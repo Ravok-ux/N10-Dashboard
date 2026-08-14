@@ -6,6 +6,42 @@ import { db } from "./firebase-config.js";
 import {
   collection, query, orderBy, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { exportarExcel, descargarPlantilla, importarExcel, toolbarHTML, puedeImportar } from "./excel-utils.js";
+
+const _COLS_ING = [
+  { key: "alias",     header: "Alias",           width: 14, required: true,  ejemplo: "jperez" },
+  { key: "nombre",    header: "Nombre completo",  width: 24, required: true,  ejemplo: "Juan Pérez García" },
+  { key: "telefono",  header: "Teléfono",         width: 16, ejemplo: "5551234567" },
+  { key: "email",     header: "Correo",           width: 26, ejemplo: "jperez@empresa.com" },
+  { key: "zona",      header: "Zona",             width: 14, ejemplo: "Norte" },
+  { key: "vehiculo",  header: "Vehículo",         width: 16, ejemplo: "Nissan NP300 ABC-123" },
+  { key: "activo",    header: "Activo (SI/NO)",   width: 14, tipo: "booleano", ejemplo: "SI" },
+];
+
+// Columnas para exportación de clientes (solo lectura — datos provienen de la APK)
+const _COLS_CLI = [
+  { key: "nombre",       header: "Nombre",          width: 28, required: true },
+  { key: "telefono",     header: "Teléfono",        width: 16 },
+  { key: "direccion",    header: "Dirección",       width: 36 },
+  { key: "segmento",     header: "Segmento",        width: 14 },
+  { key: "saldo",        header: "Saldo ($)",       width: 14, tipo: "numero" },
+  { key: "ingeniero",    header: "Ingeniero asig.", width: 18 },
+  { key: "ultimaVisita", header: "Última visita",   width: 18, fmt: "fecha" },
+  { key: "activo",       header: "Activo",          width: 10 },
+];
+
+// ── Exportación de clientes ───────────────────────────────────
+window.Cli_xlExport = async function() {
+  try {
+    const { getDocs, collection, orderBy, query } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { db } = await import("./firebase-config.js");
+    window.toast?.("Preparando exportación de clientes…", "info");
+    const snap = await getDocs(query(collection(db, "clientes"), orderBy("nombre")));
+    const rows = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    if (rows.length === 0) { window.toast?.("No hay clientes para exportar.", "info"); return; }
+    exportarExcel(rows, _COLS_CLI, "Clientes", "Clientes");
+  } catch(e) { window.toast?.("Error al exportar clientes.", "error"); }
+};
 
 let _unsubUsuarios   = null;
 let _unsubUbicaciones = null;
@@ -35,6 +71,9 @@ function _html() {
   return `
   <div style="padding:0 0 20px">
 
+    <!-- Toolbar Excel -->
+    ${toolbarHTML("Ing")}
+
     <!-- Controles -->
     <div style="background:#fff;border-radius:10px;border:1px solid #E5E7EB;padding:12px 16px;
       margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -45,6 +84,9 @@ function _html() {
           onclick="IngenierosUI.setFiltro('${f}')">
           ${{TODOS:"Todos",EN_JORNADA:"En jornada",FUERA:"Fuera"}[f]}
         </button>`).join("")}
+      <button class="xl-btn xl-btn-export" onclick="Cli_xlExport()" style="margin-left:auto">
+        ⬇ Exportar Clientes Excel
+      </button>
     </div>
 
     <!-- Tarjetas de ingenieros -->
@@ -118,7 +160,7 @@ function _render() {
   }
 
   grid.innerHTML = lista.map(u => {
-    const enVivo     = u.mins !== null && u.mins < 5;
+    const enVivo = u.mins !== null && u.mins < 5;
     const senalColor = enVivo ? "#16A34A" : u.mins !== null && u.mins < 60 ? "#D97706" : "#9CA3AF";
     const jornadaBadge = u.enJornada
       ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:9px;
@@ -160,3 +202,44 @@ function _render() {
     </div>`;
   }).join("");
 }
+
+// ── Excel handlers (globales para onclick en HTML) ─────────────
+window.Ing_xlExport = async function() {
+  try {
+    const { getDocs, collection: col } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { db: fdb } = await import("./firebase-config.js");
+    const snap = await getDocs(col(fdb, "usuarios"));
+    const rows = snap.docs
+      .filter(d => ["INGENIERO","RECUPERADOR"].includes(d.data().rol))
+      .map(d => ({ ...d.data(), id: d.id }));
+    exportarExcel(rows, _COLS_ING, "Ingenieros", "Ingenieros");
+  } catch(e) {
+    window.toast?.("Error al exportar: " + e.message, "error");
+  }
+};
+
+window.Ing_xlPlantilla = function() {
+  descargarPlantilla(_COLS_ING, "Ingenieros", "Ingenieros");
+};
+
+window.Ing_xlImport = async function() {
+  if (!puedeImportar()) { window.toast?.("Sin permisos para importar.", "error"); return; }
+  try {
+    const registros = await importarExcel(_COLS_ING);
+    if (!registros.length) return;
+    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { db: fdb } = await import("./firebase-config.js");
+    let ok = 0, err = 0;
+    for (const r of registros) {
+      try {
+        await setDoc(doc(fdb, "usuarios", r.alias), {
+          ...r, actualizadoPor: window.Sesion?.alias ?? "import", actualizadoEn: serverTimestamp()
+        }, { merge: true });
+        ok++;
+      } catch(e2) { err++; }
+    }
+    window.toast?.(`Importación completa: ${ok} ingenieros${err ? `, ${err} errores` : ""}.`, ok > 0 ? "success" : "error");
+  } catch(e) {
+    window.toast?.("Error en importación.", "error");
+  }
+};

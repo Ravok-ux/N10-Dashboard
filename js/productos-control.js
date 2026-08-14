@@ -5,10 +5,59 @@
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
+import { exportarExcel, descargarPlantilla, importarExcel, toolbarHTML, puedeImportar } from "./excel-utils.js";
 import {
   collection, doc, query, orderBy, onSnapshot,
   updateDoc, addDoc, serverTimestamp, limit
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// ── Columnas Excel ────────────────────────────────────────────
+const _COLS_PROD = [
+  { key: "codigo",      header: "Código",           width: 14, required: true,  ejemplo: "PROD-001" },
+  { key: "nombre",      header: "Nombre",            width: 28, required: true,  ejemplo: "Proteína Whey 1kg" },
+  { key: "descripcion", header: "Descripción",       width: 36, ejemplo: "Sabor vainilla, 30 porciones" },
+  { key: "precio_base", header: "Precio base",       width: 14, tipo: "numero",  ejemplo: "450.00" },
+  { key: "unidad",      header: "Unidad",            width: 12, ejemplo: "PZA" },
+  { key: "categoria",   header: "Categoría",         width: 16, ejemplo: "Proteínas" },
+  { key: "stock_min",   header: "Stock mínimo",      width: 14, tipo: "numero",  ejemplo: "10" },
+  { key: "activo",      header: "Activo (SI/NO)",    width: 14, tipo: "booleano", ejemplo: "SI" },
+];
+
+// ── Funciones globales Excel ──────────────────────────────────
+window.Prod_xlExport = async function() {
+  try {
+    const { getDocs, collection } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { db } = await import("./firebase-config.js");
+    const snap = await getDocs(collection(db, "productos"));
+    const rows = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    exportarExcel(rows, _COLS_PROD, "Productos", "Productos");
+  } catch(e) { window.toast?.("Error al exportar.", "error"); }
+};
+
+window.Prod_xlPlantilla = function() {
+  descargarPlantilla(_COLS_PROD, "Productos", "Productos");
+};
+
+window.Prod_xlImport = async function() {
+  if (!puedeImportar()) { window.toast?.("Sin permisos para importar.", "error"); return; }
+  try {
+    const registros = await importarExcel(_COLS_PROD);
+    if (!registros.length) return;
+    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { db } = await import("./firebase-config.js");
+    let ok = 0, err = 0;
+    for (const r of registros) {
+      try {
+        const id = r.codigo || r.id;
+        await setDoc(doc(db, "productos", id), {
+          ...r, actualizadoPor: window.Sesion?.alias ?? "import", actualizadoEn: serverTimestamp()
+        }, { merge: true });
+        ok++;
+      } catch(e2) { err++; }
+    }
+    window.toast?.(`Importación: ${ok} productos${err ? `, ${err} errores` : ""}.`, ok > 0 ? "success" : "error");
+  } catch(e) { window.toast?.("Error en importación.", "error"); }
+};
 
 const fmtMXN   = v => new Intl.NumberFormat("es-MX", { style:"currency", currency:"MXN" }).format(v || 0);
 const fmtPct   = v => v != null ? v.toFixed(1) + "%" : "–";
@@ -86,6 +135,9 @@ function _html() {
           <div id="${id}" style="font-size:18px;font-weight:800;color:${col}">–</div>
         </div>`).join("")}
     </div>
+
+    <!-- Toolbar Excel -->
+    ${toolbarHTML("Prod")}
 
     ${!puedeEditar ? `<div style="padding:8px 20px;font-size:11px;color:#F59E0B;
       background:#FEF3C7;border-bottom:1px solid var(--c-border);flex-shrink:0">

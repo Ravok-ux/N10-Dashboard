@@ -759,6 +759,37 @@ html, body {
 }
 .sbp-btn-logout:hover { background: rgba(220,38,38,.2); }
 
+/* ══ EXCEL TOOLBAR ══════════════════════════════ */
+.xl-toolbar {
+  display: flex; align-items: center; gap: 7px;
+  padding: 8px 16px; border-bottom: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+}
+.xl-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 6px; font-size: 11.5px;
+  font-weight: 600; cursor: pointer; border: 1px solid;
+  transition: all .15s; white-space: nowrap;
+}
+.xl-btn-export {
+  background: #ECFDF5; color: #065F46; border-color: #A7F3D0;
+}
+.xl-btn-export:hover { background: #D1FAE5; }
+.xl-btn-tmpl {
+  background: var(--border-light); color: var(--text-sec); border-color: var(--border);
+}
+.xl-btn-tmpl:hover { background: var(--border); }
+.xl-btn-import {
+  background: #EFF6FF; color: #1E40AF; border-color: #BFDBFE;
+}
+.xl-btn-import:hover { background: #DBEAFE; }
+
+/* dark mode overrides */
+[data-theme="dark"] .xl-toolbar    { background: #161B22; border-color: #30363D; }
+[data-theme="dark"] .xl-btn-export { background: rgba(6,95,70,.2); color: #4ADE80; border-color: rgba(74,222,128,.3); }
+[data-theme="dark"] .xl-btn-tmpl   { background: #21262D; color: #8B949E; border-color: #30363D; }
+[data-theme="dark"] .xl-btn-import { background: rgba(30,64,175,.2); color: #93C5FD; border-color: rgba(147,197,253,.3); }
+
 /* ══ DARK MODE ══════════════════════════════════ */
 [data-theme="dark"] {
   --bg:           #0D1117;

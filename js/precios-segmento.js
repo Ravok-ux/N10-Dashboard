@@ -1,4 +1,5 @@
 // W7 — Catálogo de Precios por Segmento
+import { exportarExcel, descargarPlantilla, importarExcel, toolbarHTML, puedeImportar } from "./excel-utils.js";
 import { db } from './firebase-config.js';
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
@@ -7,6 +8,15 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;'}[c]));
+
+const _COLS_SEG = [
+  { key: "segmento",         header: "Segmento",          width: 16, required: true, ejemplo: "Premium" },
+  { key: "codigo_producto",  header: "Código producto",   width: 16, required: true, ejemplo: "PROD-001" },
+  { key: "nombre_producto",  header: "Nombre producto",   width: 28, ejemplo: "Proteína Whey 1kg" },
+  { key: "precio",           header: "Precio",            width: 12, tipo: "numero", required: true, ejemplo: "380.00" },
+  { key: "descuento_pct",    header: "Descuento %",       width: 14, tipo: "numero", ejemplo: "15" },
+  { key: "notas",            header: "Notas",             width: 24, ejemplo: "Precio especial distribuidor" },
+];
 
 export const SegmentoPrecioModule = (() => {
   let _unsubSegmentos  = null;
@@ -22,6 +32,8 @@ export const SegmentoPrecioModule = (() => {
         <h2>Precios por Segmento</h2>
         <button class="btn-primary" id="btnNuevoSegmento">+ Nuevo segmento</button>
       </div>
+
+      ${toolbarHTML("Seg")}
 
       <div class="promo-tabs">
         <button class="tab-btn active" data-tab="segmentos">Segmentos</button>
@@ -412,3 +424,41 @@ export const SegmentoPrecioModule = (() => {
 
   return { init, mount: init, destroy };
 })();
+
+// ── Excel: Exportar ───────────────────────────────────────────
+window.Seg_xlExport = async function() {
+  try {
+    const { getDocs, collection } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { db } = await import("./firebase-config.js");
+    const snap = await getDocs(collection(db, "precios_segmento"));
+    const rows = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    exportarExcel(rows, _COLS_SEG, "PreciosSegmento", "Precios por Segmento");
+  } catch(e) { window.toast?.("Error al exportar.", "error"); }
+};
+
+// ── Excel: Plantilla ──────────────────────────────────────────
+window.Seg_xlPlantilla = function() {
+  descargarPlantilla(_COLS_SEG, "PreciosSegmento", "Precios por Segmento");
+};
+
+// ── Excel: Importar ───────────────────────────────────────────
+window.Seg_xlImport = async function() {
+  if (!puedeImportar()) { window.toast?.("Sin permisos.", "error"); return; }
+  try {
+    const registros = await importarExcel(_COLS_SEG);
+    if (!registros.length) return;
+    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { db } = await import("./firebase-config.js");
+    let ok = 0, err = 0;
+    for (const r of registros) {
+      try {
+        const id = `${r.segmento}_${r.codigo_producto}`;
+        await setDoc(doc(db, "precios_segmento", id), {
+          ...r, actualizadoPor: window.Sesion?.alias ?? "import", actualizadoEn: serverTimestamp()
+        }, { merge: true });
+        ok++;
+      } catch(e2) { err++; }
+    }
+    window.toast?.(`Importación: ${ok} precios${err ? `, ${err} errores` : ""}.`, ok > 0 ? "success" : "error");
+  } catch(e) { window.toast?.("Error en importación.", "error"); }
+};
