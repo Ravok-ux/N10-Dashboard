@@ -1,0 +1,74 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function perfil() {
+      return firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function miRol() {
+      return perfil().rol;
+    }
+
+    function esAdminOSuperior() {
+      return isAuth() && miRol() in ['SUPER_ADMIN', 'GERENTE', 'GERENTE_ZONA', 'ADMINISTRADOR'];
+    }
+
+    function esRolConocido() {
+      return isAuth() && miRol() in [
+        'SUPER_ADMIN', 'GERENTE', 'GERENTE_ZONA',
+        'INGENIERO', 'RECUPERADOR', 'ADMINISTRADOR',
+        'ALMACENISTA', 'JURIDICO', 'MESA_CONTROL'
+      ];
+    }
+
+    function cuentaActiva() {
+      return isAuth() && perfil().activo == true;
+    }
+
+    // ── evidencias/{alias}/{fecha}/{visitaId}.jpg ──────────────────────────────
+    // El APK sube las fotos de evidencia de visita bajo la ruta del propio ingeniero.
+    // El web panel las lee para mostrar en el historial de visitas.
+    match /evidencias/{alias}/{fecha}/{archivo} {
+      // Lectura: admins o el propio ingeniero
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || perfil().alias == alias);
+
+      // Escritura (subida): solo el APK del ingeniero — verifica alias coincide
+      allow write: if cuentaActiva()
+                   && esRolConocido()
+                   && perfil().alias == alias
+                   // Solo imágenes JPEG/PNG (MIME type)
+                   && request.resource.contentType.matches('image/(jpeg|png)')
+                   // Máximo 10 MB por foto
+                   && request.resource.size <= 10 * 1024 * 1024;
+
+      // El APK y el worker de cleanup pueden borrar fotos propias
+      // Los admins pueden borrar cualquier foto (ej. contenido inapropiado)
+      allow delete: if cuentaActiva()
+                    && (esAdminOSuperior() || perfil().alias == alias);
+    }
+
+    // ── formularios_fotos/{alias}/{formularioId}/{archivo} ────────────────────
+    match /formularios_fotos/{alias}/{formularioId}/{archivo} {
+      allow read: if cuentaActiva() && (esAdminOSuperior() || perfil().alias == alias);
+      allow write: if cuentaActiva()
+                   && esRolConocido()
+                   && perfil().alias == alias
+                   && request.resource.contentType.matches('image/(jpeg|png)')
+                   && request.resource.size <= 10 * 1024 * 1024;
+      allow delete: if cuentaActiva() && (esAdminOSuperior() || perfil().alias == alias);
+    }
+
+    // Bloqueo por defecto — cualquier ruta no listada queda denegada
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

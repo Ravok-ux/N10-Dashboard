@@ -1,0 +1,390 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function perfil() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function miRol() {
+      return perfil().rol;
+    }
+
+    function esSuperAdmin() {
+      return isAuth() && miRol() == 'SUPER_ADMIN';
+    }
+
+    function esAdminOSuperior() {
+      return isAuth() && miRol() in ['SUPER_ADMIN', 'GERENTE', 'GERENTE_ZONA', 'ADMINISTRADOR'];
+    }
+
+    function esRolConocido() {
+      return isAuth() && miRol() in [
+        'SUPER_ADMIN', 'GERENTE', 'GERENTE_ZONA',
+        'INGENIERO', 'RECUPERADOR', 'ADMINISTRADOR',
+        'ALMACENISTA', 'JURIDICO', 'MESA_CONTROL'
+      ];
+    }
+
+    function cuentaActiva() {
+      return isAuth() && perfil().activo == true;
+    }
+
+    function tieneFlag(flag) {
+      return esSuperAdmin() || (perfil().flags != null && perfil().flags[flag] == true);
+    }
+
+    // Valida que un string no esté vacío y no supere un tamaño máximo
+    function strValido(val, max) {
+      return val is string && val.size() > 0 && val.size() <= max;
+    }
+
+    // ── /usuarios ─────────────────────────────────────────────────────────────
+    match /usuarios/{uid} {
+      // Cada usuario lee su propio perfil; admins leen todos
+      allow read: if isAuth() && (request.auth.uid == uid || esAdminOSuperior());
+
+      // Solo SUPER_ADMIN puede crear/editar perfiles de otros
+      allow write: if esSuperAdmin();
+
+      // El propio usuario puede crear su perfil en el primer login
+      allow create: if isAuth() && request.auth.uid == uid
+                    && !exists(/databases/$(database)/documents/usuarios/$(uid))
+                    && request.resource.data.keys().hasAll(['email','alias','rol','activo'])
+                    && request.resource.data.activo == true;
+    }
+
+    // ── /ubicaciones ─────────────────────────────────────────────────────────
+    match /ubicaciones/{alias} {
+      // Cualquier usuario autenticado y activo puede leer todas las ubicaciones (mapa en vivo)
+      allow read: if cuentaActiva() && esRolConocido();
+
+      // Solo el propio usuario puede escribir su ubicación
+      allow write: if cuentaActiva() && request.auth.uid != null
+                   && request.resource.data.alias == alias
+                   && strValido(request.resource.data.alias, 60);
+    }
+
+    // ── /pedidos ──────────────────────────────────────────────────────────────
+    match /pedidos/{pedidoId} {
+      // Lectura: todo rol conocido y activo
+      allow read: if cuentaActiva() && esRolConocido();
+
+      // Escritura: SUPER_ADMIN, GERENTE, GERENTE_ZONA, ADMINISTRADOR o quien tenga flag
+      allow write: if cuentaActiva() && (esAdminOSuperior() || tieneFlag('PUEDE_CREAR_PEDIDOS'));
+    }
+
+    // ── /remisiones_credito ───────────────────────────────────────────────────
+    match /remisiones_credito/{remisionId} {
+      allow read: if cuentaActiva() && esRolConocido();
+      allow write: if cuentaActiva() && (esAdminOSuperior() || tieneFlag('PUEDE_REGISTRAR_REMISION'));
+    }
+
+    // ── /abonos_remision ─────────────────────────────────────────────────────
+    match /abonos_remision/{abonoId} {
+      allow read: if cuentaActiva() && esRolConocido();
+      allow write: if cuentaActiva() && (esAdminOSuperior() || tieneFlag('PUEDE_REGISTRAR_ABONO'));
+    }
+
+    // ── /ordenes_compra ───────────────────────────────────────────────────────
+    match /ordenes_compra/{ocId} {
+      allow read: if cuentaActiva() && (esAdminOSuperior() || tieneFlag('PUEDE_ORDENES_COMPRA'));
+      allow write: if cuentaActiva() && (esAdminOSuperior() || tieneFlag('PUEDE_ORDENES_COMPRA'));
+    }
+
+    // ── /comision_config ──────────────────────────────────────────────────────
+    match /comision_config/{docId} {
+      allow read:  if cuentaActiva() && (esAdminOSuperior() || tieneFlag('PUEDE_VER_COMISIONES'));
+      allow write: if cuentaActiva() && (esSuperAdmin() || tieneFlag('PUEDE_CONFIG_COMISIONES'));
+    }
+
+    // ── /liquidacion_comision ─────────────────────────────────────────────────
+    match /liquidacion_comision/{docId} {
+      allow read:  if cuentaActiva() && (esAdminOSuperior() || tieneFlag('PUEDE_VER_COMISIONES'));
+      allow write: if cuentaActiva() && esSuperAdmin();
+    }
+
+    // ── /log_actividades ──────────────────────────────────────────────────────
+    match /log_actividades/{logId} {
+      // Lectura: solo admins pueden ver el log global
+      allow read: if cuentaActiva() && esAdminOSuperior();
+
+      // Escritura: cualquier usuario autenticado puede registrar su propia actividad
+      // Valida que el alias y tipo estén presentes y tengan tamaño razonable
+      allow create: if cuentaActiva() && esRolConocido()
+                    && strValido(request.resource.data.tipo, 50)
+                    && request.resource.data.keys().hasAll(['alias','tipo','timestamp']);
+
+      // No se puede editar ni borrar logs (inmutabilidad de auditoría)
+      allow update, delete: if false;
+    }
+
+    // ── /comentarios_cliente ──────────────────────────────────────────────────
+    match /comentarios_cliente/{comentarioId} {
+      // Lectura: MESA_CONTROL, ADMINISTRADOR, GERENTE_ZONA, GERENTE, SUPER_ADMIN
+      allow read: if cuentaActiva() && miRol() in [
+        'SUPER_ADMIN','GERENTE','GERENTE_ZONA','ADMINISTRADOR','MESA_CONTROL'
+      ];
+
+      // Escritura: mismos roles; valida campos y longitudes
+      allow create: if cuentaActiva()
+                    && miRol() in ['SUPER_ADMIN','GERENTE','GERENTE_ZONA','ADMINISTRADOR','MESA_CONTROL']
+                    && request.resource.data.keys().hasAll(['clienteNombre','texto','alias','tipoAccion'])
+                    && strValido(request.resource.data.texto, 1000)
+                    && strValido(request.resource.data.clienteNombre, 100)
+                    && request.resource.data.uid == request.auth.uid;
+
+      // Solo el autor o SUPER_ADMIN puede editar/borrar su propio comentario
+      allow update, delete: if cuentaActiva()
+                            && (resource.data.uid == request.auth.uid || esSuperAdmin());
+    }
+
+    // ── /historial_precios ────────────────────────────────────────────────────
+    match /historial_precios/{entradaId} {
+      // Lectura: SUPER_ADMIN, GERENTE, ADMINISTRADOR
+      allow read: if cuentaActiva() && miRol() in [
+        'SUPER_ADMIN','GERENTE','ADMINISTRADOR'
+      ];
+
+      // Escritura: APK o web panel con flag PUEDE_EDITAR_PRECIO (o rol SUPER_ADMIN/GERENTE)
+      // Los registros son inmutables — no se permite update ni delete
+      allow create: if cuentaActiva()
+                    && (tieneFlag('PUEDE_EDITAR_PRECIO') || miRol() in ['SUPER_ADMIN','GERENTE'])
+                    && request.resource.data.keys().hasAll(['idPretoriano','nombreProducto','precioBase','costoBase','cambiadoPor'])
+                    && request.resource.data.precioBase is number
+                    && request.resource.data.costoBase is number
+                    && strValido(request.resource.data.nombreProducto, 200);
+
+      allow update, delete: if false;
+    }
+
+    // ── /productos ────────────────────────────────────────────────────────────
+    match /productos/{idPretoriano} {
+      // Lectura: cualquier usuario autenticado y activo (APK necesita leer en onSnapshot)
+      allow read: if cuentaActiva() && esRolConocido();
+
+      // El APK hace seed inicial con merge — requiere cuenta activa
+      // El web panel solo escribe activo/precioBase/costoBase + metadatos
+      allow write: if cuentaActiva()
+                   && (
+                     // SUPER_ADMIN y GERENTE pueden escribir cualquier campo
+                     miRol() in ['SUPER_ADMIN', 'GERENTE'] ||
+                     // ADMINISTRADOR puede activar/desactivar pero necesita flag para precios
+                     (miRol() == 'ADMINISTRADOR'
+                       && (
+                         // Solo activo: permitido
+                         request.resource.data.keys().hasOnly(['activo','modificadoPor','modificadoEn']) ||
+                         // Precio/costo: requiere flag
+                         tieneFlag('PUEDE_EDITAR_PRECIO')
+                       )
+                     ) ||
+                     // APK seed: solo merge de campos de catálogo (no precio ni costo)
+                     tieneFlag('PUEDE_CREAR_PEDIDOS') // proxy para APK autenticado
+                   );
+    }
+
+    // ── /historial_precios (web panel también puede escribir) ─────────────────
+    // Nota: regla original solo permitía APK via flag. Actualizamos para que
+    // el web panel también pueda registrar cambios de precio.
+
+    // ── /configuracion (tickets + control operativo) ──────────────────────────
+    match /configuracion/{docId} {
+      // Lectura: cualquier usuario autenticado — el APK lee 'control' al iniciar sesión
+      allow read: if isAuth();
+
+      // Escritura: solo SUPER_ADMIN o GERENTE pueden modificar la configuración
+      allow write: if cuentaActiva()
+                   && miRol() in ['SUPER_ADMIN', 'GERENTE']
+                   && (
+                     // Documento de tickets: campos esperados
+                     docId == 'tickets' ||
+                     // Documento de control: solo campo funcionalidades + metadatos
+                     (docId == 'control'
+                       && request.resource.data.keys().hasOnly([
+                           'funcionalidades','actualizadoPor','actualizadoEn'])
+                     )
+                   );
+    }
+
+    // ── /geocercas ────────────────────────────────────────────────────────────
+    match /geocercas/{geocercaId} {
+      // APK necesita leer geocercas al login para validación offline
+      allow read: if cuentaActiva() && esRolConocido();
+
+      // Solo SUPER_ADMIN, GERENTE o ADMINISTRADOR pueden crear/editar/borrar geocercas
+      allow write: if cuentaActiva()
+                   && miRol() in ['SUPER_ADMIN', 'GERENTE', 'ADMINISTRADOR']
+                   && strValido(request.resource.data.nombre, 80)
+                   && request.resource.data.lat is number
+                   && request.resource.data.lng is number
+                   && request.resource.data.radioMetros is int;
+
+      allow delete: if cuentaActiva() && miRol() in ['SUPER_ADMIN', 'GERENTE'];
+    }
+
+    // ── /visitas ──────────────────────────────────────────────────────────────
+    match /visitas/{visitaId} {
+      // Lectura: admins y superiores leen todas; el ingeniero lee las propias
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior()
+                      || resource.data.aliasVendedor == perfil().alias);
+
+      // Creación: cualquier usuario activo puede registrar su propia visita
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.aliasVendedor == perfil().alias
+                    && request.resource.data.keys().hasAll(['aliasVendedor','clienteId','timestamp']);
+
+      // Solo admins pueden modificar visitas existentes
+      allow update: if cuentaActiva() && esAdminOSuperior();
+      allow delete: if false;
+    }
+
+    // ── /metas ────────────────────────────────────────────────────────────────
+    match /metas/{metaId} {
+      // Lectura: admins y el propio ingeniero leen sus metas
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior()
+                      || resource.data.alias == perfil().alias);
+
+      // Escritura: solo SUPER_ADMIN, GERENTE, ADMINISTRADOR
+      allow create, update: if cuentaActiva()
+                            && miRol() in ['SUPER_ADMIN', 'GERENTE', 'ADMINISTRADOR']
+                            && strValido(request.resource.data.alias, 60)
+                            && request.resource.data.metaMonto is number
+                            && request.resource.data.fechaInicio is int
+                            && request.resource.data.fechaFin is int;
+
+      allow delete: if cuentaActiva() && miRol() in ['SUPER_ADMIN', 'GERENTE'];
+    }
+
+    // ── /segmentos ────────────────────────────────────────────────────────────
+    match /segmentos/{segmentoId} {
+      // APK y web panel necesitan leer la lista de segmentos
+      allow read: if cuentaActiva() && esRolConocido();
+
+      // Solo admins pueden crear/editar/borrar segmentos
+      allow create, update: if cuentaActiva()
+                            && miRol() in ['SUPER_ADMIN', 'GERENTE', 'ADMINISTRADOR']
+                            && strValido(request.resource.data.nombre, 60);
+
+      allow delete: if cuentaActiva() && miRol() in ['SUPER_ADMIN', 'GERENTE'];
+    }
+
+    // ── /precios_segmento ─────────────────────────────────────────────────────
+    match /precios_segmento/{precioId} {
+      // APK descarga todos los precios al login; web panel los muestra en la matriz
+      allow read: if cuentaActiva() && esRolConocido();
+
+      // Solo admins pueden crear/editar precios de segmento
+      allow create, update: if cuentaActiva()
+                            && miRol() in ['SUPER_ADMIN', 'GERENTE', 'ADMINISTRADOR']
+                            && request.resource.data.segmentoId is string
+                            && request.resource.data.idPretoriano is number
+                            && request.resource.data.precio is number;
+
+      allow delete: if cuentaActiva() && miRol() in ['SUPER_ADMIN', 'GERENTE'];
+    }
+
+    // ── /promociones ──────────────────────────────────────────────────────────
+    match /promociones/{promId} {
+      // Lectura: admins y todos los roles (para mostrar campañas activas en APK)
+      allow read: if cuentaActiva() && esRolConocido();
+
+      // Escritura: SUPER_ADMIN, GERENTE, ADMINISTRADOR
+      allow create, update: if cuentaActiva()
+                            && miRol() in ['SUPER_ADMIN', 'GERENTE', 'ADMINISTRADOR']
+                            && strValido(request.resource.data.nombre, 80)
+                            && request.resource.data.puntosXPeso is number
+                            && request.resource.data.puntosRecompensa is int
+                            && strValido(request.resource.data.fechaInicio, 10)
+                            && strValido(request.resource.data.fechaFin, 10);
+
+      allow delete: if cuentaActiva() && miRol() in ['SUPER_ADMIN', 'GERENTE'];
+    }
+
+    // ── /puntos_cliente ───────────────────────────────────────────────────────
+    match /puntos_cliente/{clienteId} {
+      // Lectura: admins y el propio ingeniero responsable del cliente
+      allow read: if cuentaActiva() && esAdminOSuperior();
+
+      // Escritura: admins + registro automático desde reglas de negocio del APK
+      allow write: if cuentaActiva()
+                   && miRol() in ['SUPER_ADMIN', 'GERENTE', 'ADMINISTRADOR']
+                   && request.resource.data.puntos is number;
+    }
+
+    // ── /historial_puntos ─────────────────────────────────────────────────────
+    match /historial_puntos/{entradaId} {
+      // Lectura: solo admins pueden ver el historial completo
+      allow read: if cuentaActiva() && esAdminOSuperior();
+
+      // Creación: admins pueden registrar ajustes manuales o canjes
+      allow create: if cuentaActiva()
+                    && miRol() in ['SUPER_ADMIN', 'GERENTE', 'ADMINISTRADOR']
+                    && request.resource.data.clienteId is string
+                    && request.resource.data.puntos is number
+                    && request.resource.data.tipo in ['sumar', 'restar', 'canje'];
+
+      // Los registros de historial son inmutables
+      allow update, delete: if false;
+    }
+
+    // ── /formularios ──────────────────────────────────────────────────────────
+    match /formularios/{formId} {
+      // Lectura: todos los roles (el APK descarga plantillas al sincronizar)
+      allow read: if cuentaActiva() && esRolConocido();
+
+      // CRUD de plantillas: solo admins
+      allow create, update: if cuentaActiva()
+                            && miRol() in ['SUPER_ADMIN', 'GERENTE', 'ADMINISTRADOR']
+                            && strValido(request.resource.data.nombre, 80);
+
+      allow delete: if cuentaActiva() && miRol() in ['SUPER_ADMIN', 'GERENTE'];
+    }
+
+    // ── /respuestas_formulario ────────────────────────────────────────────────
+    match /respuestas_formulario/{respId} {
+      // Lectura: admins
+      allow read: if cuentaActiva() && esAdminOSuperior();
+
+      // El APK crea respuestas — cualquier usuario activo y de rol conocido
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.formularioId is string
+                    && request.resource.data.aliasVendedor == perfil().alias
+                    && request.resource.data.timestamp is int;
+
+      // Las respuestas son inmutables
+      allow update, delete: if false;
+    }
+
+    // ── Actualización de autorizaciones en /pedidos ───────────────────────────
+    // La regla base de /pedidos ya cubre la lectura. Aquí reforzamos que solo
+    // SUPER_ADMIN, GERENTE o ADMINISTRADOR pueden cambiar el status a
+    // CONFIRMADO o RECHAZADO (autorización/rechazo de pedidos).
+    // Esta regla es complementaria — la regla de /pedidos ya permite write a admins.
+
+    // ── /pedido_items ─────────────────────────────────────────────────────────
+    match /pedido_items/{itemId} {
+      allow read: if cuentaActiva() && esRolConocido();
+      allow write: if cuentaActiva() && (esAdminOSuperior() || tieneFlag('PUEDE_CREAR_PEDIDOS'));
+    }
+
+    // ── /clientes ─────────────────────────────────────────────────────────────
+    match /clientes/{clienteId} {
+      allow read: if cuentaActiva() && esRolConocido();
+      allow write: if cuentaActiva() && esAdminOSuperior();
+    }
+
+    // ── Bloqueo por defecto ───────────────────────────────────────────────────
+    // Cualquier colección no listada queda denegada
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

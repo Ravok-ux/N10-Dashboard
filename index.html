@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-10 Analytics · Panel de Control</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- Google Maps — clave inyectada en deploy via Firebase Hosting rewrite o env -->
+  <script>
+    // La clave de Maps se sustituye en CI/CD: %%MAPS_API_KEY%%
+    window.N10_MAPS_KEY = "%%MAPS_API_KEY%%";
+  </script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     PANTALLA DE LOGIN
+     ══════════════════════════════════════════ -->
+<div id="login-screen" class="login-screen hidden">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-mark">N<sup>10</sup></div>
+      <div>
+        <div class="login-title">Nutrición de 10</div>
+        <div class="login-sub">PANEL DE CONTROL</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Correo electrónico</label>
+      <input id="login-email" type="email" class="form-input" placeholder="usuario@nutricionde10.mx" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Contraseña</label>
+      <input id="login-password" type="password" class="form-input" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div id="login-error" class="login-error hidden"></div>
+    <button id="login-btn" class="btn-primary" onclick="Auth.login()">Iniciar sesión</button>
+    <div id="login-loading" class="login-loading hidden">
+      <div class="spinner"></div> Verificando…
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     SHELL PRINCIPAL
+     ══════════════════════════════════════════ -->
+<div id="app-shell" class="shell hidden">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand">
+      <div class="sb-mark">N<sup>10</sup></div>
+      <div>
+        <div class="sb-name">Nutrición de 10</div>
+        <div class="sb-sub">ERP COMERCIAL</div>
+      </div>
+    </div>
+
+    <nav class="sb-nav">
+      <div class="sb-group">PRINCIPAL</div>
+      <a class="sb-item active" href="#" data-view="dashboard">
+        <span class="sb-icon">📊</span> Dashboard
+      </a>
+      <a class="sb-item" href="#" data-view="mapa">
+        <span class="sb-icon">🗺</span> Mapa en vivo
+        <span class="sb-live" id="sb-live-count">
+          <span class="live-dot"></span><span id="live-count">0</span>
+        </span>
+      </a>
+      <a class="sb-item" href="#" data-view="feed">
+        <span class="sb-icon">⚡</span> Feed en vivo
+        <span class="sb-badge hidden" id="feed-badge">0</span>
+      </a>
+
+      <div class="sb-group">CAMPO</div>
+      <a class="sb-item" href="#" data-view="ingenieros">
+        <span class="sb-icon">👷</span> Ingenieros
+      </a>
+      <a class="sb-item" href="#" data-view="pedidos">
+        <span class="sb-icon">🛒</span> Pedidos
+      </a>
+      <a class="sb-item" href="#" data-view="remisiones">
+        <span class="sb-icon">📄</span> Remisiones
+      </a>
+      <a class="sb-item" href="#" data-view="cobranza">
+        <span class="sb-icon">💰</span> Cobranza
+      </a>
+
+      <div class="sb-group" id="sb-grupo-supervision">SUPERVISIÓN</div>
+      <a class="sb-item" href="#" data-view="comentarios" id="sb-comentarios">
+        <span class="sb-icon">💬</span> Comentarios
+      </a>
+
+      <div class="sb-group admin-only" id="sb-admin-group">ADMINISTRACIÓN</div>
+      <a class="sb-item admin-only" href="#" data-view="usuarios" id="sb-usuarios">
+        <span class="sb-icon">🔐</span> Usuarios y flags
+      </a>
+      <a class="sb-item admin-only" href="#" data-view="comisiones">
+        <span class="sb-icon">📊</span> Comisiones
+      </a>
+      <a class="sb-item admin-only" href="#" data-view="compras">
+        <span class="sb-icon">🛒</span> Órdenes de compra
+      </a>
+      <a class="sb-item admin-only" href="#" data-view="precios" id="sb-precios">
+        <span class="sb-icon">💲</span> Precios y costos
+      </a>
+      <a class="sb-item admin-only" href="#" data-view="geocercas">
+        <span class="sb-icon">🗺</span> Geocercas
+      </a>
+      <a class="sb-item admin-only" href="#" data-view="metas">
+        <span class="sb-icon">🎯</span> Metas de Venta
+      </a>
+      <a class="sb-item admin-only" href="#" data-view="autorizaciones">
+        <span class="sb-icon">✅</span> Autorizaciones
+      </a>
+      <a class="sb-item admin-only" href="#" data-view="formularios">
+        <span class="sb-icon">📋</span> Formularios
+      </a>
+      <a class="sb-item admin-only" href="#" data-view="promociones">
+        <span class="sb-icon">🎁</span> Recompensa y Lealtad
+      </a>
+      <a class="sb-item admin-only" href="#" data-view="precios_segmento">
+        <span class="sb-icon">🏷️</span> Precios por Segmento
+      </a>
+      <a class="sb-item admin-only" href="#" data-view="productos">
+        <span class="sb-icon">📦</span> Catálogo / Productos
+      </a>
+      <a class="sb-item admin-only" href="#" data-view="config">
+        <span class="sb-icon">⚙️</span> Config. tickets
+      </a>
+      <a class="sb-item" href="#" data-view="reportes">
+        <span class="sb-icon">📈</span> Reportes
+      </a>
+    </nav>
+
+    <div class="sb-user">
+      <div class="sb-ava" id="sb-ava">?</div>
+      <div>
+        <div class="sb-uname" id="sb-uname">–</div>
+        <div class="sb-urole" id="sb-urole">–</div>
+      </div>
+      <button class="sb-logout" title="Cerrar sesión" onclick="Auth.logout()">⎋</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="tb-bc" id="tb-bc">Dashboard <span>/ Resumen del día</span></div>
+      <div class="tb-spacer"></div>
+      <div class="tb-search">
+        <span>🔍</span>
+        <input type="text" placeholder="Buscar folio, ingeniero…" id="global-search">
+      </div>
+      <button class="tb-icon-btn" id="notif-btn" title="Notificaciones">
+        🔔
+        <span class="notif-dot hidden" id="notif-dot"></span>
+      </button>
+      <div class="tb-user-pill">
+        <div class="tb-ava" id="tb-ava">?</div>
+        <span class="tb-uname" id="tb-uname">–</span>
+        <span class="tb-caret">▾</span>
+      </div>
+    </header>
+
+    <!-- SUB-HEADER -->
+    <div class="subhdr">
+      <div>
+        <div class="subhdr-title" id="subhdr-title">Resumen del día</div>
+        <div class="subhdr-sub" id="subhdr-sub">Cargando…</div>
+      </div>
+      <div class="subhdr-spacer"></div>
+      <div class="tb-chip" id="chip-campo">
+        <span class="live-dot"></span>
+        <span id="chip-count">0</span> en campo
+      </div>
+      <div class="date-chip" id="date-chip">📅 Hoy</div>
+    </div>
+
+    <!-- VISTAS -->
+    <div class="views-container" id="views-container">
+      <div class="view active" id="view-dashboard"></div>
+      <div class="view" id="view-mapa"></div>
+      <div class="view" id="view-feed"></div>
+      <div class="view" id="view-ingenieros"></div>
+      <div class="view" id="view-pedidos"></div>
+      <div class="view" id="view-remisiones"></div>
+      <div class="view" id="view-cobranza"></div>
+      <div class="view" id="view-usuarios"></div>
+      <div class="view" id="view-comisiones"></div>
+      <div class="view" id="view-compras"></div>
+      <div class="view" id="view-precios"></div>
+      <div class="view" id="view-config"></div>
+      <div class="view" id="view-reportes"></div>
+      <div class="view" id="view-comentarios"></div>
+      <div class="view" id="view-geocercas"></div>
+      <div class="view" id="view-metas"></div>
+      <div class="view" id="view-autorizaciones"></div>
+      <div class="view" id="view-formularios"></div>
+      <div class="view" id="view-promociones"></div>
+      <div class="view" id="view-precios_segmento"></div>
+      <div class="view" id="view-productos"></div>
+    </div>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div class="statusbar" id="statusbar">
+  <span class="st-item" id="st-firebase">
+    <span class="st-dot" style="background:#374151"></span> Conectando…
+  </span>
+  <span class="st-item" id="st-campo">
+    <span class="st-dot" style="background:#374151"></span> –
+  </span>
+  <div class="st-spacer"></div>
+  <span class="st-sync" id="st-sync">🔄 –</span>
+  <span class="st-item" style="margin-left:10px; color:#334155">N10 ERP · v21.25</span>
+</div>
+
+<!-- Firebase SDK -->
+<script type="module" src="js/firebase-config.js"></script>
+<script type="module" src="js/auth.js"></script>
+<script type="module" src="js/app.js"></script>
+<script type="module" src="js/dashboard.js"></script>
+<script type="module" src="js/mapa.js"></script>
+<script type="module" src="js/feed.js"></script>
+<script type="module" src="js/usuarios.js"></script>
+<script type="module" src="js/reportes.js"></script>
+
+</body>
+</html>

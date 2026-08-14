@@ -1,0 +1,21 @@
+# Nunca subir valores reales de claves
+.env
+.env.local
+env.local.js
+google-services.json
+firebase-debug.log
+
+# Cuenta de servicio Firebase — NUNCA debe estar en el repo
+serviceAccount*.json
+*serviceAccount*.json
+
+# Carpeta de backups locales
+backups/
+
+# Node
+node_modules/
+package-lock.json
+
+# OS
+.DS_Store
+Thumbs.db
