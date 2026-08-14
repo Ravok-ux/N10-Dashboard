@@ -58,8 +58,8 @@ export const AutorizacionesModule = {
               style="width:100%;padding:8px;border:1px solid var(--border,#e2e8f0);border-radius:6px;
                      font-size:.88rem;box-sizing:border-box;margin-top:8px"></textarea>
             <div style="display:flex;gap:8px;margin-top:12px">
-              <button class="btn-danger" id="autBtnConfRechazo">Confirmar rechazo</button>
-              <button class="btn-secondary" id="autBtnCancelRechazo">Cancelar</button>
+              <button class="aut-btn-danger" id="autBtnConfRechazo">Confirmar rechazo</button>
+              <button class="aut-btn-secondary" id="autBtnCancelRechazo">Cancelar</button>
             </div>
           </div>
         </div>
@@ -98,11 +98,11 @@ export const AutorizacionesModule = {
         .aut-modal  { background:var(--card-bg,#fff); border-radius:10px; padding:20px;
                       width:min(380px,90vw); }
         .aut-modal-title { font-weight:700; font-size:.95rem; }
-        .btn-primary  { background:var(--accent,#3b82f6); color:#fff; border:none;
+        .aut-btn-primary  { background:var(--accent,#3b82f6); color:#fff; border:none;
                         padding:7px 14px; border-radius:6px; cursor:pointer; font-size:.88rem; }
-        .btn-secondary{ background:transparent; border:1px solid var(--border,#e2e8f0);
+        .aut-btn-secondary{ background:transparent; border:1px solid var(--border,#e2e8f0);
                         padding:7px 14px; border-radius:6px; cursor:pointer; font-size:.88rem; }
-        .btn-danger   { background:#ef4444; color:#fff; border:none;
+        .aut-btn-danger   { background:#ef4444; color:#fff; border:none;
                         padding:7px 14px; border-radius:6px; cursor:pointer; font-size:.88rem; }
         .btn-success  { background:#22c55e; color:#fff; border:none;
                         padding:7px 14px; border-radius:6px; cursor:pointer; font-size:.88rem; }
@@ -195,7 +195,7 @@ function _renderPendientes() {
       </div>
       <div class="aut-actions">
         <button class="btn-success btn-sm" onclick="_autAprobar('${esc(p.id)}')">✓ Aprobar</button>
-        <button class="btn-danger btn-sm" onclick="_autRechazar('${esc(p.id)}')">✗ Rechazar</button>
+        <button class="aut-btn-danger btn-sm" onclick="_autRechazar('${esc(p.id)}')">✗ Rechazar</button>
       </div>
     </div>
   `).join("");
@@ -259,7 +259,11 @@ async function _cargarItems(pedidoId, containerId) {
       </div>`;
     }).join("");
     el.innerHTML = `<div class="aut-items-title">Productos</div>${rows}`;
-  } catch (_) { /* ignorar */ }
+  } catch (e) {
+    console.error('_cargarItems error:', e);
+    const el = document.getElementById(containerId);
+    if (el) el.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:.78rem">Sin detalle disponible</div>';
+  }
 }
 
 // ── Acciones ───────────────────────────────────────────────────────────────────
@@ -273,7 +277,7 @@ window._autAprobar = async id => {
       updatedAt:        serverTimestamp()
     });
   } catch (e) {
-    alert("Error al aprobar: " + e.message);
+    window.toast?.("Error al aprobar. Intenta de nuevo.", "error");
   }
 };
 
@@ -287,7 +291,7 @@ window._autRechazar = id => {
 
   document.getElementById("autBtnConfRechazo").onclick = async () => {
     const motivo = document.getElementById("autMotivoInput").value.trim();
-    if (!motivo) { alert("Escribe el motivo de rechazo."); return; }
+    if (!motivo) { window.toast?.("Escribe el motivo de rechazo.", "error"); return; }
     try {
       await updateDoc(doc(db, "pedidos", _rechazandoId), {
         status:           STATUS_RECHAZADO,
@@ -299,7 +303,7 @@ window._autRechazar = id => {
       overlay.style.display = "none";
       _rechazandoId = null;
     } catch (e) {
-      alert("Error al rechazar: " + e.message);
+      window.toast?.("Error al rechazar. Intenta de nuevo.", "error");
     }
   };
   document.getElementById("autBtnCancelRechazo").onclick = () => {

@@ -276,7 +276,10 @@ function _bindAcciones() {
         window.toast?.(`OC ${folio} creada`, "success");
         this.cerrarModal();
       } catch (e) {
-        window.toast?.("Error: " + e.message, "error");
+        const msg = /permission|PERMISSION/.test(e.message || "")
+          ? "Sin permisos para realizar esta acción."
+          : "Error al guardar. Verifica tu conexión e intenta de nuevo.";
+        window.toast?.(msg, "error");
       }
     },
 
@@ -348,7 +351,13 @@ function _bindAcciones() {
     },
 
     async cambiarStatus(ocId, nuevoStatus) {
-      if (!confirm(`¿Cambiar OC a ${nuevoStatus}?`)) return;
+      const _labelStatus = {
+        CANCELADA: 'cancelar esta orden',
+        RECIBIDA:  'marcar como recibida',
+        ENVIADA:   'marcar como enviada',
+        PENDIENTE: 'regresar a pendiente'
+      };
+      if (!confirm(`¿Deseas ${_labelStatus[nuevoStatus] || nuevoStatus}?`)) return;
       try {
         await updateDoc(doc(db, "ordenes_compra", ocId), {
           status: nuevoStatus,
@@ -358,7 +367,10 @@ function _bindAcciones() {
         window.toast?.(`OC actualizada a ${nuevoStatus}`, "success");
         this.cerrarModal();
       } catch (e) {
-        window.toast?.("Error: " + e.message, "error");
+        const msg = /permission|PERMISSION/.test(e.message || "")
+          ? "Sin permisos para realizar esta acción."
+          : "Ocurrió un error. Intenta de nuevo.";
+        window.toast?.(msg, "error");
       }
     }
   };

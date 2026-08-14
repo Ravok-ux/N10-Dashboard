@@ -138,6 +138,16 @@ function _initShell() {
     _navigateGuarded(item.dataset.view);
   });
 
+  // Sidebar toggle (móvil ≤800px)
+  const sbToggle = document.getElementById("sb-toggle");
+  const sbEl = document.getElementById("sidebar");
+  if (sbToggle && sbEl) {
+    sbToggle.addEventListener("click", () => sbEl.classList.toggle("sb-open"));
+    document.querySelectorAll(".sb-item").forEach(el =>
+      el.addEventListener("click", () => sbEl.classList.remove("sb-open"))
+    );
+  }
+
   // Prevenir cierre de pestaña con cambios pendientes
   window.addEventListener("beforeunload", e => {
     if (window.DirtyGuard?.isDirty()) {
@@ -268,7 +278,7 @@ function _toast(msg, type = "info") {
   t.className = `toast ${type}`;
   t.innerHTML = `<span>${icons[type] ?? "•"}</span> ${msg}`;
   tc.appendChild(t);
-  setTimeout(() => t.remove(), 3500);
+  setTimeout(() => t.remove(), type === 'error' ? 6000 : 3500);
 }
 
 // ── Simple list placeholder (módulos pendientes) ───────────────

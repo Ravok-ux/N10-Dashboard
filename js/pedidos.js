@@ -144,7 +144,7 @@ function _renderTabla() {
   }
   tbody.innerHTML = lista.map(p => {
     const color = STATUS_COLOR[p.status] ?? "#9E9E9E";
-    return `<tr style="border-bottom:1px solid #F3F4F6">
+    return `<tr style="border-bottom:1px solid #F3F4F6;cursor:pointer" data-id="${p.id}">
       <td style="padding:10px 14px;font-weight:700;font-variant-numeric:tabular-nums">${p.folio || p.id}</td>
       <td style="padding:10px 14px">${p.clienteNombre || p.clienteId || "–"}</td>
       <td style="padding:10px 14px">${p.ingenieroAlias || p.vendedor || "–"}</td>
@@ -158,6 +158,34 @@ function _renderTabla() {
         ${p.tipoVenta || "–"}</td>
     </tr>`;
   }).join("");
+
+  // Click handler: expand/collapse fila de detalle (solo un listener por tbody)
+  if (!tbody._detListenerAttached) {
+  tbody.addEventListener("click", e => {
+    const tr = e.target.closest("tr[data-id]");
+    if (!tr) return;
+    const id = tr.dataset.id;
+    const existing = tbody.querySelector(`tr.tr-detalle[data-for="${id}"]`);
+    if (existing) { existing.remove(); return; }
+    // Cerrar cualquier otro detalle abierto
+    tbody.querySelectorAll("tr.tr-detalle").forEach(r => r.remove());
+    const ped = _pedidos.find(p => p.id === id);
+    if (!ped) return;
+    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+    const det = document.createElement("tr");
+    det.className = "tr-detalle";
+    det.dataset.for = id;
+    det.innerHTML = `<td colspan="99" style="padding:12px 16px;background:var(--surface,#f8fafc);font-size:.85rem">
+  <strong>Folio:</strong> ${esc(ped.folio || ped.id)} &nbsp;
+  <strong>Cliente:</strong> ${esc(ped.cliente || ped.clienteNombre || '')} &nbsp;
+  <strong>Total:</strong> $${ped.total?.toFixed(2) || '0.00'} &nbsp;
+  <strong>Status:</strong> ${esc(ped.status || '')} &nbsp;
+  <strong>Ingeniero:</strong> ${esc(ped.ingeniero || ped.ingenieroAlias || '')}
+</td>`;
+    tr.insertAdjacentElement("afterend", det);
+  });
+  tbody._detListenerAttached = true;
+  } // end if !_detListenerAttached
 }
 
 function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }

@@ -35,6 +35,10 @@
   --amber:  #D97706;
   --violet: #7C3AED;
   --red:    #DC2626;
+
+  --c-surface: var(--surface);
+  --c-border:  var(--border);
+  --c-text:    var(--text-primary);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -83,7 +87,7 @@ html, body {
 .login-sub   { font-size: 9px; color: var(--green-mid); letter-spacing: 2px; font-weight: 700; margin-top: 2px; }
 
 .form-group  { margin-bottom: 16px; }
-.form-label  { display: block; font-size: 11.5px; font-weight: 700; color: var(--text-sec); margin-bottom: 5px; }
+.form-label  { display: block; font-size: 13px; font-weight: 700; color: var(--text-sec); margin-bottom: 5px; }
 .form-input  {
   width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
   padding: 9px 12px; font-size: 13px; color: var(--text-primary);
@@ -102,6 +106,12 @@ html, body {
 }
 .btn-primary:hover { background: var(--green-mid); }
 .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+.btn-primary:focus-visible,
+.action-btn:focus-visible,
+.sb-item:focus-visible {
+  outline: 2px solid var(--accent, #3b82f6);
+  outline-offset: 2px;
+}
 .login-loading {
   display: flex; align-items: center; justify-content: center;
   gap: 8px; font-size: 12px; color: var(--text-sec); margin-top: 12px;
@@ -680,3 +690,32 @@ html, body {
 
 /* Toast container (global) */
 #toast-container { position: fixed; bottom: 40px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+
+/* ── Sidebar toggle button (mobile) ── */
+.sb-toggle-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  color: var(--text-primary);
+  padding: 6px 10px;
+}
+@media (max-width: 800px) {
+  .sb-toggle-btn { display: block; }
+  #sidebar.sb-open { left: 0 !important; }
+}
+
+/* ── Sidebar sublabels ── */
+.sb-sublabel {
+  font-size: 0.65rem;
+  color: var(--text-muted, #94a3b8);
+  padding: 6px 16px 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.sb-divider-mini {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 12px;
+}

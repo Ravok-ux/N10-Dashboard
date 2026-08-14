@@ -60,18 +60,20 @@ export const Auth = {
       btnEl.classList.remove("hidden");
       loadEl.classList.add("hidden");
       const msgs = {
-        "auth/invalid-credential": "Correo o contraseña incorrectos.",
-        "auth/user-not-found":     "No existe una cuenta con ese correo.",
-        "auth/wrong-password":     "Contraseña incorrecta.",
-        "auth/too-many-requests":  "Demasiados intentos. Intenta más tarde.",
-        "auth/user-disabled":      "Esta cuenta fue desactivada."
+        "auth/invalid-credential":      "Correo o contraseña incorrectos.",
+        "auth/user-not-found":          "No existe una cuenta con ese correo.",
+        "auth/wrong-password":          "Contraseña incorrecta.",
+        "auth/too-many-requests":       "Demasiados intentos. Espera unos minutos.",
+        "auth/user-disabled":           "Esta cuenta está deshabilitada.",
+        "auth/network-request-failed":  "Sin conexión a internet. Revisa tu red.",
+        "auth/internal-error":          "Error interno. Intenta de nuevo."
       };
       _showLoginError(msgs[e.code] ?? `Error: ${e.message}`);
     }
   },
 
   async logout() {
-    if (!confirm("¿Cerrar sesión?")) return;
+    if (!confirm("¿Seguro que quieres cerrar sesión? Se perderán los cambios no guardados.")) return;
     await signOut(auth);
     Sesion.clear();
     _mostrarLogin();

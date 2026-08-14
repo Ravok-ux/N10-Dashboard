@@ -5,10 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>N-10 Analytics · Panel de Control</title>
   <link rel="stylesheet" href="css/styles.css">
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1B5E20">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="N-10 ERP">
+  <link rel="apple-touch-icon" href="icons/icon-192.svg">
   <!-- Google Maps — clave inyectada en deploy via Firebase Hosting rewrite o env -->
   <script>
     // La clave de Maps se sustituye en CI/CD: %%MAPS_API_KEY%%
     window.N10_MAPS_KEY = "%%MAPS_API_KEY%%";
+    // Registro del Service Worker (PWA)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
   </script>
 </head>
 <body>
@@ -92,6 +106,7 @@
       </a>
 
       <div class="sb-group admin-only" id="sb-admin-group">ADMINISTRACIÓN</div>
+      <div class="sb-sublabel admin-only">Operaciones</div>
       <a class="sb-item admin-only" href="#" data-view="usuarios" id="sb-usuarios">
         <span class="sb-icon">🔐</span> Usuarios y flags
       </a>
@@ -99,13 +114,15 @@
         <span class="sb-icon">📊</span> Comisiones
       </a>
       <a class="sb-item admin-only" href="#" data-view="compras">
-        <span class="sb-icon">🛒</span> Órdenes de compra
+        <span class="sb-icon">📋</span> Órdenes de compra
       </a>
+      <div class="sb-divider-mini admin-only"></div>
+      <div class="sb-sublabel admin-only">Control</div>
       <a class="sb-item admin-only" href="#" data-view="precios" id="sb-precios">
         <span class="sb-icon">💲</span> Precios y costos
       </a>
       <a class="sb-item admin-only" href="#" data-view="geocercas">
-        <span class="sb-icon">🗺</span> Geocercas
+        <span class="sb-icon">📍</span> Geocercas
       </a>
       <a class="sb-item admin-only" href="#" data-view="metas">
         <span class="sb-icon">🎯</span> Metas de Venta
@@ -113,6 +130,8 @@
       <a class="sb-item admin-only" href="#" data-view="autorizaciones">
         <span class="sb-icon">✅</span> Autorizaciones
       </a>
+      <div class="sb-divider-mini admin-only"></div>
+      <div class="sb-sublabel admin-only">Configuración</div>
       <a class="sb-item admin-only" href="#" data-view="formularios">
         <span class="sb-icon">📋</span> Formularios
       </a>
@@ -139,7 +158,7 @@
         <div class="sb-uname" id="sb-uname">–</div>
         <div class="sb-urole" id="sb-urole">–</div>
       </div>
-      <button class="sb-logout" title="Cerrar sesión" onclick="Auth.logout()">⎋</button>
+      <button class="sb-logout" title="Cerrar sesión" onclick="Auth.logout()">⏻ Salir</button>
     </div>
   </aside>
 
@@ -148,6 +167,7 @@
 
     <!-- TOP BAR -->
     <header class="topbar">
+      <button id="sb-toggle" class="sb-toggle-btn" aria-label="Menú">☰</button>
       <div class="tb-bc" id="tb-bc">Dashboard <span>/ Resumen del día</span></div>
       <div class="tb-spacer"></div>
       <div class="tb-search">

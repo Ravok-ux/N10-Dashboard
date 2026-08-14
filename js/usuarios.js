@@ -487,8 +487,13 @@ function _bindAcciones() {
   window.UsuariosUI = {
 
     nuevoUsuario() {
-      document.getElementById("modal-nuevo-usuario").classList.remove("hidden");
+      const overlayEl = document.getElementById("modal-nuevo-usuario");
+      overlayEl.classList.remove("hidden");
       this.previewPreset("INGENIERO");
+      const cerrar = () => this.cerrarModal();
+      overlayEl.addEventListener("click", e => { if (e.target === overlayEl) cerrar(); }, { once: true });
+      const onKey = e => { if (e.key === "Escape") { cerrar(); document.removeEventListener("keydown", onKey); } };
+      document.addEventListener("keydown", onKey);
     },
 
     cerrarModal() {
@@ -536,7 +541,10 @@ function _bindAcciones() {
         window.toast?.(`Usuario ${alias} pre-registrado como ${rol}`, "success");
         this.cerrarModal();
       } catch (e) {
-        window.toast?.("Error al guardar: " + e.message, "error");
+        const msg = /permission|PERMISSION/.test(e.message || "")
+          ? "Sin permisos para realizar esta acción."
+          : "Error al guardar. Verifica tu conexión e intenta de nuevo.";
+        window.toast?.(msg, "error");
       }
     },
 
@@ -547,7 +555,12 @@ function _bindAcciones() {
       const sel = document.getElementById("cr-rol");
       sel.value = rolActual;
       this.previewPresetCR(rolActual);
-      document.getElementById("modal-cambiar-rol").classList.remove("hidden");
+      const overlayEl = document.getElementById("modal-cambiar-rol");
+      overlayEl.classList.remove("hidden");
+      const cerrar = () => this.cerrarModal();
+      overlayEl.addEventListener("click", e => { if (e.target === overlayEl) cerrar(); }, { once: true });
+      const onKey = e => { if (e.key === "Escape") { cerrar(); document.removeEventListener("keydown", onKey); } };
+      document.addEventListener("keydown", onKey);
     },
 
     async confirmarCambioRol() {
@@ -580,7 +593,10 @@ function _bindAcciones() {
           `Rol actualizado a ${nuevoRol}${aplicarPreset ? " con preset" : ""}`, "success");
         this.cerrarModal();
       } catch (e) {
-        window.toast?.("Error: " + e.message, "error");
+        const msg = /permission|PERMISSION/.test(e.message || "")
+          ? "Sin permisos para realizar esta acción."
+          : "Error al guardar. Verifica tu conexión e intenta de nuevo.";
+        window.toast?.(msg, "error");
       }
     },
 
@@ -592,7 +608,10 @@ function _bindAcciones() {
           modificadoEn: serverTimestamp()
         });
       } catch (e) {
-        window.toast?.("Error al actualizar: " + e.message, "error");
+        const msg = /permission|PERMISSION/.test(e.message || "")
+          ? "Sin permisos para realizar esta acción."
+          : "Ocurrió un error. Intenta de nuevo.";
+        window.toast?.(msg, "error");
       }
     },
 
@@ -607,7 +626,10 @@ function _bindAcciones() {
         });
         window.toast?.(`Usuario ${nuevoEstado ? "reactivado" : "dado de baja"}`, "success");
       } catch (e) {
-        window.toast?.("Error: " + e.message, "error");
+        const msg = /permission|PERMISSION/.test(e.message || "")
+          ? "Sin permisos para realizar esta acción."
+          : "Ocurrió un error. Intenta de nuevo.";
+        window.toast?.(msg, "error");
       }
     }
   };
