@@ -148,6 +148,52 @@ function _initShell() {
     );
   }
 
+  // ── User popover ────────────────────────────────────────────
+  const sbUser   = document.querySelector(".sb-user");
+  const sbPop    = document.getElementById("sb-popover");
+  const darkTgl  = document.getElementById("dark-toggle");
+  const sbpLogout= document.getElementById("sbp-logout");
+
+  // Sincronizar datos en el popover
+  if (document.getElementById("sbp-ava"))  document.getElementById("sbp-ava").textContent  = initiales;
+  if (document.getElementById("sbp-name")) document.getElementById("sbp-name").textContent = Sesion.alias;
+  if (document.getElementById("sbp-role")) document.getElementById("sbp-role").textContent = Sesion.rol.replace("_"," ");
+
+  // Abrir/cerrar popover
+  if (sbUser && sbPop) {
+    sbUser.style.cursor = "pointer";
+    sbUser.addEventListener("click", e => {
+      e.stopPropagation();
+      sbPop.classList.toggle("hidden");
+    });
+    document.addEventListener("click", () => sbPop.classList.add("hidden"));
+    sbPop.addEventListener("click", e => e.stopPropagation());
+  }
+
+  // Dark mode — persistido en localStorage por usuario
+  const _dmKey = "n10_theme_" + (Sesion.uid || "default");
+  const _applyTheme = dark => {
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    if (darkTgl) darkTgl.checked = dark;
+  };
+  _applyTheme(localStorage.getItem(_dmKey) === "dark");
+  if (darkTgl) {
+    darkTgl.addEventListener("change", () => {
+      const isDark = darkTgl.checked;
+      localStorage.setItem(_dmKey, isDark ? "dark" : "light");
+      _applyTheme(isDark);
+    });
+  }
+
+  // Logout desde popover
+  if (sbpLogout) {
+    sbpLogout.addEventListener("click", () => {
+      if (confirm("¿Seguro que quieres cerrar sesión? Se perderán los cambios no guardados.")) {
+        Auth.logout?.() || import("./auth.js").then(m => m.Auth.cerrarSesion?.());
+      }
+    });
+  }
+
   // Prevenir cierre de pestaña con cambios pendientes
   window.addEventListener("beforeunload", e => {
     if (window.DirtyGuard?.isDirty()) {

@@ -81,6 +81,18 @@ function _html() {
         <span id="ms-sync">–</span>
       </div>
 
+      <!-- Botón Mi ubicación -->
+      <button id="btn-mi-ubicacion" title="Mi ubicación" style="
+        position:absolute;top:12px;right:12px;z-index:5;
+        width:36px;height:36px;border-radius:8px;
+        background:rgba(13,17,23,.85);border:1px solid #30363D;
+        color:#4ADE80;font-size:16px;cursor:pointer;
+        display:flex;align-items:center;justify-content:center;
+        backdrop-filter:blur(4px);transition:background .15s;
+      " onmouseover="this.style.background='rgba(74,222,128,.15)'"
+        onmouseout="this.style.background='rgba(13,17,23,.85)'"
+        onclick="MapaMiUbicacion.centrar()">📍</button>
+
       <!-- Panel Replay de Ruta -->
       <div id="replay-panel" style="
         position:absolute;bottom:0;left:0;right:0;
@@ -591,6 +603,98 @@ function _limpiarReplay() {
   _replay.idx    = 0;
   _actualizarUI();
 }
+
+// ── Mi ubicación ──────────────────────────────────────────────
+const _RADIO_KM = 5;
+
+function _distanciaKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+window.MapaMiUbicacion = {
+  _miPin: null,
+  _circulo: null,
+  _highlights: [],
+
+  centrar() {
+    if (!_map) { window.toast?.("El mapa no está listo aún.", "error"); return; }
+    if (!navigator.geolocation) { window.toast?.("Tu navegador no soporta geolocalización.", "error"); return; }
+
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+
+        // Pin de MI posición
+        if (this._miPin) this._miPin.setMap(null);
+        this._miPin = new google.maps.Marker({
+          position: { lat, lng },
+          map: _map,
+          title: "Mi posición",
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 10,
+            fillColor: "#3B82F6",
+            fillOpacity: 1,
+            strokeColor: "#fff",
+            strokeWeight: 2.5
+          },
+          zIndex: 999
+        });
+
+        // Círculo de 5 km
+        if (this._circulo) this._circulo.setMap(null);
+        this._circulo = new google.maps.Circle({
+          map: _map,
+          center: { lat, lng },
+          radius: _RADIO_KM * 1000,
+          strokeColor: "#3B82F6",
+          strokeOpacity: 0.5,
+          strokeWeight: 1.5,
+          fillColor: "#3B82F6",
+          fillOpacity: 0.06
+        });
+
+        // Centrar mapa
+        _map.panTo({ lat, lng });
+        _map.setZoom(13);
+
+        // Comparar con ingenieros en _markers
+        let cercanos = 0;
+        Object.entries(_markers).forEach(([alias, marker]) => {
+          const mPos = marker.getPosition?.();
+          if (!mPos) return;
+          const dist = _distanciaKm(lat, lng, mPos.lat(), mPos.lng());
+          if (dist <= _RADIO_KM) {
+            cercanos++;
+            // Resaltar con animación bounce
+            marker.setAnimation?.(google.maps.Animation.BOUNCE);
+            this._highlights.push(marker);
+            setTimeout(() => marker.setAnimation?.(null), 2100);
+          }
+        });
+
+        const msg = cercanos === 0
+          ? `Sin ingenieros en ${_RADIO_KM} km de tu posición.`
+          : `${cercanos} ingeniero${cercanos > 1 ? "s" : ""} a menos de ${_RADIO_KM} km de ti.`;
+        window.toast?.(msg, cercanos > 0 ? "success" : "info");
+      },
+      err => {
+        const msgs = {
+          1: "Permiso de ubicación denegado.",
+          2: "No se pudo obtener tu posición.",
+          3: "Tiempo agotado al obtener ubicación."
+        };
+        window.toast?.(msgs[err.code] || "Error de geolocalización.", "error");
+      },
+      { timeout: 10000, maximumAge: 30000, enableHighAccuracy: true }
+    );
+  }
+};
 
 // ── Dark map style para Google Maps ───────────────────────────
 function _mapStyles() {
