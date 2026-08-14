@@ -137,9 +137,9 @@ html, body {
 .sidebar {
   width: var(--sidebar-w); min-width: var(--sidebar-w);
   background: var(--green-dark);
-  display: flex; flex-direction: column; overflow-x: hidden; overflow-y: hidden;
+  display: flex; flex-direction: column; overflow: hidden;
   z-index: 10;
-  height: 100vh;
+  height: 100%;
 }
 
 .sb-brand {
@@ -767,20 +767,70 @@ html, body {
   --border-light: #21262D;
   --text-primary: #E6EDF3;
   --text-sec:     #8B949E;
-  --text-muted:   #6B7280;
+  --text-muted:   #6E7681;
   --shadow:       0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
   --shadow-md:    0 4px 16px rgba(0,0,0,.4);
   --c-surface: var(--surface);
   --c-border:  var(--border);
   --c-text:    var(--text-primary);
+  color-scheme: dark;
 }
-[data-theme="dark"] .login-card { background: #161B22; }
-[data-theme="dark"] .form-input { background: #0D1117; border-color: #30363D; color: #E6EDF3; }
-[data-theme="dark"] .topbar { background: var(--surface); }
-[data-theme="dark"] .tb-search-input { background: #0D1117; border-color: #30363D; color: #E6EDF3; }
+
+/* ── Fondos principales ── */
+[data-theme="dark"] body          { background: #0D1117; }
+[data-theme="dark"] .login-card   { background: #161B22; border: 1px solid #30363D; color: #E6EDF3; }
+[data-theme="dark"] .topbar       { background: #161B22; border-color: #30363D; }
+[data-theme="dark"] .subhdr       { background: #161B22; border-color: #30363D; }
+[data-theme="dark"] .statusbar    { background: #0D1117; border-color: #21262D; }
+[data-theme="dark"] .dash-right   { background: #161B22; border-color: #30363D; }
+[data-theme="dark"] .main         { background: #0D1117; }
+
+/* ── Inputs y búsqueda ── */
+[data-theme="dark"] .form-input        { background: #0D1117; border-color: #30363D; color: #E6EDF3; }
+[data-theme="dark"] .form-input::placeholder { color: #6E7681; }
+[data-theme="dark"] .tb-search        { background: #0D1117; border-color: #30363D; }
+[data-theme="dark"] .tb-search input  { color: #E6EDF3; }
+[data-theme="dark"] .tb-icon-btn      { background: #21262D; border-color: #30363D; }
+[data-theme="dark"] .tb-user-pill     { background: #21262D; border-color: #30363D; }
+[data-theme="dark"] .tb-uname         { color: #E6EDF3; }
+
+/* ── Cards y superficies ── */
+[data-theme="dark"] .kpi-card    { background: #161B22; border-color: #30363D; }
+[data-theme="dark"] .kpi-val     { color: #E6EDF3; }
 [data-theme="dark"] .view-card,
-[data-theme="dark"] .card       { background: var(--surface); border-color: var(--border); }
-[data-theme="dark"] table       { color: var(--text-primary); }
-[data-theme="dark"] th          { background: #161B22; border-color: #30363D; }
-[data-theme="dark"] td          { border-color: #21262D; }
-[data-theme="dark"] tr:hover td { background: rgba(255,255,255,.03); }
+[data-theme="dark"] .card        { background: #161B22; border-color: #30363D; }
+[data-theme="dark"] .date-chip   { background: #21262D; border-color: #30363D; color: #E6EDF3; }
+[data-theme="dark"] .rp-map      { background: #1C2128; }
+[data-theme="dark"] .rp-map-btn  { background: #21262D; border-color: #30363D; }
+
+/* ── Tablas ── */
+[data-theme="dark"] table              { color: #E6EDF3; }
+[data-theme="dark"] th                 { background: #161B22; border-color: #30363D; color: #8B949E; }
+[data-theme="dark"] td                 { border-color: #21262D; color: #C9D1D9; }
+[data-theme="dark"] tr:hover td        { background: rgba(255,255,255,.04); }
+[data-theme="dark"] .rank-table th     { border-color: #30363D; }
+[data-theme="dark"] .rank-table td     { border-color: #21262D; }
+[data-theme="dark"] .rank-table tr:hover td { background: #21262D; }
+[data-theme="dark"] .rank-name,
+[data-theme="dark"] .rank-money        { color: #E6EDF3; }
+
+/* ── Pills y badges ── */
+[data-theme="dark"] .pill-campo  { background: rgba(22,101,52,.3); color: #4ADE80; }
+[data-theme="dark"] .pill-parado { background: rgba(161,98,7,.3);  color: #FCD34D; }
+[data-theme="dark"] .pill-off    { background: #21262D; color: #6E7681; }
+[data-theme="dark"] .pill-ruta   { background: rgba(217,119,6,.2); color: #FCD34D; }
+[data-theme="dark"] .pill-conf   { background: rgba(29,78,216,.3); color: #93C5FD; }
+[data-theme="dark"] .pill-entg   { background: rgba(22,101,52,.3); color: #4ADE80; }
+[data-theme="dark"] .pill-venc   { background: rgba(220,38,38,.3); color: #F87171; }
+[data-theme="dark"] .kpi-delta.up { background: rgba(22,101,52,.3); color: #4ADE80; }
+[data-theme="dark"] .kpi-delta.dn { background: rgba(220,38,38,.3); color: #F87171; }
+[data-theme="dark"] .kpi-delta.nt { background: #21262D; color: #6E7681; }
+
+/* ── Botones ── */
+[data-theme="dark"] .btn-primary  { background: var(--green-mid); }
+[data-theme="dark"] .action-btn   { background: #21262D; border-color: #30363D; color: #E6EDF3; }
+
+/* ── Barras y estados ── */
+[data-theme="dark"] .bar-wrap     { background: #21262D; }
+[data-theme="dark"] .st-item      { color: #6E7681; }
+[data-theme="dark"] .st-sync      { color: #484F58; }
