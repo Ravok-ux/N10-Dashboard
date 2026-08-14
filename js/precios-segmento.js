@@ -157,6 +157,8 @@ export const SegmentoPrecioModule = (() => {
         <p class="card-desc">${esc(s.descripcion || '')}</p>
         <div class="card-actions">
           <button class="btn-sm btn-edit" data-id="${esc(d.id)}">Editar</button>
+          <button class="btn-sm btn-precios" data-id="${esc(d.id)}" title="Ver y editar precios de este segmento"
+            style="background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE">💲 Precios</button>
           <button class="btn-sm btn-del" data-id="${esc(d.id)}">Eliminar</button>
         </div>
       </div>`;
@@ -164,6 +166,18 @@ export const SegmentoPrecioModule = (() => {
 
     grid.querySelectorAll('.btn-edit').forEach(btn =>
       btn.addEventListener('click', () => _abrirPanelSegmento(container, docs.find(d => d.id === btn.dataset.id))));
+    grid.querySelectorAll('.btn-precios').forEach(btn =>
+      btn.addEventListener('click', () => {
+        // Activar tab Matriz
+        container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        container.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+        const tabBtn = [...container.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'matriz');
+        if (tabBtn) tabBtn.classList.add('active');
+        container.querySelector('#tabMatriz')?.classList.remove('hidden');
+        // Preseleccionar segmento
+        const sel = container.querySelector('#selectSegmentoMatriz');
+        if (sel) { sel.value = btn.dataset.id; sel.dispatchEvent(new Event('change')); }
+      }));
     grid.querySelectorAll('.btn-del').forEach(btn =>
       btn.addEventListener('click', () => _eliminarSegmento(btn.dataset.id)));
   }

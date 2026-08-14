@@ -87,12 +87,110 @@ function _html() {
       <button class="xl-btn xl-btn-export" onclick="Cli_xlExport()" style="margin-left:auto">
         ⬇ Exportar Clientes Excel
       </button>
+      <button onclick="IngenierosUI.abrirAlta()"
+        style="padding:6px 14px;border-radius:6px;border:none;background:#1B5E20;
+          color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+        + Nuevo ingeniero
+      </button>
     </div>
 
     <!-- Tarjetas de ingenieros -->
     <div id="ing-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
       <div style="padding:30px;text-align:center;color:#9CA3AF;font-size:13px;
         grid-column:1/-1">Cargando ingenieros…</div>
+    </div>
+  </div>
+
+  <!-- Modal alta de ingeniero -->
+  <div id="ing-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
+    z-index:1000;align-items:center;justify-content:center">
+    <div style="background:var(--c-surface,#fff);border-radius:14px;padding:28px;
+      width:420px;max-width:94vw;border:1px solid var(--c-border,#E5E7EB);
+      max-height:90vh;overflow-y:auto">
+      <div style="font-size:15px;font-weight:800;color:var(--c-text,#111);margin-bottom:18px">
+        Nuevo ingeniero / recuperador
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">
+            Alias* <span style="color:#9CA3AF;font-weight:400">(ID único, sin espacios)</span>
+          </label>
+          <input id="ing-f-alias" type="text" maxlength="20" autocomplete="off"
+            placeholder="jperez"
+            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
+              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Rol*</label>
+          <select id="ing-f-rol"
+            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
+              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+            <option value="INGENIERO">Ingeniero</option>
+            <option value="RECUPERADOR">Recuperador</option>
+            <option value="GERENTE_ZONA">Gerente de zona</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Nombre completo*</label>
+        <input id="ing-f-nombre" type="text" maxlength="80" placeholder="Juan Pérez García"
+          style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
+            font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Correo*</label>
+          <input id="ing-f-email" type="email" maxlength="80" placeholder="jperez@empresa.com"
+            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
+              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Teléfono</label>
+          <input id="ing-f-tel" type="tel" maxlength="15" placeholder="5551234567"
+            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
+              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Zona</label>
+          <input id="ing-f-zona" type="text" maxlength="40" placeholder="Norte"
+            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
+              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Vehículo</label>
+          <input id="ing-f-vehiculo" type="text" maxlength="50" placeholder="Nissan NP300 ABC-123"
+            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
+              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+        </div>
+      </div>
+
+      <div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;padding:10px 12px;
+        font-size:11px;color:#713F12;margin-bottom:18px;line-height:1.5">
+        ⚠️ Después de guardar, crea la cuenta de acceso en <strong>Firebase Console → Authentication</strong>
+        usando el mismo correo. El ingeniero aparecerá en la APK en el próximo sync.
+      </div>
+
+      <div id="ing-modal-error" style="display:none;background:#FEE2E2;border-radius:6px;
+        padding:8px 12px;font-size:11.5px;color:#DC2626;margin-bottom:12px"></div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="IngenierosUI.cerrarAlta()"
+          style="padding:8px 18px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
+            background:transparent;color:var(--c-text,#111);font-size:12px;cursor:pointer">
+          Cancelar
+        </button>
+        <button onclick="IngenierosUI.guardarAlta()"
+          style="padding:8px 22px;border:none;border-radius:6px;
+            background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+          Guardar
+        </button>
+      </div>
     </div>
   </div>`;
 }
@@ -105,6 +203,78 @@ function _bindUI() {
       document.querySelectorAll("[data-ing-f]").forEach(b =>
         b.classList.toggle("active", b.dataset.ingF === f));
       _render();
+    },
+
+    abrirAlta() {
+      ["ing-f-alias","ing-f-nombre","ing-f-email","ing-f-tel","ing-f-zona","ing-f-vehiculo"]
+        .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+      const rol = document.getElementById("ing-f-rol");
+      if (rol) rol.value = "INGENIERO";
+      const err = document.getElementById("ing-modal-error");
+      if (err) err.style.display = "none";
+      document.getElementById("ing-modal").style.display = "flex";
+      setTimeout(() => document.getElementById("ing-f-alias")?.focus(), 80);
+    },
+
+    cerrarAlta() {
+      document.getElementById("ing-modal").style.display = "none";
+    },
+
+    async guardarAlta() {
+      const alias   = document.getElementById("ing-f-alias").value.trim().toLowerCase().replace(/\s+/g,"");
+      const nombre  = document.getElementById("ing-f-nombre").value.trim();
+      const email   = document.getElementById("ing-f-email").value.trim().toLowerCase();
+      const tel     = document.getElementById("ing-f-tel").value.trim();
+      const zona    = document.getElementById("ing-f-zona").value.trim();
+      const vehiculo= document.getElementById("ing-f-vehiculo").value.trim();
+      const rol     = document.getElementById("ing-f-rol").value;
+
+      const errEl = document.getElementById("ing-modal-error");
+      const mostrarError = msg => { errEl.textContent = msg; errEl.style.display = "block"; };
+
+      if (!alias)  { mostrarError("El alias es obligatorio."); return; }
+      if (!/^[a-z0-9_-]{2,20}$/.test(alias)) {
+        mostrarError("Alias solo puede contener letras, números, guion o guion bajo (2-20 caracteres)."); return;
+      }
+      if (!nombre) { mostrarError("El nombre es obligatorio."); return; }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        mostrarError("Ingresa un correo válido."); return;
+      }
+
+      errEl.style.display = "none";
+      const btn = document.querySelector("#ing-modal button[onclick='IngenierosUI.guardarAlta()']");
+      if (btn) { btn.disabled = true; btn.textContent = "Guardando…"; }
+
+      try {
+        const { setDoc, doc, serverTimestamp, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        const { db: fdb } = await import("./firebase-config.js");
+
+        const ref = doc(fdb, "usuarios", alias);
+        const existe = await getDoc(ref);
+        if (existe.exists()) {
+          mostrarError(`Ya existe un usuario con alias "${alias}". Usa uno diferente.`);
+          if (btn) { btn.disabled = false; btn.textContent = "Guardar"; }
+          return;
+        }
+
+        await setDoc(ref, {
+          alias, nombre, email,
+          ...(tel      ? { telefono: tel }      : {}),
+          ...(zona     ? { zona }               : {}),
+          ...(vehiculo ? { vehiculo }            : {}),
+          rol,
+          activo: true,
+          creadoPor: window.Sesion?.alias ?? "web",
+          creadoEn:  serverTimestamp()
+        });
+
+        window.toast?.(`Ingeniero "${alias}" registrado correctamente.`, "success");
+        this.cerrarAlta();
+      } catch(e) {
+        mostrarError("Error al guardar: " + e.message);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Guardar"; }
+      }
     }
   };
 }

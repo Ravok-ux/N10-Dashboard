@@ -112,6 +112,11 @@ function _html() {
       <input id="pc-buscar" type="text" placeholder="Buscar producto…"
         style="padding:6px 10px;border-radius:6px;border:1px solid var(--c-border);
           background:var(--c-surface);color:var(--c-text);font-size:12px;width:220px">
+      ${PUEDE_PRECIOS() ? `<button onclick="ProdCtrlUI.abrirAltaProducto()"
+        style="padding:6px 14px;border-radius:6px;border:none;background:#1B5E20;
+          color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">
+        + Nuevo producto
+      </button>` : ""}
       <div style="display:flex;gap:6px">
         ${["todos","activos","inactivos"].map(f => `
           <button class="filter-pill ${f==="todos"?"active":""}" data-filtro="${f}"
@@ -165,6 +170,83 @@ function _html() {
             </td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Modal nuevo producto -->
+    <div id="pc-modal-nuevo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
+      z-index:1000;align-items:center;justify-content:center">
+      <div style="background:var(--c-surface);border-radius:14px;padding:28px;
+        width:460px;max-width:94vw;border:1px solid var(--c-border);max-height:90vh;overflow-y:auto">
+        <div style="font-size:15px;font-weight:800;color:var(--c-text);margin-bottom:18px">Nuevo producto</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Código*</label>
+            <input id="pn-codigo" type="text" maxlength="30" placeholder="PROD-001"
+              style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
+                font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Categoría</label>
+            <input id="pn-categoria" type="text" maxlength="40" placeholder="Proteínas"
+              style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
+                font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+          </div>
+        </div>
+
+        <div style="margin-bottom:12px">
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Nombre*</label>
+          <input id="pn-nombre" type="text" maxlength="120" placeholder="Proteína Whey 1kg"
+            style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
+              font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+        </div>
+
+        <div style="margin-bottom:12px">
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Descripción</label>
+          <input id="pn-descripcion" type="text" maxlength="200" placeholder="Sabor vainilla, 30 porciones"
+            style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
+              font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Precio al cliente ($)</label>
+            <input id="pn-precio" type="number" min="0" step="0.01" placeholder="450.00"
+              style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
+                font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Costo ($)</label>
+            <input id="pn-costo" type="number" min="0" step="0.01" placeholder="300.00"
+              style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
+                font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Unidad</label>
+            <input id="pn-unidad" type="text" maxlength="10" placeholder="PZA"
+              style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
+                font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+          </div>
+        </div>
+
+        <div style="font-size:11px;color:#9CA3AF;margin-bottom:6px" id="pn-margen-preview"></div>
+
+        <div id="pc-nuevo-error" style="display:none;background:#FEE2E2;border-radius:6px;
+          padding:8px 12px;font-size:11.5px;color:#DC2626;margin-bottom:12px"></div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button onclick="ProdCtrlUI.cerrarAltaProducto()"
+            style="padding:8px 18px;border:1px solid var(--c-border);border-radius:6px;
+              background:transparent;color:var(--c-text);font-size:12px;cursor:pointer">
+            Cancelar
+          </button>
+          <button onclick="ProdCtrlUI.guardarNuevoProducto()"
+            style="padding:8px 22px;border:none;border-radius:6px;
+              background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+            Guardar producto
+          </button>
+        </div>
       </div>
     </div>
 
@@ -332,10 +414,25 @@ function _bindUI() {
     });
   }
 
-  // Preview de margen en modal
+  // Preview de margen en modal edición
   ["pc-modal-precio","pc-modal-costo"].forEach(id => {
     document.getElementById(id)?.addEventListener("input", _actualizarMargenModal);
   });
+
+  // Preview de margen en modal nuevo
+  const _previewNuevo = () => {
+    const precio = parseFloat(document.getElementById("pn-precio")?.value ?? "0");
+    const costo  = parseFloat(document.getElementById("pn-costo")?.value  ?? "0");
+    const el = document.getElementById("pn-margen-preview");
+    if (!el) return;
+    if (costo > 0 && precio > 0) {
+      const mg = ((precio - costo) / costo) * 100;
+      const col = mg >= 20 ? "#16A34A" : mg >= 5 ? "#D97706" : "#DC2626";
+      el.innerHTML = `Margen estimado: <strong style="color:${col}">${mg.toFixed(1)}%</strong>`;
+    } else { el.textContent = ""; }
+  };
+  document.getElementById("pn-precio")?.addEventListener("input", _previewNuevo);
+  document.getElementById("pn-costo")?.addEventListener("input",  _previewNuevo);
 
   let _editandoId = null;
 
@@ -397,6 +494,67 @@ function _bindUI() {
         this.cerrarModal();
       } catch (e) {
         window.toast?.("Error al guardar: " + e.message, "error");
+      }
+    },
+
+    abrirAltaProducto() {
+      ["pn-codigo","pn-nombre","pn-descripcion","pn-precio","pn-costo","pn-unidad","pn-categoria"]
+        .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+      const err = document.getElementById("pc-nuevo-error");
+      if (err) err.style.display = "none";
+      const prev = document.getElementById("pn-margen-preview");
+      if (prev) prev.textContent = "";
+      document.getElementById("pc-modal-nuevo").style.display = "flex";
+      setTimeout(() => document.getElementById("pn-codigo")?.focus(), 80);
+    },
+
+    cerrarAltaProducto() {
+      document.getElementById("pc-modal-nuevo").style.display = "none";
+    },
+
+    async guardarNuevoProducto() {
+      const codigo      = document.getElementById("pn-codigo").value.trim().toUpperCase();
+      const nombre      = document.getElementById("pn-nombre").value.trim();
+      const descripcion = document.getElementById("pn-descripcion").value.trim();
+      const precioRaw   = document.getElementById("pn-precio").value;
+      const costoRaw    = document.getElementById("pn-costo").value;
+      const unidad      = document.getElementById("pn-unidad").value.trim().toUpperCase();
+      const categoria   = document.getElementById("pn-categoria").value.trim();
+
+      const errEl = document.getElementById("pc-nuevo-error");
+      const mostrarError = msg => { errEl.textContent = msg; errEl.style.display = "block"; };
+
+      if (!codigo)  { mostrarError("El código es obligatorio."); return; }
+      if (!nombre)  { mostrarError("El nombre es obligatorio."); return; }
+
+      const precio = precioRaw !== "" ? parseFloat(precioRaw) : null;
+      const costo  = costoRaw  !== "" ? parseFloat(costoRaw)  : null;
+      if (precio !== null && (isNaN(precio) || precio < 0)) { mostrarError("Precio inválido."); return; }
+      if (costo  !== null && (isNaN(costo)  || costo  < 0)) { mostrarError("Costo inválido.");  return; }
+
+      errEl.style.display = "none";
+      const btn = document.querySelector("#pc-modal-nuevo button[onclick='ProdCtrlUI.guardarNuevoProducto()']");
+      if (btn) { btn.disabled = true; btn.textContent = "Guardando…"; }
+
+      try {
+        const datos = {
+          codigo, nombre,
+          ...(descripcion ? { descripcion } : {}),
+          ...(precio !== null ? { precioBase: precio } : {}),
+          ...(costo  !== null ? { costoBase:  costo  } : {}),
+          ...(unidad   ? { unidad }   : {}),
+          ...(categoria? { categoria }: {}),
+          activo: true,
+          creadoPor: Sesion.alias,
+          creadoEn:  serverTimestamp()
+        };
+        await addDoc(collection(db, "productos"), datos);
+        window.toast?.(`Producto "${nombre}" registrado correctamente.`, "success");
+        this.cerrarAltaProducto();
+      } catch(e) {
+        mostrarError("Error al guardar: " + e.message);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Guardar producto"; }
       }
     },
 
