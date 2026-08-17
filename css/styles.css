@@ -1036,3 +1036,183 @@ html, body {
 [data-theme="dark"] .bar-wrap     { background: #21262D; }
 [data-theme="dark"] .st-item      { color: #6E7681; }
 [data-theme="dark"] .st-sync      { color: #484F58; }
+
+/* ════════════════════════════════════════════════════
+   MODAL DE PREFERENCIAS
+   ════════════════════════════════════════════════════ */
+
+/* Botón del popover */
+.sbp-btn-prefs {
+  display: block; width: 100%; padding: 9px 14px;
+  background: transparent; border: none; border-radius: 7px;
+  color: var(--text); font-size: 13px; text-align: left;
+  cursor: pointer; transition: background .15s;
+}
+.sbp-btn-prefs:hover { background: var(--surface-2, rgba(0,0,0,.06)); }
+
+/* Overlay */
+#prefs-overlay {
+  position: fixed; inset: 0; z-index: 1200;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+
+/* Modal box */
+.prefs-modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; width: 100%; max-width: 580px;
+  max-height: 88vh; display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  overflow: hidden;
+}
+
+/* Header */
+.prefs-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.prefs-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.prefs-x {
+  background: none; border: none; color: var(--text-muted);
+  font-size: 17px; cursor: pointer; padding: 4px 8px;
+  border-radius: 6px; line-height: 1; transition: background .15s;
+}
+.prefs-x:hover { background: var(--surface-2, rgba(0,0,0,.07)); }
+
+/* Scrollable body */
+.prefs-body {
+  overflow-y: auto; padding: 4px 0;
+  flex: 1;
+}
+
+/* Sections */
+.prefs-sec {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.prefs-sec:last-child { border-bottom: none; }
+
+.prefs-sec-title {
+  font-size: 13px; font-weight: 700; color: var(--primary);
+  text-transform: uppercase; letter-spacing: .04em;
+  margin-bottom: 12px;
+}
+
+.prefs-label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: var(--text-muted); margin-bottom: 6px;
+  text-transform: uppercase; letter-spacing: .03em;
+}
+
+.prefs-hint {
+  font-size: 12px; color: var(--text-muted); margin-top: 4px;
+  line-height: 1.45;
+}
+
+.prefs-input {
+  width: 100%; padding: 9px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text); font-size: 13px;
+  transition: border-color .15s;
+  box-sizing: border-box;
+}
+.prefs-input:focus {
+  outline: none; border-color: var(--primary);
+}
+
+/* Color swatches */
+.prefs-color-grid {
+  display: flex; gap: 10px; flex-wrap: wrap;
+}
+.prefs-swatch {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 2px solid transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 14px; font-weight: 700;
+  transition: border-color .15s, transform .1s;
+}
+.prefs-swatch:hover { transform: scale(1.12); }
+.prefs-swatch.sel   { border-color: var(--text); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text); }
+
+/* Radio grid */
+.prefs-radio-grid {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.prefs-radio-item {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; color: var(--text); cursor: pointer;
+  padding: 7px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg);
+  transition: border-color .15s, background .15s;
+}
+.prefs-radio-item:hover { border-color: var(--primary); }
+.prefs-radio-item input[type="radio"] { accent-color: var(--primary); }
+.prefs-radio-item:has(input:checked) {
+  border-color: var(--primary);
+  background: rgba(29,92,51,.08);
+}
+
+/* Checkboxes grid */
+.prefs-checks-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+}
+@media (max-width: 480px) { .prefs-checks-grid { grid-template-columns: 1fr; } }
+
+.prefs-check-item {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; color: var(--text); cursor: pointer;
+  padding: 7px 10px; border-radius: 8px;
+  border: 1px solid transparent;
+  transition: background .12s;
+}
+.prefs-check-item:hover { background: var(--surface-2, rgba(0,0,0,.05)); }
+.prefs-check-item input[type="checkbox"] { accent-color: var(--primary); }
+
+/* Density buttons */
+.prefs-density-row {
+  display: flex; gap: 8px;
+}
+.prefs-density-btn {
+  flex: 1; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text-muted); font-size: 13px; cursor: pointer;
+  transition: all .15s;
+}
+.prefs-density-btn:hover   { border-color: var(--primary); color: var(--text); }
+.prefs-density-btn.active  { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* Badge "Solo APK" */
+.prefs-badge {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  background: rgba(217,119,6,.15); color: #D97706;
+  border: 1px solid rgba(217,119,6,.3);
+  border-radius: 4px; padding: 1px 6px;
+  vertical-align: middle; margin-left: 6px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+
+/* Footer */
+.prefs-footer {
+  display: flex; gap: 10px; justify-content: flex-end;
+  padding: 14px 20px; border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.prefs-save-btn {
+  padding: 9px 20px; border-radius: 8px;
+  background: var(--primary); color: #fff;
+  border: none; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.prefs-save-btn:hover    { background: var(--green-mid, #2A6B37); }
+.prefs-save-btn:disabled { opacity: .6; cursor: default; }
+
+/* ── Dark mode overrides para prefs ── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .prefs-radio-item:has(input:checked) { background: rgba(109,191,138,.08); }
+  :root:not([data-theme="light"]) .prefs-density-btn.active             { background: var(--primary); }
+}
+[data-theme="dark"] .prefs-radio-item:has(input:checked) { background: rgba(109,191,138,.08); }
+[data-theme="dark"] .sbp-btn-prefs:hover { background: rgba(255,255,255,.06); }
+[data-theme="dark"] .prefs-badge { background: rgba(251,182,68,.1); color: #FBB644; border-color: rgba(251,182,68,.25); }

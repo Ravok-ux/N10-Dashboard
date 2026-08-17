@@ -26,9 +26,10 @@ export const Sesion = {
   alias:  "",
   rol:    "",
   flags:  {},
+  prefs:  {},
   esSuperAdmin() { return this.rol === "SUPER_ADMIN"; },
   tieneFlag(f)    { return this.esSuperAdmin() || this.flags[f] === true; },
-  clear() { this.uid=""; this.email=""; this.alias=""; this.rol=""; this.flags={}; }
+  clear() { this.uid=""; this.email=""; this.alias=""; this.rol=""; this.flags={}; this.prefs={}; }
 };
 
 // ── Autenticación ──────────────────────────────────────────────

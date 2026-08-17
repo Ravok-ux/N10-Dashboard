@@ -3,6 +3,7 @@
 // ══════════════════════════════════════════════════════════════
 
 import { Auth, Sesion, iniciarInactivityTimer, detenerInactivityTimer } from "./auth.js";
+import { PreferenciasModule, aplicarPrefsIniciales } from "./preferencias.js";
 import { DashboardModule }  from "./dashboard.js";
 import { MapaModule }       from "./mapa.js";
 import { FeedModule }       from "./feed.js";
@@ -70,7 +71,11 @@ Auth.observarSesion(
   () => {
     iniciarInactivityTimer();
     _initShell();
-    _navigate("dashboard");
+    aplicarPrefsIniciales(Sesion.uid).then(() => {
+      // Navegar a vista por defecto de prefs si existe
+      const defView = Sesion.prefs?.defaultView;
+      _navigate(defView && defView !== "dashboard" ? defView : "dashboard");
+    }).catch(() => _navigate("dashboard"));
   },
   () => {
     detenerInactivityTimer();
@@ -182,6 +187,15 @@ function _initShell() {
       const isDark = darkTgl.checked;
       localStorage.setItem(_dmKey, isDark ? "dark" : "light");
       _applyTheme(isDark);
+    });
+  }
+
+  // Preferencias desde popover
+  const sbpPrefs = document.getElementById("sbp-prefs");
+  if (sbpPrefs) {
+    sbpPrefs.addEventListener("click", () => {
+      sbPop?.classList.add("hidden");
+      PreferenciasModule.abrir();
     });
   }
 
