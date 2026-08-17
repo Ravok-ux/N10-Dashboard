@@ -109,10 +109,12 @@ function _initShell() {
   // Sección Comentarios: MESA_CONTROL, ADMINISTRADOR, GERENTE_ZONA, GERENTE, SUPER_ADMIN
   const puedeVerComentarios = Sesion.esSuperAdmin() ||
     ["GERENTE","GERENTE_ZONA","ADMINISTRADOR","MESA_CONTROL"].includes(Sesion.rol);
-  const elCom = document.getElementById("sb-comentarios");
+  const elCom      = document.getElementById("sb-comentarios");
   const elGrupoSup = document.getElementById("sb-grupo-supervision");
+  const elSupItems = document.getElementById("sbi-supervision");
   if (elCom)      elCom.style.display      = puedeVerComentarios ? "" : "none";
   if (elGrupoSup) elGrupoSup.style.display = puedeVerComentarios ? "" : "none";
+  if (elSupItems) elSupItems.style.display = puedeVerComentarios ? "" : "none";
 
   // Firebase status verde
   _setStatus("firebase", true, "Firebase conectado");
@@ -152,6 +154,9 @@ function _initShell() {
       el.addEventListener("click", () => sbEl.classList.remove("sb-open"))
     );
   }
+
+  // Secciones colapsables del sidebar
+  _initSidebarCollapse();
 
   // ── User popover ────────────────────────────────────────────
   const sbUser   = document.querySelector(".sb-user");
@@ -353,6 +358,30 @@ function SimpleListModule(id, title, subtitle) {
         </div>`;
     }
   };
+}
+
+// ── Sidebar collapsible sections ──────────────────────────────
+function _initSidebarCollapse() {
+  const KEY = "n10_sb_";
+
+  document.querySelectorAll(".sb-group[data-section]").forEach(grp => {
+    const section = grp.dataset.section;
+    const items   = grp.nextElementSibling;
+    if (!items || !items.classList.contains("sb-section-items")) return;
+
+    // Restaurar estado guardado
+    if (localStorage.getItem(KEY + section) === "1") {
+      grp.classList.add("sb-collapsed");
+      items.classList.add("sb-collapsed");
+    }
+
+    grp.addEventListener("click", () => {
+      const closing = !grp.classList.contains("sb-collapsed");
+      grp.classList.toggle("sb-collapsed");
+      items.classList.toggle("sb-collapsed");
+      localStorage.setItem(KEY + section, closing ? "1" : "0");
+    });
+  });
 }
 
 // ── Exponer navigate globalmente ───────────────────────────────
