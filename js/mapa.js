@@ -499,7 +499,7 @@ async function _cargarPuntos(alias, fecha) {
       lat: parseFloat(d.data().lat),
       lng: parseFloat(d.data().lng),
       ts:  d.data().ts
-    })).filter(p => p.lat && p.lng);
+    })).filter(p => !isNaN(p.lat) && !isNaN(p.lng));
   } catch (e) {
     console.error("[Replay]", e);
   }

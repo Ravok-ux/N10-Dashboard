@@ -85,7 +85,15 @@ export const Auth = {
     let primeraVez = true;
     onAuthStateChanged(auth, async user => {
       if (user) {
-        await _cargarPerfil(user);
+        try {
+          await _cargarPerfil(user);
+        } catch (e) {
+          console.error("[auth] Error cargando perfil:", e);
+          window.manejarErrorFirestore?.(e);
+          primeraVez = false;
+          onLogout();
+          return;
+        }
         primeraVez = false;
         onLogin();
       } else {

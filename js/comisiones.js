@@ -244,9 +244,16 @@ function _bindAcciones() {
 
     async editarConfig(alias) {
       _editandoAlias = alias;
-      const snap = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js")
-        .then(m => m.getDoc(doc(db, "comision_config", alias)));
-      const c = snap.data() || {};
+      let snap;
+      try {
+        snap = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js")
+          .then(m => m.getDoc(doc(db, "comision_config", alias)));
+      } catch (e) {
+        console.error("[comisiones] Error al cargar config:", e);
+        window.toast?.("Error al cargar configuración. Intenta de nuevo.", "error");
+        return;
+      }
+      const c = snap.exists() ? snap.data() : {};
       _tramos = _parseTramos(c.tramosJson) || [{ meta: 100000, pct: 3 }];
 
       document.getElementById("com-alias").value   = alias;
@@ -278,8 +285,8 @@ function _bindAcciones() {
       // Leer tramos del DOM
       _tramos = [];
       document.querySelectorAll(".tramo-row").forEach(row => {
-        const meta = parseFloat(row.querySelector(".tramo-meta").value) || 0;
-        const pct  = parseFloat(row.querySelector(".tramo-pct").value)  || 0;
+        const meta = parseFloat(row.querySelector(".tramo-meta")?.value ?? "0") || 0;
+        const pct  = parseFloat(row.querySelector(".tramo-pct")?.value  ?? "0") || 0;
         _tramos.push({ meta, pct });
       });
       _tramos.sort((a, b) => a.meta - b.meta);

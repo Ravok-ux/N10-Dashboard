@@ -140,14 +140,15 @@ function _renderTabla() {
       Sin remisiones para este filtro.</td></tr>`;
     return;
   }
+  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
   tbody.innerHTML = lista.map(r => {
     const color = STATUS_COLOR[r.status] ?? "#9E9E9E";
     const venceStr = r.fechaVencimiento ? fmtDia(r.fechaVencimiento) : "–";
     const saldoColor = r.status === "VENCIDA" ? "#B71C1C" : r.status === "LIQUIDADA" ? "#1B5E20" : "#111827";
     return `<tr style="border-bottom:1px solid #F3F4F6">
-      <td style="padding:10px 14px;font-weight:700">${r.folio || r.remisionNumero || r.id}</td>
-      <td style="padding:10px 14px">${r.clienteNombre || r.clienteId || "–"}</td>
-      <td style="padding:10px 14px">${r.ingenieroAlias || "–"}</td>
+      <td style="padding:10px 14px;font-weight:700">${esc(r.folio || r.remisionNumero || r.id)}</td>
+      <td style="padding:10px 14px">${esc(r.clienteNombre || r.clienteId || "–")}</td>
+      <td style="padding:10px 14px">${esc(r.ingenieroAlias || "–")}</td>
       <td style="padding:10px 14px;text-align:right;font-variant-numeric:tabular-nums">
         ${fmt.format(r.montoTotal || 0)}</td>
       <td style="padding:10px 14px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:${saldoColor}">
@@ -155,7 +156,7 @@ function _renderTabla() {
       <td style="padding:10px 14px;text-align:center;color:#6B7280">${venceStr}</td>
       <td style="padding:10px 14px;text-align:center">
         <span style="font-size:9px;font-weight:800;padding:3px 8px;border-radius:8px;
-          background:${color}1A;color:${color}">${r.status}</span></td>
+          background:${color}1A;color:${color}">${esc(r.status)}</span></td>
     </tr>`;
   }).join("");
 }

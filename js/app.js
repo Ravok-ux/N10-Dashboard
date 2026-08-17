@@ -91,7 +91,7 @@ function _initShell() {
   const initiales = (Sesion.alias || "?").slice(0, 2).toUpperCase();
   document.getElementById("sb-ava").textContent   = initiales;
   document.getElementById("sb-uname").textContent = Sesion.alias;
-  document.getElementById("sb-urole").textContent = Sesion.rol.replace("_", " ");
+  document.getElementById("sb-urole").textContent = (Sesion.rol || "").replace("_", " ");
   document.getElementById("tb-ava").textContent   = initiales;
   document.getElementById("tb-uname").textContent = Sesion.alias;
 

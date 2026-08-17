@@ -1,7 +1,7 @@
 // Service Worker — N-10 ERP
 // Estrategia: Cache-first para assets estáticos, Network-first para datos dinámicos
 
-const CACHE_NAME = 'n10-erp-v5';
+const CACHE_NAME = 'n10-erp-v6';
 
 const STATIC_ASSETS = [
   '/',
@@ -41,8 +41,11 @@ const STATIC_ASSETS = [
 // Instalar — pre-cachear assets estáticos
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache =>
+      Promise.allSettled(STATIC_ASSETS.map(url =>
+        cache.add(url).catch(e => console.warn('[SW] No se pudo cachear:', url, e))
+      ))
+    ).then(() => self.skipWaiting())
   );
 });
 

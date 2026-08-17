@@ -208,7 +208,12 @@ window._gCentrar  = id => {
 };
 window._gEliminar = async id => {
   if (!confirm("¿Eliminar esta geocerca permanentemente?")) return;
-  await deleteDoc(doc(db, "geocercas", id));
+  try {
+    await deleteDoc(doc(db, "geocercas", id));
+  } catch (e) {
+    console.error("[geocercas] Error al eliminar:", e);
+    window.toast?.("Error al eliminar la geocerca. Intenta de nuevo.", "error");
+  }
 };
 
 // ── Formulario ─────────────────────────────────────────────────────────────────

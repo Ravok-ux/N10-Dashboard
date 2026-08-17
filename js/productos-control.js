@@ -463,8 +463,8 @@ function _bindUI() {
 
     async guardarPrecio() {
       if (!_editandoId) return;
-      const precio = parseFloat(document.getElementById("pc-modal-precio").value);
-      const costo  = parseFloat(document.getElementById("pc-modal-costo").value);
+      const precio = parseFloat(document.getElementById("pc-modal-precio")?.value ?? "");
+      const costo  = parseFloat(document.getElementById("pc-modal-costo")?.value ?? "");
       if (isNaN(precio) || precio < 0) { window.toast?.("Precio inválido", "error"); return; }
       if (isNaN(costo)  || costo  < 0) { window.toast?.("Costo inválido",  "error"); return; }
 

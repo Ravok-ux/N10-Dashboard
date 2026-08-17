@@ -142,20 +142,21 @@ function _renderTabla() {
       Sin pedidos para este filtro.</td></tr>`;
     return;
   }
+  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
   tbody.innerHTML = lista.map(p => {
     const color = STATUS_COLOR[p.status] ?? "#9E9E9E";
-    return `<tr style="border-bottom:1px solid #F3F4F6;cursor:pointer" data-id="${p.id}">
-      <td style="padding:10px 14px;font-weight:700;font-variant-numeric:tabular-nums">${p.folio || p.id}</td>
-      <td style="padding:10px 14px">${p.clienteNombre || p.clienteId || "–"}</td>
-      <td style="padding:10px 14px">${p.ingenieroAlias || p.vendedor || "–"}</td>
+    return `<tr style="border-bottom:1px solid #F3F4F6;cursor:pointer" data-id="${esc(p.id)}">
+      <td style="padding:10px 14px;font-weight:700;font-variant-numeric:tabular-nums">${esc(p.folio || p.id)}</td>
+      <td style="padding:10px 14px">${esc(p.clienteNombre || p.clienteId || "–")}</td>
+      <td style="padding:10px 14px">${esc(p.ingenieroAlias || p.vendedor || "–")}</td>
       <td style="padding:10px 14px;color:#6B7280">${p.fechaPedido ? fmtDt(p.fechaPedido) : "–"}</td>
       <td style="padding:10px 14px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums">
         ${fmt.format(p.total || 0)}</td>
       <td style="padding:10px 14px;text-align:center">
         <span style="font-size:9px;font-weight:800;padding:3px 8px;border-radius:8px;
-          background:${color}1A;color:${color}">${p.status?.replace(/_/g," ") || "–"}</span></td>
+          background:${color}1A;color:${color}">${esc(p.status?.replace(/_/g," ") || "–")}</span></td>
       <td style="padding:10px 14px;text-align:center;color:#6B7280;font-size:11px">
-        ${p.tipoVenta || "–"}</td>
+        ${esc(p.tipoVenta || "–")}</td>
     </tr>`;
   }).join("");
 

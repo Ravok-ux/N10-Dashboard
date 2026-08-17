@@ -285,9 +285,10 @@ let _rechazandoId = null;
 window._autRechazar = id => {
   _rechazandoId = id;
   const overlay = document.getElementById("autModalRechazo");
+  if (!overlay) return;
   overlay.style.display = "flex";
-  document.getElementById("autMotivoInput").value = "";
-  document.getElementById("autMotivoInput").focus();
+  const motivoInput = document.getElementById("autMotivoInput");
+  if (motivoInput) { motivoInput.value = ""; motivoInput.focus(); }
 
   document.getElementById("autBtnConfRechazo").onclick = async () => {
     const motivo = document.getElementById("autMotivoInput").value.trim();

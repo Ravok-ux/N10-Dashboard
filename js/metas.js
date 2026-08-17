@@ -297,7 +297,12 @@ async function _cargarProgreso(m) {
 window._mEditar   = id => _abrirForm(id);
 window._mEliminar = async id => {
   if (!confirm("¿Eliminar esta meta?")) return;
-  await deleteDoc(doc(db, "metas", id));
+  try {
+    await deleteDoc(doc(db, "metas", id));
+  } catch (e) {
+    console.error("[metas] Error al eliminar:", e);
+    window.toast?.("Error al eliminar la meta. Intenta de nuevo.", "error");
+  }
 };
 
 // ── Formulario ─────────────────────────────────────────────────────────────────

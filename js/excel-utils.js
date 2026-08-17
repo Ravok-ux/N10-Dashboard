@@ -148,7 +148,8 @@ export function importarExcel(cols) {
                 if (colDef.tipo === "booleano") {
                   obj[colDef.key] = ["si","sí","true","1","yes","activo"].includes(String(val).toLowerCase().trim());
                 } else if (colDef.tipo === "numero") {
-                  obj[colDef.key] = parseFloat(val) || 0;
+                  const n = parseFloat(val);
+                  obj[colDef.key] = isNaN(n) ? null : n;
                 } else {
                   obj[colDef.key] = String(val ?? "").trim();
                 }
