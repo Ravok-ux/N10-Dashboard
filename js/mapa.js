@@ -684,12 +684,15 @@ window.MapaMiUbicacion = {
         window.toast?.(msg, cercanos > 0 ? "success" : "info");
       },
       err => {
-        const msgs = {
-          1: "Permiso de ubicación denegado.",
-          2: "No se pudo obtener tu posición.",
-          3: "Tiempo agotado al obtener ubicación."
-        };
-        window.toast?.(msgs[err.code] || "Error de geolocalización.", "error");
+        if (err.code === 1) {
+          window.toast?.("Ubicación no compartida. Activa el permiso en el navegador si deseas usar esta función.", "info");
+        } else {
+          const msgs = {
+            2: "No se pudo obtener tu posición.",
+            3: "Tiempo agotado al obtener ubicación."
+          };
+          window.toast?.(msgs[err.code] || "Error de geolocalización.", "error");
+        }
       },
       { timeout: 10000, maximumAge: 30000, enableHighAccuracy: true }
     );
