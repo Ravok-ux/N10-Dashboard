@@ -336,10 +336,13 @@ html, body {
   flex: 1; overflow: hidden; position: relative;
 }
 .view {
-  display: none; height: 100%; overflow: hidden;
+  display: none; height: 100%; overflow: auto;
   flex-direction: column;
 }
 .view.active { display: flex; }
+/* Vistas con layout interno controlado (mapa, dashboard) manejan su propio overflow */
+#view-mapa   { overflow: hidden; }
+#view-feed   { overflow: hidden; }
 
 /* ══════════════════════════════
    STATUS BAR

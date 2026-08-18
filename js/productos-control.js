@@ -141,13 +141,12 @@ function _html() {
       ${toolbarHTML("Prod")}
     </div>
 
-    <!-- Tabla -->
-    <div style="flex:1;overflow-y:auto">
-      <div style="overflow-x:auto;min-width:100%">
-        <table style="width:100%;border-collapse:collapse;font-size:12px" id="pc-table">
+    <!-- Tabla: scroll vertical e horizontal -->
+    <div style="flex:1;overflow:auto;min-height:0">
+      <table style="border-collapse:collapse;font-size:12px;min-width:1500px;width:100%" id="pc-table">
           <thead>
             <tr style="background:var(--c-surface2,#1E293B);border-bottom:2px solid var(--c-border);
-              position:sticky;top:0;z-index:1">
+              position:sticky;top:0;z-index:2">
               <th style="${_th()}"><input type="checkbox" id="pc-chk-all" onchange="ProdCtrlUI.toggleTodos(this.checked)"
                 style="cursor:pointer"></th>
               <th style="${_th()}">ID</th>
@@ -163,6 +162,7 @@ function _html() {
               <th style="${_th(true)}">DESCRIPCIÓN</th>
               <th style="${_th()}">CON O SIN IMPUESTO</th>
               <th style="${_th()}">MAT. PRIMA</th>
+              <th style="${_th()}">ESTADO</th>
               ${PUEDE_EDITAR() ? `<th style="${_th()}">ACCIONES</th>` : ""}
             </tr>
           </thead>
@@ -170,7 +170,6 @@ function _html() {
             <tr><td colspan="15" style="text-align:center;color:#9CA3AF;padding:40px">Cargando…</td></tr>
           </tbody>
         </table>
-      </div>
     </div>
 
     <!-- ── Modal Edición completa ── -->
@@ -333,42 +332,49 @@ function _renderizar() {
   tbody.innerHTML = filtrados.map((p, i) => {
     const activo   = p.activo !== false;
     const num      = p.numero ?? (i + 1);
-    const codigo   = p.codigo ?? p._docId;
+    const codigo   = p.codigo || ("N10-" + String(Math.round(num)).padStart(4, "0"));
     const matPrima = p.materia_prima === true ? "Sí" : "–";
-    const impuesto = p.impuesto
-      ? (p.impuesto === "Exento" ? "Exento de Impuesto"
-        : p.impuesto === "IVA"   ? "Con IVA 16%"
-        : p.impuesto)
-      : "Exento de Impuesto";
+    const impuesto = !p.impuesto || p.impuesto === "Exento" ? "Exento de Impuesto"
+                   : p.impuesto === "IVA" ? "Con IVA 16%"
+                   : p.impuesto;
 
-    return `<tr style="${!activo ? "opacity:.5;" : ""}background:${i%2===1?"var(--c-surface2,rgba(255,255,255,.02))":"transparent"}">
+    return `<tr style="${!activo ? "opacity:.45;" : ""}background:${i%2===1?"var(--c-surface2,rgba(255,255,255,.02))":"transparent"}">
       <td style="${COL_TD}"><input type="checkbox" class="pc-chk-row" data-id="${esc(p._docId)}" style="cursor:pointer"></td>
-      <td style="${COL_TD}color:#9CA3AF">${num}</td>
-      <td style="${COL_TD}font-weight:600;color:var(--c-text)">${esc(codigo)}</td>
-      <td style="${COL_TD}color:#6B7280">${esc(p.clave_sat || "Sin clave SAT")}</td>
+      <td style="${COL_TD}color:#9CA3AF;font-variant-numeric:tabular-nums">${num}</td>
+      <td style="${COL_TD}font-weight:700;color:var(--c-text);font-family:monospace">${esc(codigo)}</td>
+      <td style="${COL_TD}color:#6B7280">${esc(p.clave_sat || "–")}</td>
       <td style="${COL_TD}color:#6B7280">${esc(p.nombre_sucursal || "Nutricion de 10")}</td>
-      <td style="${COL_TD}max-width:220px;overflow:hidden;text-overflow:ellipsis;
-        font-weight:600;color:var(--c-text)" title="${esc(p.nombre)}">${esc(p.nombre || "–")}</td>
+      <td style="${COL_TD}max-width:200px;overflow:hidden;text-overflow:ellipsis;
+        font-weight:600;color:var(--c-text);white-space:nowrap" title="${esc(p.nombre)}">${esc(p.nombre || "–")}</td>
       <td style="${COL_TD}text-align:right;font-weight:700;font-variant-numeric:tabular-nums;
-        color:${p.precio_base > 0 ? "#4ADE80" : "#F87171"}">
+        color:${p.precio_base > 0 ? "#4ADE80" : "#9CA3AF"}">
         ${p.precio_base > 0 ? fmtMXN(p.precio_base) : "–"}
       </td>
       <td style="${COL_TD}color:#6B7280">${esc(p.marca || "–")}</td>
       <td style="${COL_TD}color:#6B7280">${esc(p.categoria || "–")}</td>
       <td style="${COL_TD}color:#6B7280;text-align:right">${p.peso > 0 ? p.peso : "–"}</td>
-      <td style="${COL_TD}color:#6B7280;text-align:right">${p.stock ?? "–"}</td>
-      <td style="${COL_TD}max-width:200px;overflow:hidden;text-overflow:ellipsis;
+      <td style="${COL_TD}color:#6B7280;text-align:right;font-variant-numeric:tabular-nums">${p.stock ?? "–"}</td>
+      <td style="${COL_TD}max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
         color:#9CA3AF" title="${esc(p.descripcion)}">${esc(p.descripcion || "–")}</td>
-      <td style="${COL_TD}color:#6B7280">${esc(impuesto)}</td>
+      <td style="${COL_TD}color:#6B7280;white-space:nowrap">${esc(impuesto)}</td>
       <td style="${COL_TD}color:#6B7280;text-align:center">${matPrima}</td>
+      <td style="${COL_TD}text-align:center">
+        <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:9px;
+          background:${activo?"#DCFCE7":"#FEE2E2"};color:${activo?"#166534":"#DC2626"}">
+          ${activo ? "Activo" : "Inactivo"}
+        </span>
+      </td>
       ${puedeEditar ? `<td style="${COL_TD}">
-        <div style="display:flex;gap:6px;align-items:center">
+        <div style="display:flex;gap:5px;align-items:center;white-space:nowrap">
           <button onclick="ProdCtrlUI.abrirEdicion('${esc(p._docId)}')" title="Editar"
-            style="font-size:16px;background:transparent;border:none;cursor:pointer;padding:2px 4px;color:#FBBF24">✏</button>
-          <button onclick="ProdCtrlUI.toggleActivo('${esc(p._docId)}',${!activo})" title="${activo?"Desactivar":"Activar"}"
-            style="font-size:16px;background:transparent;border:none;cursor:pointer;padding:2px 4px;
-              color:${activo?"#F87171":"#4ADE80"}">
-            ${activo ? "⊘" : "✓"}
+            style="padding:3px 10px;border-radius:5px;border:1px solid #374151;
+              background:transparent;color:var(--c-text);font-size:11px;cursor:pointer;font-weight:600">
+            ✏ Editar
+          </button>
+          <button onclick="ProdCtrlUI.toggleActivo('${esc(p._docId)}',${!activo})"
+            style="padding:3px 10px;border-radius:5px;border:none;font-size:11px;cursor:pointer;font-weight:600;
+              background:${activo?"#FEE2E2":"#DCFCE7"};color:${activo?"#DC2626":"#166534"}">
+            ${activo ? "Desactivar" : "Activar"}
           </button>
         </div>
       </td>` : ""}
@@ -460,19 +466,22 @@ function _bindUI() {
     },
 
     async guardarEdicion() {
-      if (!_editandoId) return;
-      const nombre = document.getElementById("pc-e-nombre")?.value.trim();
-      if (!nombre) {
-        const err = document.getElementById("pc-edit-error");
-        err.textContent = "El nombre es obligatorio."; err.style.display = "block"; return;
-      }
+      const esNuevo = !_editandoId;
+      const nombre  = document.getElementById("pc-e-nombre")?.value.trim();
+      const errEl   = document.getElementById("pc-edit-error");
+      if (!nombre) { errEl.textContent = "El nombre es obligatorio."; errEl.style.display = "block"; return; }
       const btn = document.getElementById("pc-edit-save-btn");
       if (btn) { btn.disabled = true; btn.textContent = "Guardando…"; }
 
       try {
+        const p = esNuevo ? null : _todos.find(x => x._docId === _editandoId);
+        const codigoInput = document.getElementById("pc-e-codigo")?.value.trim();
+        const nextNum  = esNuevo ? Math.max(..._todos.map(x => x.numero ?? 0), 0) + 1 : (p?.numero ?? 0);
+        const codigo   = codigoInput || p?.codigo || ("N10-" + String(Math.round(nextNum)).padStart(4, "0"));
+
         const data = {
           nombre,
-          codigo:          document.getElementById("pc-e-codigo")?.value.trim() || _editandoId,
+          codigo,
           clave_sat:       document.getElementById("pc-e-clave_sat")?.value.trim()    || "",
           nombre_sucursal: document.getElementById("pc-e-nombre_suc")?.value.trim()  || "Nutricion de 10",
           marca:           document.getElementById("pc-e-marca")?.value.trim()        || "",
@@ -485,17 +494,24 @@ function _bindUI() {
           impuesto:        document.getElementById("pc-e-impuesto")?.value || "Exento",
           materia_prima:   document.getElementById("pc-e-materia_prima")?.checked === true,
           activo:          document.getElementById("pc-e-activo")?.checked !== false,
-          modificadoPor:   Sesion.alias,
-          modificadoEn:    serverTimestamp()
         };
-        await updateDoc(doc(db, "productos", _editandoId), data);
-        window.toast?.("Producto actualizado.", "success");
+
+        if (esNuevo) {
+          await addDoc(collection(db, "productos"), {
+            ...data, numero: nextNum, creadoPor: Sesion.alias, creadoEn: serverTimestamp()
+          });
+          window.toast?.(`Producto "${nombre}" creado con código ${codigo}.`, "success");
+        } else {
+          await updateDoc(doc(db, "productos", _editandoId), {
+            ...data, modificadoPor: Sesion.alias, modificadoEn: serverTimestamp()
+          });
+          window.toast?.("Producto actualizado.", "success");
+        }
         this.cerrarEdicion();
       } catch(e) {
-        const err = document.getElementById("pc-edit-error");
-        err.textContent = "Error: " + e.message; err.style.display = "block";
+        errEl.textContent = "Error: " + e.message; errEl.style.display = "block";
       } finally {
-        if (btn) { btn.disabled = false; btn.textContent = "Guardar cambios"; }
+        if (btn) { btn.disabled = false; btn.textContent = esNuevo ? "Guardar producto" : "Guardar cambios"; }
       }
     },
 
@@ -514,9 +530,10 @@ function _bindUI() {
       const err    = document.getElementById("pc-express-error");
       if (!nombre) { err.textContent = "Nombre obligatorio."; err.style.display = "block"; return; }
       try {
-        const num = Math.max(..._todos.map(p => p.numero ?? 0), 0) + 1;
+        const num    = Math.max(..._todos.map(p => p.numero ?? 0), 0) + 1;
+        const codigo = "N10-" + String(num).padStart(4, "0");
         await addDoc(collection(db, "productos"), {
-          nombre, precio_base: precio, activo: true, numero: num,
+          nombre, codigo, precio_base: precio, activo: true, numero: num,
           nombre_sucursal: "Nutricion de 10", impuesto: "Exento",
           materia_prima: false, peso: 0, clave_sat: "", costo_base: 0,
           creadoPor: Sesion.alias, creadoEn: serverTimestamp()
@@ -529,10 +546,14 @@ function _bindUI() {
     // ── Nuevo Normal ──────────────────────────────────────────
     abrirAltaProducto() {
       _editandoId = null;
-      ["pc-e-nombre","pc-e-codigo","pc-e-clave_sat","pc-e-nombre_suc",
+      const nextNum   = Math.max(..._todos.map(p => p.numero ?? 0), 0) + 1;
+      const nextCodigo = "N10-" + String(nextNum).padStart(4, "0");
+      ["pc-e-nombre","pc-e-clave_sat",
        "pc-e-marca","pc-e-categoria","pc-e-subcategoria",
        "pc-e-precio","pc-e-costo","pc-e-peso","pc-e-descripcion"
-      ].forEach(id => _val(id, id === "pc-e-nombre_suc" ? "Nutricion de 10" : ""));
+      ].forEach(id => _val(id, ""));
+      _val("pc-e-codigo",    nextCodigo);
+      _val("pc-e-nombre_suc","Nutricion de 10");
       const selImp = document.getElementById("pc-e-impuesto");
       if (selImp) selImp.value = "Exento";
       const chkM = document.getElementById("pc-e-materia_prima"); if (chkM) chkM.checked = false;
