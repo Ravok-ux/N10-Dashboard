@@ -26,6 +26,18 @@ import { FormulariosModule }      from "./formularios.js";
 import { PromocionesModule }      from "./promociones.js";
 import { SegmentoPrecioModule }   from "./precios-segmento.js";
 import { ClientesModule }         from "./clientes.js";
+import { KardexModule }           from "./kardex.js";
+import { CarteraModule }          from "./cartera.js";
+import { VisitasModule }          from "./visitas.js";
+import { CotizacionesPanelModule } from "./cotizaciones-panel.js";
+import { DevolucionesModule }      from "./devoluciones.js";
+import { ChatModule, iniciarChatBg, detenerChatBg } from "./chat.js";
+import { RhModule }               from "./rh.js";
+import { AuditoriaModule }        from "./auditoria.js";
+import { InventarioModule }       from "./inventario.js";
+import { CrmModule }              from "./crm.js";
+import { LogisticaModule }        from "./logistica.js";
+import { iniciarNotificaciones, detenerNotificaciones } from "./notificaciones.js";
 
 // ── Sanitización XSS ──────────────────────────────────────────
 // Usa esta función en TODOS los lugares donde datos de Firestore
@@ -38,6 +50,90 @@ export function esc(str) {
 }
 // Exponerlo globalmente para módulos que no usen import
 window.esc = esc;
+
+// ── Modal de confirmación ─────────────────────────────────────
+// Reemplaza confirm() / prompt() nativos con un modal estilizado.
+// Uso: const ok = await window.modal({ message:"¿Seguro?", danger:true })
+// Uso prompt: const txt = await window.promptModal({ label:"Motivo" })
+window.modal = ({ title = "", message = "", confirmLabel = "Confirmar", cancelLabel = "Cancelar", danger = false } = {}) =>
+  new Promise(resolve => {
+    const o = document.createElement("div");
+    o.id = "_gmodal";
+    o.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9990;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px)";
+    const confirmStyle = danger
+      ? "background:#DC2626;color:#fff;border:1px solid #B91C1C"
+      : "background:var(--primary,#1D5C33);color:#fff;border:1px solid #16A34A";
+    o.innerHTML = `
+      <div style="background:var(--surface,#1e293b);border:1px solid var(--border,#334155);border-radius:12px;
+        padding:24px 28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.45)">
+        ${title ? `<div style="font-size:14px;font-weight:700;color:var(--text,#f1f5f9);margin-bottom:10px">${esc(title)}</div>` : ""}
+        <div style="font-size:13px;color:var(--text2,#94a3b8);line-height:1.6;margin-bottom:20px">${esc(message)}</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button id="_gm-c" style="padding:8px 18px;border-radius:7px;font-size:12px;font-weight:600;
+            cursor:pointer;border:1px solid var(--border,#334155);background:transparent;color:var(--text2,#94a3b8)">${esc(cancelLabel)}</button>
+          <button id="_gm-ok" style="padding:8px 18px;border-radius:7px;font-size:12px;font-weight:600;
+            cursor:pointer;${confirmStyle}">${esc(confirmLabel)}</button>
+        </div>
+      </div>`;
+    const close = r => { o.remove(); resolve(r); };
+    o.querySelector("#_gm-c").onclick  = () => close(false);
+    o.querySelector("#_gm-ok").onclick = () => close(true);
+    o.addEventListener("click", e => { if (e.target === o) close(false); });
+    const onKey = e => { if (e.key === "Escape") { close(false); document.removeEventListener("keydown", onKey); } };
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(o);
+    o.querySelector("#_gm-ok").focus();
+  });
+
+// ── Skeleton loader ───────────────────────────────────────────
+// Genera N filas skeleton para mostrar mientras carga Firestore.
+// Uso: container.innerHTML = window.skeleton(5, 4); // 5 filas, 4 columnas
+window.skeleton = (rows = 4, cols = 4) => {
+  const cells = Array(cols).fill(`<td><div class="skel-cell"></div></td>`).join("");
+  const trs   = Array(rows).fill(`<tr>${cells}</tr>`).join("");
+  if (!document.getElementById("_skel-style")) {
+    const s = document.createElement("style");
+    s.id = "_skel-style";
+    s.textContent = `
+      .skel-cell { height:12px; border-radius:4px;
+        background: linear-gradient(90deg, var(--border,#e2e8f0) 25%, var(--surface2,#f8fafc) 50%, var(--border,#e2e8f0) 75%);
+        background-size:200% 100%; animation:skel-shine 1.4s ease infinite; }
+      @keyframes skel-shine { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    `;
+    document.head.appendChild(s);
+  }
+  return `<table style="width:100%;border-collapse:collapse"><tbody>${trs}</tbody></table>`;
+};
+
+window.promptModal = ({ title = "", label = "", placeholder = "", confirmLabel = "Aceptar", cancelLabel = "Cancelar" } = {}) =>
+  new Promise(resolve => {
+    const o = document.createElement("div");
+    o.id = "_gpmodal";
+    o.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9990;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px)";
+    o.innerHTML = `
+      <div style="background:var(--surface,#1e293b);border:1px solid var(--border,#334155);border-radius:12px;
+        padding:24px 28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.45)">
+        ${title ? `<div style="font-size:14px;font-weight:700;color:var(--text,#f1f5f9);margin-bottom:10px">${esc(title)}</div>` : ""}
+        ${label ? `<label style="font-size:12px;color:var(--text2,#94a3b8);display:block;margin-bottom:6px">${esc(label)}</label>` : ""}
+        <input id="_gpi" type="text" placeholder="${esc(placeholder)}"
+          style="width:100%;padding:9px 12px;border:1px solid var(--border,#334155);border-radius:7px;
+            font-size:13px;background:var(--bg,#0f172a);color:var(--text,#f1f5f9);margin-bottom:16px;outline:none">
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button id="_gpi-c" style="padding:8px 18px;border-radius:7px;font-size:12px;font-weight:600;
+            cursor:pointer;border:1px solid var(--border,#334155);background:transparent;color:var(--text2,#94a3b8)">${esc(cancelLabel)}</button>
+          <button id="_gpi-ok" style="padding:8px 18px;border-radius:7px;font-size:12px;font-weight:600;
+            cursor:pointer;background:var(--primary,#1D5C33);color:#fff;border:1px solid #16A34A">${esc(confirmLabel)}</button>
+        </div>
+      </div>`;
+    const close = r => { o.remove(); resolve(r); };
+    o.querySelector("#_gpi-c").onclick  = () => close(null);
+    o.querySelector("#_gpi-ok").onclick = () => close(o.querySelector("#_gpi").value.trim() || null);
+    o.addEventListener("click", e => { if (e.target === o) close(null); });
+    const onKey = e => { if (e.key === "Escape") { close(null); document.removeEventListener("keydown", onKey); } };
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(o);
+    o.querySelector("#_gpi").focus();
+  });
 
 // ── Módulos registrados por nombre de vista ────────────────────
 const MODULES = {
@@ -52,6 +148,17 @@ const MODULES = {
   ingenieros: IngenierosModule,
   comisiones: ComisionesModule,
   compras:      ComprasModule,
+  kardex:       KardexModule,
+  cartera:      CarteraModule,
+  visitas:      VisitasModule,
+  cotizaciones: CotizacionesPanelModule,
+  devoluciones: DevolucionesModule,
+  chat:         ChatModule,
+  rh:           RhModule,
+  auditoria:    AuditoriaModule,
+  inventario:   InventarioModule,
+  crm:          CrmModule,
+  logistica:    LogisticaModule,
   precios:      PreciosModule,
   productos:    ProductosControlModule,
   geocercas:      GeocercasModule,
@@ -73,6 +180,8 @@ Auth.observarSesion(
   () => {
     iniciarInactivityTimer();
     _initShell();
+    // Listeners de fondo del chat: badge + sonido desde cualquier vista
+    setTimeout(() => iniciarChatBg(), 1200);
     aplicarPrefsIniciales(Sesion.uid).then(() => {
       // Navegar a vista por defecto de prefs si existe
       const defView = Sesion.prefs?.defaultView;
@@ -81,6 +190,8 @@ Auth.observarSesion(
   },
   () => {
     detenerInactivityTimer();
+    detenerNotificaciones();
+    detenerChatBg();
     _destroyAll();
     document.getElementById("app-shell").classList.add("hidden");
     document.getElementById("login-screen").classList.remove("hidden");
@@ -138,6 +249,12 @@ function _initShell() {
     document.body.appendChild(tc);
   }
   window.toast = _toast;
+
+  // Iniciar sistema de notificaciones web
+  iniciarNotificaciones(
+    document.getElementById("tb-notif-bell"),
+    document.getElementById("tb-notif-count")
+  );
 
   // Sidebar nav — event delegation con guard de descarte
   document.getElementById("sidebar").addEventListener("click", e => {
@@ -208,10 +325,15 @@ function _initShell() {
 
   // Logout desde popover
   if (sbpLogout) {
-    sbpLogout.addEventListener("click", () => {
-      if (confirm("¿Seguro que quieres cerrar sesión? Se perderán los cambios no guardados.")) {
-        Auth.logout?.() || import("./auth.js").then(m => m.Auth.cerrarSesion?.());
-      }
+    sbpLogout.addEventListener("click", async () => {
+      const ok = await window.modal({
+        title: "Cerrar sesión",
+        message: "¿Seguro que quieres salir? Se perderán los cambios no guardados.",
+        confirmLabel: "Cerrar sesión",
+        cancelLabel: "Cancelar",
+        danger: true
+      });
+      if (ok) Auth.logout();
     });
   }
 
@@ -269,18 +391,23 @@ function _navigate(viewId) {
   const bc = { dashboard:"Dashboard", mapa:"Mapa en vivo", feed:"Feed en vivo",
     ingenieros:"Ingenieros", pedidos:"Pedidos", remisiones:"Remisiones",
     cobranza:"Cobranza", usuarios:"Usuarios y flags", reportes:"Reportes",
-    comisiones:"Comisiones", compras:"Órdenes de compra", precios:"Precios y costos", config:"Config. tickets",
+    comisiones:"Comisiones", compras:"Órdenes de compra", kardex:"Kardex",
+    cartera:"Cartera vencida", visitas:"Visitas", precios:"Precios y costos", config:"Config. tickets",
     geocercas:"Geocercas", metas:"Metas de venta", autorizaciones:"Autorizaciones",
     formularios:"Formularios", promociones:"Recompensas y lealtad", precios_segmento:"Precios por segmento",
-    productos:"Control de productos", comentarios:"Comentarios de clientes" };
+    productos:"Control de productos", comentarios:"Comentarios de clientes",
+    inventario:"Inventario", crm:"CRM — Prospectos", logistica:"Logística de visitas" };
   const subs = { dashboard:"Resumen del día", mapa:"Ingenieros en campo",
     feed:"Actividades globales", usuarios:"Gestión de privilegios",
     reportes:"Generación de reportes", comisiones:"Nómina e incentivos por ingeniero",
-    compras:"Órdenes a proveedores",
+    compras:"Órdenes a proveedores", cartera:"Cartera vencida por cliente", visitas:"Programación de visitas",
     geocercas:"Zonas autorizadas en mapa", metas:"Objetivos por ingeniero",
     autorizaciones:"Aprobación de pedidos pendientes", formularios:"Plantillas de campo",
     promociones:"Campañas y puntos de lealtad", precios_segmento:"Catálogo por segmento de cliente",
-    productos:"Gestión del catálogo", comentarios:"Notas y seguimiento de clientes" };
+    productos:"Gestión del catálogo", comentarios:"Notas y seguimiento de clientes",
+    inventario:"Stock en tiempo real por producto",
+    crm:"Pipeline de prospectos y conversión a clientes",
+    logistica:"Visitas programadas por frecuencia de cliente" };
   document.getElementById("tb-bc").innerHTML =
     `${bc[viewId] ?? viewId} <span>/ ${subs[viewId] ?? ""}</span>`;
   document.getElementById("subhdr-title").textContent = bc[viewId] ?? viewId;

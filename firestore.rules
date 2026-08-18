@@ -8,6 +8,21 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Bloquea flags de alto privilegio en documentos de usuario auto-creados
+    function sinFlagsPrivilegiados(data) {
+      return !data.keys().hasAny(['flags']) || (
+        data.flags.get('PUEDE_EDITAR_PRECIO', false)      == false &&
+        data.flags.get('PUEDE_CANCELAR_PEDIDO', false)    == false &&
+        data.flags.get('PUEDE_VER_CARTERA_GLOBAL', false) == false &&
+        data.flags.get('PUEDE_IMPORTAR_CATALOGO', false)  == false &&
+        data.flags.get('PUEDE_EXPORTAR_BACKUP', false)    == false &&
+        data.flags.get('PUEDE_CONFIG_PROMOCIONES', false) == false &&
+        data.flags.get('PUEDE_ORDENES_COMPRA', false)     == false &&
+        data.flags.get('PUEDE_CONFIG_COMISIONES', false)  == false &&
+        data.flags.get('PUEDE_AUTORIZAR_VISITAS', false)  == false
+      );
+    }
+
     function perfil() {
       return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
     }
@@ -53,11 +68,16 @@ service cloud.firestore {
       // Solo SUPER_ADMIN puede crear/editar perfiles de otros
       allow write: if esSuperAdmin();
 
-      // El propio usuario puede crear su perfil en el primer login
+      // El propio usuario puede crear su perfil en el primer login.
+      // Rol restringido a roles no privilegiados; flags sensibles no pueden ser true.
       allow create: if isAuth() && request.auth.uid == uid
                     && !exists(/databases/$(database)/documents/usuarios/$(uid))
                     && request.resource.data.keys().hasAll(['email','alias','rol','activo'])
-                    && request.resource.data.activo == true;
+                    && request.resource.data.activo == true
+                    && request.resource.data.rol in [
+                         'INGENIERO','RECUPERADOR','ALMACENISTA','MESA_CONTROL','JURIDICO'
+                       ]
+                    && sinFlagsPrivilegiados(request.resource.data);
     }
 
     // ── /ubicaciones ─────────────────────────────────────────────────────────
@@ -195,8 +215,11 @@ service cloud.firestore {
 
     // ── /configuracion (tickets + control operativo) ──────────────────────────
     match /configuracion/{docId} {
-      // Lectura: cualquier usuario autenticado — el APK lee 'control' al iniciar sesión
-      allow read: if isAuth();
+      // Lectura: usuario activo, o usuario nuevo sin doc (primer login del APK)
+      allow read: if isAuth() && (
+                    cuentaActiva() ||
+                    !exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+                  );
 
       // Escritura: solo SUPER_ADMIN o GERENTE pueden modificar la configuración
       allow write: if cuentaActiva()
@@ -379,6 +402,231 @@ service cloud.firestore {
     match /clientes/{clienteId} {
       allow read: if cuentaActiva() && esRolConocido();
       allow write: if cuentaActiva() && esAdminOSuperior();
+    }
+
+    // ── /solicitudes_visita ───────────────────────────────────────────────────
+    match /solicitudes_visita/{solId} {
+      // Lectura: admins, gerentes y mesa de control
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || miRol() == 'MESA_CONTROL' || tieneFlag('PUEDE_AUTORIZAR_VISITAS'));
+
+      // El ingeniero puede crear su propia solicitud
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.keys().hasAll(['clienteId','clienteNombre','solicitadoPor','status','creadaEn'])
+                    && request.resource.data.status == 'PENDIENTE'
+                    && request.resource.data.solicitadoPor == perfil().alias;
+
+      // Solo quien puede autorizar puede cambiar el status
+      allow update: if cuentaActiva()
+                    && (esAdminOSuperior() || miRol() == 'MESA_CONTROL' || tieneFlag('PUEDE_AUTORIZAR_VISITAS'))
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','resueltaPor','resueltaEn']);
+
+      allow delete: if false;
+    }
+
+    // ── /movimientos_stock (kardex) ───────────────────────────────────────────
+    match /movimientos_stock/{movId} {
+      // Lectura: admins y ALMACENISTA
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || miRol() == 'ALMACENISTA');
+
+      // Escritura: solo Cloud Functions (service account) — desde el cliente solo lectura
+      // Las Cloud Functions usan Admin SDK y saltan estas reglas
+      // Permitimos create a admins para ajustes manuales desde el panel
+      allow create: if cuentaActiva()
+                    && (esAdminOSuperior() || miRol() == 'ALMACENISTA')
+                    && request.resource.data.keys().hasAll(['productoId','tipo','cantidad','_ts'])
+                    && request.resource.data.tipo in ['ENTRADA','SALIDA','AJUSTE','DEVOLUCION','TRASLADO']
+                    && request.resource.data.cantidad is number;
+
+      // Los movimientos son inmutables (auditoría)
+      allow update, delete: if false;
+    }
+
+    // ── /alertas_stock ────────────────────────────────────────────────────────
+    match /alertas_stock/{alertaId} {
+      // Lectura: admins y ALMACENISTA
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || miRol() == 'ALMACENISTA');
+
+      // Creación: Cloud Functions (Admin SDK, ignora reglas) + admins para alertas manuales
+      allow create: if cuentaActiva() && esAdminOSuperior()
+                    && request.resource.data.keys().hasAll(['productoId','stockActual','stockMinimo','resuelta'])
+                    && request.resource.data.resuelta == false;
+
+      // Solo admins pueden marcar alertas como resueltas
+      allow update: if cuentaActiva()
+                    && (esAdminOSuperior() || miRol() == 'ALMACENISTA')
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resuelta','resueltaEn','resueltaPor']);
+
+      allow delete: if false;
+    }
+
+    // ── /cotizaciones ─────────────────────────────────────────────────────────
+    match /cotizaciones/{cotId} {
+      // Lectura: admins, gerentes, mesa de control + ingeniero propietario
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior()
+                      || miRol() in ['MESA_CONTROL', 'RECUPERADOR']
+                      || (miRol() == 'INGENIERO' && resource.data.ingenieroAlias == perfil().alias));
+
+      // Crear: cualquier rol activo (ingeniero crea sus cotizaciones)
+      allow create: if cuentaActiva()
+                    && esRolConocido()
+                    && request.resource.data.keys().hasAll(['folio','clienteId','status','ingenieroAlias'])
+                    && request.resource.data.status == 'BORRADOR';
+
+      // Actualizar: propietario puede cambiar estado, admins todo
+      allow update: if cuentaActiva()
+                    && (esAdminOSuperior()
+                        || (miRol() == 'INGENIERO'
+                            && resource.data.ingenieroAlias == perfil().alias
+                            && request.resource.data.status in ['BORRADOR','ENVIADA','EXPIRADA']));
+
+      allow delete: if false;
+    }
+
+    // ── /campanas_promociones ─────────────────────────────────────────────────
+    match /campanas_promociones/{promoId} {
+      // Lectura: cualquier usuario autenticado (APK necesita leer las promos activas)
+      allow read: if isAuth();
+
+      // Escritura: solo SUPER_ADMIN, ADMINISTRADOR o flag PUEDE_CONFIG_PROMOCIONES
+      allow create, update: if cuentaActiva()
+                             && (esAdminOSuperior()
+                                 || (perfil().keys().hasAny(['flags'])
+                                     && 'PUEDE_CONFIG_PROMOCIONES' in perfil().flags));
+
+      allow delete: if esSuperAdmin();
+    }
+
+    // ── /configuracion/cotizaciones ───────────────────────────────────────────
+    match /configuracion/cotizaciones {
+      allow read: if isAuth();
+      allow write: if cuentaActiva() && esAdminOSuperior();
+    }
+
+    // ── /notificaciones_web ───────────────────────────────────────────────────
+    match /notificaciones_web/{notifId} {
+      // Leer solo las propias (destinatario incluye el uid o "TODOS")
+      allow read: if isAuth() && (
+        request.auth.uid in resource.data.destinatarios ||
+        'TODOS' in resource.data.destinatarios
+      );
+      // Crear: solo Cloud Functions (vía Admin SDK, sin auth token) o admin
+      allow create: if cuentaActiva() && esAdminOSuperior();
+      // Actualizar: solo marcar como leída (solo el campo 'leida')
+      allow update: if isAuth() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['leida']);
+      allow delete: if esSuperAdmin();
+    }
+
+    // ── /devoluciones ─────────────────────────────────────────────────────────
+    match /devoluciones/{devId} {
+      // Lectura: admin o el propio ingeniero que la creó
+      allow read: if cuentaActiva() && (
+        esAdminOSuperior() ||
+        ['MESA_CONTROL','GERENTE_ZONA'].hasAny([miRol()]) ||
+        resource.data.ingenieroUid == request.auth.uid
+      );
+      // Crear: cualquier usuario autenticado activo
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.status == 'PENDIENTE';
+      // Actualizar: aprobar/rechazar solo admins; el ingeniero no puede cambiar status
+      allow update: if cuentaActiva() && (
+        esAdminOSuperior() ||
+        ['MESA_CONTROL'].hasAny([miRol()])
+      );
+      allow delete: if esSuperAdmin();
+    }
+
+    // ── /notas_credito ────────────────────────────────────────────────────────
+    match /notas_credito/{ncId} {
+      allow read: if cuentaActiva() && esAdminOSuperior();
+      allow create, update: if false; // Solo Cloud Functions vía Admin SDK
+      allow delete: if esSuperAdmin();
+    }
+
+    // ── /mensajes_internos ────────────────────────────────────────────────────
+    match /mensajes_internos/{msgId} {
+      // Leer: cualquier usuario autenticado activo
+      allow read: if cuentaActiva();
+      // Crear: cualquier usuario activo, solo sus propios campos
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.uid == request.auth.uid;
+      // Sin edición ni borrado de mensajes (integridad del historial)
+      allow update: if false;
+      allow delete: if esSuperAdmin();
+    }
+
+    // ── /configuracion/alertas_cobranza ───────────────────────────────────────
+    match /configuracion/alertas_cobranza {
+      allow read: if cuentaActiva() && esAdminOSuperior();
+      allow write: if cuentaActiva() && esAdminOSuperior();
+    }
+
+    // ── /rh_asistencia ────────────────────────────────────────────────────────
+    match /rh_asistencia/{docId} {
+      allow read:   if cuentaActiva() && (esAdminOSuperior() || miRol() == 'MESA_CONTROL');
+      allow create: if cuentaActiva() && (esAdminOSuperior() || miRol() == 'MESA_CONTROL');
+      allow update: if cuentaActiva() && esAdminOSuperior();
+      allow delete: if esSuperAdmin();
+    }
+
+    // ── /rh_vacaciones ────────────────────────────────────────────────────────
+    match /rh_vacaciones/{docId} {
+      allow read:   if cuentaActiva() && (esAdminOSuperior() || miRol() == 'MESA_CONTROL');
+      allow create: if cuentaActiva() && esRolConocido();
+      allow update: if cuentaActiva() && (esAdminOSuperior() || miRol() == 'GERENTE_ZONA');
+      allow delete: if esSuperAdmin();
+    }
+
+    // ── /rh_anticipos ────────────────────────────────────────────────────────
+    match /rh_anticipos/{docId} {
+      allow read:   if cuentaActiva() && (esAdminOSuperior() || miRol() == 'MESA_CONTROL');
+      allow create: if cuentaActiva() && esRolConocido();
+      allow update: if cuentaActiva() && esAdminOSuperior();
+      allow delete: if esSuperAdmin();
+    }
+
+    // ── /audit_log ────────────────────────────────────────────────────────────
+    // Solo lectura para admin; escritura solo desde Admin SDK (Cloud Functions)
+    match /audit_log/{docId} {
+      allow read:   if cuentaActiva() && esAdminOSuperior();
+      allow create: if false; // Solo Cloud Functions
+      allow update, delete: if false; // Inmutable — trazabilidad de auditoría
+    }
+
+    // ── /inventario ───────────────────────────────────────────────────────────
+    match /inventario/{docId} {
+      allow read:   if cuentaActiva() && esRolConocido();
+      allow write:  if cuentaActiva() && esAdminOSuperior();
+    }
+
+    // ── /prospectos ───────────────────────────────────────────────────────────
+    match /prospectos/{docId} {
+      allow read:   if cuentaActiva() && esRolConocido();
+      allow create: if cuentaActiva() && esRolConocido();
+      // Solo admin o el creador del prospecto puede modificarlo
+      allow update: if cuentaActiva() && (
+                      esAdminOSuperior() ||
+                      resource.data.creadoPor == perfil().alias
+                    );
+      allow delete: if esSuperAdmin();
+    }
+
+    // ── /visitas_programadas ──────────────────────────────────────────────────
+    match /visitas_programadas/{docId} {
+      allow read:   if cuentaActiva() && esRolConocido();
+      allow create: if cuentaActiva() && esAdminOSuperior();
+      allow update: if cuentaActiva() && esRolConocido();
+      allow delete: if esSuperAdmin();
+    }
+
+    // ── /rh_pagos_nomina ──────────────────────────────────────────────────────
+    match /rh_pagos_nomina/{docId} {
+      allow read:   if cuentaActiva() && esAdminOSuperior();
+      allow create: if cuentaActiva() && esAdminOSuperior();
+      allow update, delete: if esSuperAdmin();
     }
 
     // ── Bloqueo por defecto ───────────────────────────────────────────────────

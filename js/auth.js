@@ -12,25 +12,22 @@ import {
   doc, getDoc, setDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-// ── Emails con SUPER_ADMIN automático ──────────────────────────
-const EMAILS_SUPER_ADMIN = new Set([
-  "josanceb@gmail.com",
-  "sismas-proyectos1@outlook.com",
-  "sismassistemasdos@gmail.com"
-]);
-
 // ── Estado de sesión ───────────────────────────────────────────
-export const Sesion = {
-  uid:    "",
-  email:  "",
-  alias:  "",
-  rol:    "",
-  flags:  {},
-  prefs:  {},
-  esSuperAdmin() { return this.rol === "SUPER_ADMIN"; },
-  tieneFlag(f)    { return this.esSuperAdmin() || this.flags[f] === true; },
-  clear() { this.uid=""; this.email=""; this.alias=""; this.rol=""; this.flags={}; this.prefs={}; }
-};
+// _state es privado al módulo; Sesion es inmutable desde fuera
+// (Object.freeze bloquea asignación directa en DevTools)
+let _state = { uid:"", email:"", alias:"", rol:"", flags:{}, prefs:{} };
+
+export const Sesion = Object.freeze({
+  get uid()   { return _state.uid;   },
+  get email() { return _state.email; },
+  get alias() { return _state.alias; },
+  get rol()   { return _state.rol;   },
+  get flags() { return _state.flags; },
+  get prefs() { return _state.prefs; },
+  esSuperAdmin() { return _state.rol === "SUPER_ADMIN"; },
+  tieneFlag(f)    { return this.esSuperAdmin() || _state.flags[f] === true; },
+  clear() { _state = { uid:"", email:"", alias:"", rol:"", flags:{}, prefs:{} }; }
+});
 
 // ── Autenticación ──────────────────────────────────────────────
 export const Auth = {
@@ -74,7 +71,6 @@ export const Auth = {
   },
 
   async logout() {
-    if (!confirm("¿Seguro que quieres cerrar sesión? Se perderán los cambios no guardados.")) return;
     await signOut(auth);
     Sesion.clear();
     _mostrarLogin();
@@ -160,16 +156,16 @@ async function _cargarPerfil(user) {
   const ref  = doc(db, "usuarios", user.uid);
   const snap = await getDoc(ref);
 
-  const esSA = EMAILS_SUPER_ADMIN.has(user.email);
-
   if (!snap.exists()) {
-    // Primer login: crear perfil
+    // Primer login: crear perfil con rol base.
+    // El rol SUPER_ADMIN debe asignarse desde el panel de administración.
     const perfil = {
       email:    user.email,
       alias:    user.email.split("@")[0],
-      rol:      esSA ? "SUPER_ADMIN" : "INGENIERO",
+      rol:      "INGENIERO",
       activo:   true,
-      flags:    _flagsDefault(esSA),
+      prefs:    { theme: "system", density: "normal" },
+      flags:    _flagsDefault(),
       creadoEn: serverTimestamp()
     };
     await setDoc(ref, perfil);
@@ -181,35 +177,20 @@ async function _cargarPerfil(user) {
       _showLoginError("Tu cuenta está desactivada. Contacta al administrador.");
       return;
     }
-    // Garantizar SUPER_ADMIN a emails predefinidos
-    if (esSA && data.rol !== "SUPER_ADMIN") {
-      await setDoc(ref, { rol: "SUPER_ADMIN" }, { merge: true });
-      data.rol = "SUPER_ADMIN";
-    }
     _aplicarSesion(user.uid, user.email, data);
   }
 }
 
 function _aplicarSesion(uid, email, data) {
-  Sesion.uid   = uid;
-  Sesion.email = email;
-  Sesion.alias = data.alias || email.split("@")[0];
-  Sesion.rol   = data.rol   || "INGENIERO";
-  Sesion.flags = data.flags || {};
+  _state.uid   = uid;
+  _state.email = email;
+  _state.alias = data.alias || email.split("@")[0];
+  _state.rol   = data.rol   || "INGENIERO";
+  _state.flags = data.flags || {};
+  _state.prefs = data.prefs || {};
 }
 
-function _flagsDefault(esSuperAdmin) {
-  if (esSuperAdmin) {
-    return {
-      PUEDE_EDITAR_PRECIO:      true,
-      PUEDE_CANCELAR_PEDIDO:    true,
-      PUEDE_VER_CARTERA_GLOBAL: true,
-      PUEDE_IMPORTAR_CATALOGO:  true,
-      PUEDE_EXPORTAR_BACKUP:    true,
-      PUEDE_REGISTRAR_REMISION: true,
-      PUEDE_REGISTRAR_ABONO:    true
-    };
-  }
+function _flagsDefault() {
   return {
     PUEDE_EDITAR_PRECIO:      false,
     PUEDE_CANCELAR_PEDIDO:    false,

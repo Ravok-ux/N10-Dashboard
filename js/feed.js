@@ -7,6 +7,9 @@ import {
   collection, query, orderBy, limit, where, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#x27;"}[c]));
+
 let _unsubs = [];
 let _filtroTipo   = "TODOS";
 let _filtroAlias  = "TODOS";
@@ -57,27 +60,27 @@ function _html() {
   return `
   <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
     <!-- Filtros -->
-    <div style="background:#fff;border-bottom:1px solid #E5E7EB;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0">
-      <span style="font-size:11px;font-weight:700;color:#6B7280">Tipo:</span>
+    <div style="background:var(--surface,#fff);border-bottom:1px solid var(--border,#E5E7EB);padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0">
+      <span style="font-size:11px;font-weight:700;color:var(--text2,#6B7280)">Tipo:</span>
       <div id="tipo-filters" style="display:flex;gap:5px;flex-wrap:wrap">
         ${TIPOS.map(t => `
           <button class="filter-pill ${t==='TODOS'?'active':''}" data-tipo="${t}" onclick="FeedUI.setTipo('${t}')">
             ${TIPO_LABEL[t]}
           </button>`).join("")}
       </div>
-      <div style="width:1px;height:18px;background:#E5E7EB;margin:0 4px"></div>
-      <span style="font-size:11px;font-weight:700;color:#6B7280">Ingeniero:</span>
+      <div style="width:1px;height:18px;background:var(--border,#E5E7EB);margin:0 4px"></div>
+      <span style="font-size:11px;font-weight:700;color:var(--text2,#6B7280)">Ingeniero:</span>
       <select id="alias-select" onchange="FeedUI.setAlias(this.value)"
-        style="border:1px solid #E5E7EB;border-radius:6px;padding:4px 8px;font-size:11px;color:#374151">
+        style="border:1px solid var(--border,#E5E7EB);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--text,#374151);background:var(--surface,#fff)">
         <option value="TODOS">Todos</option>
       </select>
       <div style="flex:1"></div>
-      <span id="feed-count" style="font-size:11px;color:#9CA3AF">– eventos</span>
+      <span id="feed-count" style="font-size:11px;color:var(--text3,#9CA3AF)">– eventos</span>
     </div>
 
     <!-- Lista -->
     <div style="flex:1;overflow-y:auto;padding:14px 18px" id="feed-list">
-      <div style="text-align:center;padding:24px;color:#9CA3AF;font-size:12px">Cargando feed…</div>
+      <div style="text-align:center;padding:24px;color:var(--text3,#9CA3AF);font-size:12px">Cargando feed…</div>
     </div>
   </div>`;
 }
@@ -165,17 +168,15 @@ function _renderFeed(snap) {
     const det = _detalle(a);
 
     return `
-      <div style="background:#fff;border-radius:10px;padding:12px 16px;border:1px solid #E5E7EB;
-        display:flex;gap:12px;align-items:center;margin-bottom:7px;cursor:pointer"
-        onmouseenter="this.style.background='#F9FAFB'"
-        onmouseleave="this.style.background='#fff'">
+      <div class="feed-card" style="border-radius:10px;padding:12px 16px;border:1px solid var(--border,#E5E7EB);
+        display:flex;gap:12px;align-items:center;margin-bottom:7px;cursor:pointer">
         <div style="width:36px;height:36px;border-radius:8px;background:${c}1A;
           display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${ico}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:700;color:#111">${a.alias || "–"} · ${_tipoLabel(a.tipo)}</div>
-          <div style="font-size:11px;color:#6B7280;margin-top:2px">${det}</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text,#111)">${esc(a.alias) || "–"} · ${_tipoLabel(a.tipo)}</div>
+          <div style="font-size:11px;color:var(--text2,#6B7280);margin-top:2px">${det}</div>
         </div>
-        <div style="font-size:10px;color:#9CA3AF;white-space:nowrap;text-align:right">
+        <div style="font-size:10px;color:var(--text3,#9CA3AF);white-space:nowrap;text-align:right">
           <div>${ts.hora}</div>
           <div style="margin-top:1px">${ts.fecha}</div>
         </div>
@@ -189,7 +190,7 @@ function _updateAliasSelect() {
   if (!sel) return;
   const current = sel.value;
   sel.innerHTML = `<option value="TODOS">Todos</option>` +
-    [..._aliases].sort().map(a => `<option value="${a}">${a}</option>`).join("");
+    [..._aliases].sort().map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
   sel.value = _aliases.has(current) ? current : "TODOS";
 }
 
@@ -226,11 +227,16 @@ const style = document.createElement("style");
 style.textContent = `
   .filter-pill {
     padding:4px 10px; border-radius:20px; font-size:10.5px; font-weight:600;
-    border:1px solid #E5E7EB; color:#6B7280; background:transparent; cursor:pointer;
-    transition:.12s;
+    border:1px solid var(--border,#E5E7EB); color:var(--text2,#6B7280);
+    background:transparent; cursor:pointer; transition:.12s;
   }
   .filter-pill.active { background:#166534; border-color:#16A34A; color:#4ADE80; }
-  .filter-pill:hover:not(.active) { border-color:#4ADE80; color:#374151; }
+  .filter-pill:hover:not(.active) { border-color:#4ADE80; color:var(--text,#374151); }
+  .feed-card {
+    background: var(--surface,#fff);
+    transition: background .12s;
+  }
+  .feed-card:hover { background: var(--surface2,#F9FAFB); }
 `;
 if (!document.getElementById("feed-styles")) {
   style.id = "feed-styles";

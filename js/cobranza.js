@@ -3,9 +3,11 @@
 // ══════════════════════════════════════════════════════════════
 
 import { db } from "./firebase-config.js";
+import { Sesion } from "./auth.js";
 import { esc } from "./app.js";
 import {
-  collection, query, orderBy, limit, where, onSnapshot, Timestamp
+  collection, query, orderBy, limit, where, onSnapshot, Timestamp,
+  doc, updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let _unsub      = null;
@@ -19,6 +21,7 @@ const fmtDt  = d => new Date(d?.toDate?.() ?? d).toLocaleDateString("es-MX", { d
 export const CobranzaModule = {
   mount(container) {
     container.innerHTML = _html();
+    document.getElementById("cob-tbody").innerHTML = window.skeleton?.(5, 7) ?? "";
     _bindUI();
     _escuchar();
     return () => this.destroy();
@@ -32,10 +35,10 @@ function _html() {
   <div style="padding:0 0 20px">
 
     <!-- Controles -->
-    <div style="background:#fff;border-radius:10px;border:1px solid #E5E7EB;padding:12px 16px;
+    <div style="background:var(--surface,#fff);border-radius:10px;border:1px solid var(--border,#E5E7EB);padding:12px 16px;
       margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
       box-shadow:0 1px 3px rgba(0,0,0,.06)">
-      <span style="font-size:12px;font-weight:700;color:#374151">Período:</span>
+      <span style="font-size:12px;font-weight:700;color:var(--text,#374151)">Período:</span>
       ${["hoy","semana","mes"].map(p => `
         <button class="filter-pill ${p==="semana"?"active":""}" data-cob-p="${p}"
           onclick="CobranzaUI.setPeriodo('${p}')">
@@ -51,7 +54,7 @@ function _html() {
     <!-- KPIs cobranza -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
       ${[["cob-k-abonos","ABONOS"],["cob-k-total","COBRADO"],["cob-k-prom","PROMEDIO"],["cob-k-ingenieros","RECUPERADORES"]].map(([id,l]) =>
-        `<div style="background:#fff;border-radius:10px;border:1px solid #E5E7EB;padding:14px 16px;
+        `<div style="background:var(--surface,#fff);border-radius:10px;border:1px solid var(--border,#E5E7EB);padding:14px 16px;
           box-shadow:0 1px 3px rgba(0,0,0,.06)">
           <div style="font-size:20px;font-weight:800;color:#111827" id="${id}">–</div>
           <div style="font-size:11px;font-weight:600;color:#6B7280;margin-top:2px">${l}</div>
@@ -59,26 +62,27 @@ function _html() {
     </div>
 
     <!-- Ranking por recuperador -->
-    <div style="background:#fff;border-radius:10px;border:1px solid #E5E7EB;padding:16px;
+    <div style="background:var(--surface,#fff);border-radius:10px;border:1px solid var(--border,#E5E7EB);padding:16px;
       margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-      <div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;
+      <div style="font-size:11px;font-weight:700;color:var(--text,#374151);text-transform:uppercase;
         letter-spacing:.05em;margin-bottom:10px">Ranking de cobranza</div>
       <div id="cob-ranking"></div>
     </div>
 
     <!-- Tabla de abonos -->
-    <div style="background:#fff;border-radius:10px;border:1px solid #E5E7EB;overflow:hidden;
+    <div style="background:var(--surface,#fff);border-radius:10px;border:1px solid var(--border,#E5E7EB);overflow:hidden;
       box-shadow:0 1px 3px rgba(0,0,0,.06)">
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead>
-            <tr style="background:#F9FAFB;border-bottom:1px solid #E5E7EB">
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151">FECHA</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151">CLIENTE</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151">RECUPERADOR</th>
-              <th style="padding:10px 14px;text-align:right;font-weight:700;color:#374151">MONTO</th>
-              <th style="padding:10px 14px;text-align:center;font-weight:700;color:#374151">FORMA DE PAGO</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151">REMISIÓN</th>
+            <tr style="background:var(--surface2,#F9FAFB);border-bottom:1px solid var(--border,#E5E7EB)">
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">FECHA</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">CLIENTE</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">RECUPERADOR</th>
+              <th style="padding:10px 14px;text-align:right;font-weight:700;color:var(--text,#374151)">MONTO</th>
+              <th style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text,#374151)">FORMA DE PAGO</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">REMISIÓN</th>
+              <th style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text,#374151)">CONCILIAR</th>
             </tr>
           </thead>
           <tbody id="cob-tbody">
@@ -90,8 +94,24 @@ function _html() {
   </div>`;
 }
 
+// ── Conciliar abono ───────────────────────────────────────────
+async function _conciliarAbono(id) {
+  try {
+    await updateDoc(doc(db, "abonos_remision", id), {
+      confirmado:        true,
+      fechaConfirmacion: Date.now(),
+      confirmadoPor:     Sesion.alias || Sesion.uid || "–"
+    });
+    window.toast?.("Abono conciliado correctamente", "success");
+  } catch(e) {
+    console.error("[Cobranza] conciliar:", e);
+    window.toast?.("Error: " + e.message, "error");
+  }
+}
+
 // ── UI Bind ───────────────────────────────────────────────────
 function _bindUI() {
+  window._cobConc = _conciliarAbono;
   window.CobranzaUI = {
     setPeriodo(p) {
       _filtroPeriodo = p;
@@ -177,7 +197,18 @@ function _renderTabla() {
       Sin abonos en este período.</td></tr>`;
     return;
   }
-  tbody.innerHTML = lista.map(a => `<tr style="border-bottom:1px solid #F3F4F6">
+  const puedeConc = Sesion.esSuperAdmin?.() ||
+    ["GERENTE","ADMINISTRADOR","MESA_CONTROL"].includes(Sesion.rol);
+
+  tbody.innerHTML = lista.map(a => {
+    const concBtn = a.confirmado
+      ? `<span style="font-size:11px;color:#16A34A;font-weight:700">✓ Conciliado</span>`
+      : puedeConc
+        ? `<button onclick="window._cobConc('${esc(a.id)}')"
+             style="font-size:11px;padding:3px 10px;background:#1D5C33;color:#fff;border:none;
+             border-radius:6px;cursor:pointer;font-weight:600">Conciliar</button>`
+        : `<span style="font-size:11px;color:#9CA3AF">Pendiente</span>`;
+    return `<tr style="border-bottom:1px solid #F3F4F6;${a.confirmado ? "opacity:.75" : ""}">
     <td style="padding:10px 14px;color:#6B7280">${a.fecha ? fmtDt(a.fecha) : "–"}</td>
     <td style="padding:10px 14px">${esc(a.clienteNombre || a.clienteId || "–")}</td>
     <td style="padding:10px 14px">${esc(a.quienRegistro || a.alias || "–")}</td>
@@ -185,7 +216,9 @@ function _renderTabla() {
       ${fmt.format(a.monto || 0)}</td>
     <td style="padding:10px 14px;text-align:center;color:#6B7280">${a.formaPago || "–"}</td>
     <td style="padding:10px 14px;color:#6B7280;font-size:11px">${a.remisionNumero || a.remisionId || "–"}</td>
-  </tr>`).join("");
+    <td style="padding:10px 14px;text-align:center">${concBtn}</td>
+  </tr>`;
+  }).join("");
 }
 
 function _rango() {

@@ -401,12 +401,16 @@ function _escucharUsuarios() {
         <td class="toggle-col">
           ${esSA
             ? `<label class="toggle"><input type="checkbox" checked disabled><span class="toggle-slider"></span></label>`
-            : `<label class="toggle">
-                <input type="checkbox" ${flags[f.key] ? "checked" : ""}
-                  onchange="UsuariosUI.toggleFlag('${uid}','${f.key}',this.checked)"
-                  ${!Sesion.esSuperAdmin() && f.soloSA ? "disabled" : ""}>
-                <span class="toggle-slider"></span>
-               </label>`}
+            : (!Sesion.esSuperAdmin() && f.soloSA
+                ? `<label class="toggle" title="Solo Super Admin puede activar este flag" style="opacity:.5;cursor:not-allowed">
+                    <input type="checkbox" ${flags[f.key] ? "checked" : ""} disabled>
+                    <span class="toggle-slider"></span>
+                   </label>`
+                : `<label class="toggle">
+                    <input type="checkbox" ${flags[f.key] ? "checked" : ""}
+                      onchange="UsuariosUI.toggleFlag('${uid}','${f.key}',this.checked)">
+                    <span class="toggle-slider"></span>
+                   </label>`)}
         </td>`).join("");
 
       const colsMod = MODULOS.map(f => `

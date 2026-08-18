@@ -19,6 +19,7 @@ const fmtDia = d => new Date(d?.toDate?.() ?? d).toLocaleDateString("es-MX", { d
 export const RemisionesModule = {
   mount(container) {
     container.innerHTML = _html();
+    document.getElementById("rem-tbody").innerHTML = window.skeleton?.(5, 7) ?? "";
     _bindUI();
     _escuchar();
     return () => this.destroy();
@@ -32,10 +33,10 @@ function _html() {
   <div style="padding:0 0 20px">
 
     <!-- Controles -->
-    <div style="background:#fff;border-radius:10px;border:1px solid #E5E7EB;padding:12px 16px;
+    <div style="background:var(--surface,#fff);border-radius:10px;border:1px solid var(--border,#E5E7EB);padding:12px 16px;
       margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
       box-shadow:0 1px 3px rgba(0,0,0,.06)">
-      <span style="font-size:12px;font-weight:700;color:#374151">Estado:</span>
+      <span style="font-size:12px;font-weight:700;color:var(--text,#374151)">Estado:</span>
       ${STATUS.map(s => `
         <button class="filter-pill ${s==="TODOS"?"active":""}" data-rst="${s}"
           onclick="RemisionesUI.setStatus('${s}')">
@@ -54,18 +55,18 @@ function _html() {
     </div>
 
     <!-- Tabla -->
-    <div style="background:#fff;border-radius:10px;border:1px solid #E5E7EB;overflow:hidden;
+    <div style="background:var(--surface,#fff);border-radius:10px;border:1px solid var(--border,#E5E7EB);overflow:hidden;
       box-shadow:0 1px 3px rgba(0,0,0,.06)">
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead>
-            <tr style="background:#F9FAFB;border-bottom:1px solid #E5E7EB">
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151">FOLIO</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151">CLIENTE</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151">INGENIERO</th>
-              <th style="padding:10px 14px;text-align:right;font-weight:700;color:#374151">MONTO</th>
-              <th style="padding:10px 14px;text-align:right;font-weight:700;color:#374151">SALDO</th>
-              <th style="padding:10px 14px;text-align:center;font-weight:700;color:#374151">VENCE</th>
+            <tr style="background:var(--surface2,#F9FAFB);border-bottom:1px solid var(--border,#E5E7EB)">
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">FOLIO</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">CLIENTE</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">INGENIERO</th>
+              <th style="padding:10px 14px;text-align:right;font-weight:700;color:var(--text,#374151)">MONTO</th>
+              <th style="padding:10px 14px;text-align:right;font-weight:700;color:var(--text,#374151)">SALDO</th>
+              <th style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text,#374151)">VENCE</th>
               <th style="padding:10px 14px;text-align:center;font-weight:700;color:#374151">STATUS</th>
             </tr>
           </thead>

@@ -24,6 +24,7 @@ const fmtDt = d => new Date(d?.toDate?.() ?? d).toLocaleDateString("es-MX", { da
 export const PedidosModule = {
   mount(container) {
     container.innerHTML = _html();
+    document.getElementById("pd-tbody").innerHTML = window.skeleton?.(6, 7) ?? "";
     _bindUI();
     _escuchar();
     return () => this.destroy();
@@ -64,19 +65,19 @@ function _html() {
     </div>
 
     <!-- Tabla -->
-    <div style="background:#fff;border-radius:10px;border:1px solid #E5E7EB;overflow:hidden;
+    <div style="background:var(--surface,#fff);border-radius:10px;border:1px solid var(--border,#E5E7EB);overflow:hidden;
       box-shadow:0 1px 3px rgba(0,0,0,.06)">
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead>
-            <tr style="background:#F9FAFB;border-bottom:1px solid #E5E7EB">
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151">FOLIO</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151">CLIENTE</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151">INGENIERO</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151">FECHA</th>
-              <th style="padding:10px 14px;text-align:right;font-weight:700;color:#374151">TOTAL</th>
-              <th style="padding:10px 14px;text-align:center;font-weight:700;color:#374151">STATUS</th>
-              <th style="padding:10px 14px;text-align:center;font-weight:700;color:#374151">TIPO</th>
+            <tr style="background:var(--surface2,#F9FAFB);border-bottom:1px solid var(--border,#E5E7EB)">
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">FOLIO</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">CLIENTE</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">INGENIERO</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">FECHA</th>
+              <th style="padding:10px 14px;text-align:right;font-weight:700;color:var(--text,#374151)">TOTAL</th>
+              <th style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text,#374151)">STATUS</th>
+              <th style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text,#374151)">TIPO</th>
             </tr>
           </thead>
           <tbody id="pd-tbody">
@@ -90,6 +91,8 @@ function _html() {
 
 // ── UI Bind ───────────────────────────────────────────────────
 function _bindUI() {
+  window._pedCancelar = _cancelarPedido;
+  window._pedEditar   = _editarPedido;
   window.PedidosUI = {
     setStatus(s) {
       _filtroStatus = s;
@@ -176,17 +179,146 @@ function _renderTabla() {
     const det = document.createElement("tr");
     det.className = "tr-detalle";
     det.dataset.for = id;
-    det.innerHTML = `<td colspan="99" style="padding:12px 16px;background:var(--surface,#f8fafc);font-size:.85rem">
-  <strong>Folio:</strong> ${esc(ped.folio || ped.id)} &nbsp;
-  <strong>Cliente:</strong> ${esc(ped.cliente || ped.clienteNombre || '')} &nbsp;
-  <strong>Total:</strong> $${ped.total?.toFixed(2) || '0.00'} &nbsp;
-  <strong>Status:</strong> ${esc(ped.status || '')} &nbsp;
-  <strong>Ingeniero:</strong> ${esc(ped.ingeniero || ped.ingenieroAlias || '')}
+
+    const puedeEditar = Sesion.esSuperAdmin?.() ||
+      ["GERENTE","ADMINISTRADOR"].includes(Sesion.rol);
+    const puedeCancelar = puedeEditar || Sesion.rol === "MESA_CONTROL";
+    const yaCancel = ped.status === "CANCELADO";
+
+    const itms = ped.items || ped.productos || [];
+    const itmsHtml = itms.length
+      ? `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px">
+          <tr style="color:#6B7280">
+            <th style="text-align:left;padding:3px 6px;font-weight:600">Producto</th>
+            <th style="text-align:center;padding:3px 6px;font-weight:600">Cant.</th>
+            <th style="text-align:right;padding:3px 6px;font-weight:600">Precio</th>
+            <th style="text-align:right;padding:3px 6px;font-weight:600">Subtotal</th>
+          </tr>
+          ${itms.map(it => `<tr>
+            <td style="padding:3px 6px">${esc(it.nombre || it.producto || "–")}</td>
+            <td style="padding:3px 6px;text-align:center">${it.cantidad ?? 1}</td>
+            <td style="padding:3px 6px;text-align:right">$${(it.precio||0).toLocaleString("es-MX")}</td>
+            <td style="padding:3px 6px;text-align:right;font-weight:700">
+              $${((it.cantidad||1)*(it.precio||0)).toLocaleString("es-MX")}</td>
+          </tr>`).join("")}
+        </table>`
+      : `<span style="color:#9CA3AF;font-size:11px">Sin detalle de productos</span>`;
+
+    const acnsHtml = yaCancel
+      ? `<div style="margin-top:8px;font-size:11px;color:#B71C1C;font-weight:700">
+           ✕ Cancelado${ped.motivoCancelacion ? ': ' + esc(ped.motivoCancelacion) : ''}</div>`
+      : `<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+          ${puedeCancelar
+            ? `<button onclick="window._pedCancelar('${esc(id)}')" style="font-size:11px;padding:4px 12px;
+               background:#DC2626;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">
+               ✕ Cancelar</button>` : ""}
+          ${puedeEditar
+            ? `<button onclick="window._pedEditar('${esc(id)}')" style="font-size:11px;padding:4px 12px;
+               background:#1D5C33;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">
+               ✏️ Editar cantidades</button>` : ""}
+        </div>`;
+
+    det.innerHTML = `<td colspan="99" style="padding:12px 16px;background:var(--surface,#f8fafc)">
+  <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#374151">
+    <span><strong>Folio:</strong> ${esc(ped.folio || ped.id)}</span>
+    <span><strong>Cliente:</strong> ${esc(ped.cliente || ped.clienteNombre || "–")}</span>
+    <span><strong>Total:</strong> $${(ped.total||0).toLocaleString("es-MX",{minimumFractionDigits:2})}</span>
+    <span><strong>Ingeniero:</strong> ${esc(ped.ingeniero || ped.ingenieroAlias || "–")}</span>
+    ${ped.notas ? `<span><strong>Notas:</strong> ${esc(ped.notas)}</span>` : ""}
+  </div>
+  ${itmsHtml}
+  ${acnsHtml}
 </td>`;
     tr.insertAdjacentElement("afterend", det);
   });
   tbody._detListenerAttached = true;
   } // end if !_detListenerAttached
+}
+
+// ── Cancelar pedido ───────────────────────────────────────────
+async function _cancelarPedido(pedidoId) {
+  const razon = window.prompt("Motivo de cancelación:");
+  if (razon === null) return; // usuario canceló el diálogo
+  if (!razon.trim()) { window.toast?.("Ingresa un motivo", "warning"); return; }
+
+  try {
+    await updateDoc(doc(db, "pedidos", pedidoId), {
+      status:             "CANCELADO",
+      motivoCancelacion:  razon.trim(),
+      canceladoEn:        Date.now(),
+      canceladoPor:       Sesion.alias || Sesion.uid || "–"
+    });
+    window.toast?.("Pedido cancelado", "success");
+    document.querySelector(`tr.tr-detalle[data-for="${pedidoId}"]`)?.remove();
+  } catch(e) {
+    console.error("[Pedidos] cancelar:", e);
+    window.toast?.("Error: " + e.message, "error");
+  }
+}
+
+// ── Editar cantidades de pedido ───────────────────────────────
+function _editarPedido(pedidoId) {
+  const ped = _pedidos.find(p => p.id === pedidoId);
+  if (!ped) return;
+  const items = ped.items || ped.productos || [];
+  if (!items.length) { window.toast?.("Este pedido no tiene items editables", "info"); return; }
+
+  // Modal inline
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;
+    display:flex;align-items:center;justify-content:center`;
+  const modal = document.createElement("div");
+  modal.style.cssText = `background:var(--surface,#fff);border-radius:12px;padding:20px;
+    width:380px;max-width:95vw;max-height:80vh;overflow-y:auto;
+    box-shadow:0 8px 32px rgba(0,0,0,.2)`;
+  const esc2 = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  modal.innerHTML = `
+    <div style="font-weight:800;font-size:14px;margin-bottom:12px">
+      ✏️ Editar cantidades — ${esc2(ped.folio || ped.id)}</div>
+    <div style="font-size:11px;color:#6B7280;margin-bottom:10px">
+      Solo cantidades. Los precios requieren autorización especial.</div>
+    ${items.map((it, i) => `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="flex:1;font-size:12px">${esc2(it.nombre || it.producto || "–")}</span>
+        <input type="number" min="1" value="${it.cantidad || 1}" data-idx="${i}"
+          style="width:64px;padding:4px 6px;border:1px solid #D1D5DB;border-radius:6px;
+          font-size:12px;text-align:center" class="pd-edit-qty">
+      </div>`).join("")}
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button id="pd-edit-cancel" style="padding:6px 14px;border:1px solid #D1D5DB;border-radius:6px;
+        background:none;cursor:pointer;font-size:12px">Cancelar</button>
+      <button id="pd-edit-save" style="padding:6px 14px;background:#1D5C33;color:#fff;border:none;
+        border-radius:6px;cursor:pointer;font-size:12px;font-weight:700">Guardar</button>
+    </div>`;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  overlay.querySelector("#pd-edit-cancel").onclick = () => overlay.remove();
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.querySelector("#pd-edit-save").onclick = async () => {
+    const newItems = items.map((it, i) => {
+      const inp = overlay.querySelector(`.pd-edit-qty[data-idx="${i}"]`);
+      const qty = Math.max(1, parseInt(inp?.value || it.cantidad || 1));
+      return { ...it, cantidad: qty };
+    });
+    const newTotal = newItems.reduce((s, it) => s + (it.cantidad * (it.precio||0)), 0);
+    try {
+      await updateDoc(doc(db, "pedidos", pedidoId), {
+        items:       newItems,
+        productos:   newItems,
+        total:       newTotal,
+        editadoEn:   Date.now(),
+        editadoPor:  Sesion.alias || Sesion.uid || "–"
+      });
+      window.toast?.("Pedido actualizado", "success");
+      overlay.remove();
+      document.querySelector(`tr.tr-detalle[data-for="${pedidoId}"]`)?.remove();
+    } catch(e) {
+      console.error("[Pedidos] editar:", e);
+      window.toast?.("Error: " + e.message, "error");
+    }
+  };
 }
 
 function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }

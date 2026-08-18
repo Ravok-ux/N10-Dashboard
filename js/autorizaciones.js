@@ -267,8 +267,18 @@ async function _cargarItems(pedidoId, containerId) {
 }
 
 // ── Acciones ───────────────────────────────────────────────────────────────────
+const _enProgreso = new Set();
+
 window._autAprobar = async id => {
-  if (!confirm(`¿Aprobar el pedido ${_pendientes[id]?.folio || id}?`)) return;
+  if (_enProgreso.has(id)) return;
+  const folio = _pendientes[id]?.folio || id;
+  const ok = await window.modal({
+    title: "Aprobar pedido",
+    message: `¿Confirmas la aprobación del pedido ${folio}?`,
+    confirmLabel: "Aprobar"
+  });
+  if (!ok) return;
+  _enProgreso.add(id);
   try {
     await updateDoc(doc(db, "pedidos", id), {
       status:           STATUS_CONFIRMADO,
@@ -278,6 +288,8 @@ window._autAprobar = async id => {
     });
   } catch (e) {
     window.toast?.("Error al aprobar. Intenta de nuevo.", "error");
+  } finally {
+    _enProgreso.delete(id);
   }
 };
 
