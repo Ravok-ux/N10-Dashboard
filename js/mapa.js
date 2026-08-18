@@ -685,16 +685,16 @@ window.MapaMiUbicacion = {
       },
       err => {
         if (err.code === 1) {
-          window.toast?.("Ubicación no compartida. Activa el permiso en el navegador si deseas usar esta función.", "info");
+          window.toast?.("Ubicación bloqueada. Revisa Configuración de Windows → Privacidad → Ubicación y asegúrate de que Chrome tenga acceso.", "info");
         } else {
           const msgs = {
-            2: "No se pudo obtener tu posición.",
-            3: "Tiempo agotado al obtener ubicación."
+            2: "No se pudo determinar tu posición (sin señal GPS ni Wi-Fi).",
+            3: "Tiempo agotado. Intenta de nuevo."
           };
           window.toast?.(msgs[err.code] || "Error de geolocalización.", "error");
         }
       },
-      { timeout: 10000, maximumAge: 30000, enableHighAccuracy: true }
+      { timeout: 12000, maximumAge: 60000, enableHighAccuracy: false }
     );
   }
 };
