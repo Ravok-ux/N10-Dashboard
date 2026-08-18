@@ -25,6 +25,7 @@ import { AutorizacionesModule }   from "./autorizaciones.js";
 import { FormulariosModule }      from "./formularios.js";
 import { PromocionesModule }      from "./promociones.js";
 import { SegmentoPrecioModule }   from "./precios-segmento.js";
+import { ClientesModule }         from "./clientes.js";
 
 // ── Sanitización XSS ──────────────────────────────────────────
 // Usa esta función en TODOS los lugares donde datos de Firestore
@@ -59,6 +60,7 @@ const MODULES = {
   formularios:    FormulariosModule,
   promociones:    PromocionesModule,
   precios_segmento: SegmentoPrecioModule,
+  clientes:         ClientesModule,
   config:       ConfigModule,
   comentarios:  ComentariosModule,
 };
