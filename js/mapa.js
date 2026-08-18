@@ -684,15 +684,14 @@ window.MapaMiUbicacion = {
         window.toast?.(msg, cercanos > 0 ? "success" : "info");
       },
       err => {
-        if (err.code === 1) {
-          window.toast?.("Ubicación bloqueada. Revisa Configuración de Windows → Privacidad → Ubicación y asegúrate de que Chrome tenga acceso.", "info");
-        } else {
+        if (err.code !== 1) {
           const msgs = {
-            2: "No se pudo determinar tu posición (sin señal GPS ni Wi-Fi).",
+            2: "No se pudo determinar tu posición.",
             3: "Tiempo agotado. Intenta de nuevo."
           };
           window.toast?.(msgs[err.code] || "Error de geolocalización.", "error");
         }
+        // código 1 = permiso denegado por el navegador/SO — no mostrar toast
       },
       { timeout: 12000, maximumAge: 60000, enableHighAccuracy: false }
     );
