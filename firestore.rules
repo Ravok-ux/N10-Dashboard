@@ -717,6 +717,129 @@ service cloud.firestore {
                     && request.resource.data.keys().hasAll(['tipo','destinatarios','titulo','_ts']);
     }
 
+    // ── /gastos_empleado ──────────────────────────────────────────────────────
+    match /gastos_empleado/{docId} {
+      // El propio empleado puede ver sus gastos; admins y mesa_control ven todos
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || miRol() == 'MESA_CONTROL'
+                      || request.auth.uid == resource.data.uid);
+
+      // El empleado crea su propio gasto; campos mínimos requeridos
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['uid','alias','categoria','monto','descripcion','status','_ts'])
+                    && request.resource.data.status == 'PENDIENTE'
+                    && request.resource.data.monto is number
+                    && request.resource.data.monto > 0
+                    && request.resource.data.monto <= 50000
+                    && strValido(request.resource.data.descripcion, 500)
+                    && request.resource.data.categoria in ['GASOLINA','ALIMENTACION','HOSPEDAJE','TRANSPORTE','COMUNICACION','OTRO'];
+
+      // Solo admins y mesa_control pueden cambiar el status (aprobar/rechazar)
+      allow update: if cuentaActiva()
+                    && (esAdminOSuperior() || miRol() == 'MESA_CONTROL')
+                    && request.resource.data.uid == resource.data.uid // uid inmutable
+                    && request.resource.data.status in ['APROBADO','RECHAZADO'];
+
+      allow delete: if false;
+    }
+
+    // ── /cortes_caja ──────────────────────────────────────────────────────────
+    match /cortes_caja/{docId} {
+      // Admins y el propio empleado pueden leer sus cortes
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || miRol() == 'MESA_CONTROL'
+                      || request.auth.uid == resource.data.uid);
+
+      // El empleado crea su propio corte
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['uid','alias','turno','efectivo','tarjeta','transferencia','status','_ts'])
+                    && request.resource.data.status == 'PENDIENTE'
+                    && request.resource.data.turno in ['MAÑANA','TARDE','NOCHE']
+                    && request.resource.data.efectivo    is number
+                    && request.resource.data.tarjeta     is number
+                    && request.resource.data.transferencia is number;
+
+      // Solo admins y mesa_control pueden validar/marcar diferencia
+      allow update: if cuentaActiva()
+                    && (esAdminOSuperior() || miRol() == 'MESA_CONTROL')
+                    && request.resource.data.uid == resource.data.uid
+                    && request.resource.data.status in ['VALIDADO','DIFERENCIA'];
+
+      allow delete: if false;
+    }
+
+    // ── /asistencias ──────────────────────────────────────────────────────────
+    match /asistencias/{docId} {
+      // Admins y mesa_control leen todas; el empleado lee las propias
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || miRol() == 'MESA_CONTROL'
+                      || request.auth.uid == resource.data.uid);
+
+      // El empleado crea/actualiza su propio registro de asistencia (check-in/out)
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['uid','alias','fecha','checkInTs','_ts']);
+
+      allow update: if cuentaActiva() && esRolConocido()
+                    && request.auth.uid == resource.data.uid
+                    && request.resource.data.uid == resource.data.uid; // uid inmutable
+
+      allow delete: if false;
+    }
+
+    // ── /sms_campanas ─────────────────────────────────────────────────────────
+    match /sms_campanas/{docId} {
+      // Solo admins y mesa_control leen el historial
+      allow read: if cuentaActiva() && (esAdminOSuperior() || miRol() == 'MESA_CONTROL');
+
+      // Solo admins crean campañas
+      allow create: if cuentaActiva() && esAdminOSuperior()
+                    && request.resource.data.keys().hasAll(['segmento','mensaje','status','_ts'])
+                    && request.resource.data.status == 'PENDIENTE'
+                    && request.resource.data.segmento in ['todos','deudores','sin_compra_30','manual']
+                    && strValido(request.resource.data.mensaje, 160);
+
+      // Cloud Functions actualizan el status (Admin SDK, bypasses rules)
+      allow update, delete: if false;
+    }
+
+    // ── /lealtad_config_producto ──────────────────────────────────────────────
+    match /lealtad_config_producto/{docId} {
+      allow read: if cuentaActiva() && esRolConocido();
+      allow write: if cuentaActiva() && (esAdminOSuperior() || tieneFlag('PUEDE_CONFIG_PROMOCIONES'));
+    }
+
+    // ── /horarios_empleado ────────────────────────────────────────────────────
+    match /horarios_empleado/{alias} {
+      // El empleado ve su propio horario; admins y mesa_control ven todos
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || miRol() == 'MESA_CONTROL'
+                      || perfil().alias == alias);
+
+      // Solo admins y mesa_control configuran horarios
+      allow write: if cuentaActiva() && (esAdminOSuperior() || miRol() == 'MESA_CONTROL')
+                   && request.resource.data.keys().hasAll(['alias','horaEntrada','horaSalida','toleranciaMin'])
+                   && request.resource.data.toleranciaMin is int
+                   && request.resource.data.toleranciaMin >= 0
+                   && request.resource.data.toleranciaMin <= 120;
+    }
+
+    // ── /historial_tipo_cambio ────────────────────────────────────────────────
+    match /historial_tipo_cambio/{docId} {
+      allow read: if cuentaActiva() && esRolConocido();
+      // Solo Cloud Functions escriben en el historial (Admin SDK)
+      allow write: if false;
+    }
+
+    // ── /config ───────────────────────────────────────────────────────────────
+    match /config/{docId} {
+      allow read: if cuentaActiva() && esRolConocido();
+      // Solo admins y gerentes actualizan tipo de cambio u otras configuraciones globales
+      allow write: if cuentaActiva() && esAdminOSuperior();
+    }
+
     // ── Bloqueo por defecto ───────────────────────────────────────────────────
     // Cualquier colección no listada queda denegada
     match /{document=**} {

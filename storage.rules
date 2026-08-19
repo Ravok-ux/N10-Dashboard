@@ -66,6 +66,25 @@ service firebase.storage {
       allow delete: if cuentaActiva() && (esAdminOSuperior() || perfil().alias == alias);
     }
 
+    // ── gastos/{uid}/{archivo} ────────────────────────────────────────────────
+    // El APK del empleado sube la foto del ticket de gasto bajo su propio UID.
+    match /gastos/{uid}/{archivo} {
+      // Lectura: el propio empleado o admins/mesa_control
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || miRol() == 'MESA_CONTROL'
+                      || request.auth.uid == uid);
+
+      // Escritura: solo el propio empleado, solo imágenes JPEG/PNG, máx 10 MB
+      allow write: if cuentaActiva()
+                   && esRolConocido()
+                   && request.auth.uid == uid
+                   && request.resource.contentType.matches('image/(jpeg|png)')
+                   && request.resource.size <= 10 * 1024 * 1024;
+
+      allow delete: if cuentaActiva()
+                    && (esAdminOSuperior() || request.auth.uid == uid);
+    }
+
     // Bloqueo por defecto — cualquier ruta no listada queda denegada
     match /{allPaths=**} {
       allow read, write: if false;
