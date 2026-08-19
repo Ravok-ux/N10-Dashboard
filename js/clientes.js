@@ -49,6 +49,7 @@ let _detalleId  = null;
 export const ClientesModule = {
   mount(container) {
     container.innerHTML = _html();
+    document.getElementById("cli-tbody").innerHTML = window.skeleton?.(5, 7) ?? "";
     _bindUI();
     _escuchar();
     return () => this.destroy();

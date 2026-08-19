@@ -34,6 +34,7 @@ export const PreciosModule = {
       return;
     }
     container.innerHTML = _html();
+    document.getElementById("hp-tbody").innerHTML = window.skeleton?.(5, 5) ?? "";
     _bindBusqueda();
     _escucharHistorial();
     return () => this.destroy();

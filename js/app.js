@@ -37,7 +37,11 @@ import { AuditoriaModule }        from "./auditoria.js";
 import { InventarioModule }       from "./inventario.js";
 import { CrmModule }              from "./crm.js";
 import { LogisticaModule }        from "./logistica.js";
+import { JuridicoModule }         from "./juridico.js";
+import { ObservabilidadModule }   from "./observabilidad.js";
+import { MiRhModule }             from "./mi-rh.js";
 import { iniciarNotificaciones, detenerNotificaciones } from "./notificaciones.js";
+import { iniciarFCM } from "./fcm.js";
 
 // ── Sanitización XSS ──────────────────────────────────────────
 // Usa esta función en TODOS los lugares donde datos de Firestore
@@ -127,7 +131,7 @@ window.promptModal = ({ title = "", label = "", placeholder = "", confirmLabel =
       </div>`;
     const close = r => { o.remove(); resolve(r); };
     o.querySelector("#_gpi-c").onclick  = () => close(null);
-    o.querySelector("#_gpi-ok").onclick = () => close(o.querySelector("#_gpi").value.trim() || null);
+    o.querySelector("#_gpi-ok").onclick = () => close(o.querySelector("#_gpi").value);
     o.addEventListener("click", e => { if (e.target === o) close(null); });
     const onKey = e => { if (e.key === "Escape") { close(null); document.removeEventListener("keydown", onKey); } };
     document.addEventListener("keydown", onKey);
@@ -159,6 +163,9 @@ const MODULES = {
   inventario:   InventarioModule,
   crm:          CrmModule,
   logistica:    LogisticaModule,
+  juridico:        JuridicoModule,
+  observabilidad:  ObservabilidadModule,
+  mi_rh:           MiRhModule,
   precios:      PreciosModule,
   productos:    ProductosControlModule,
   geocercas:      GeocercasModule,
@@ -213,21 +220,7 @@ function _initShell() {
   document.getElementById("tb-ava").textContent   = initiales;
   document.getElementById("tb-uname").textContent = Sesion.alias;
 
-  // Sección Admin solo para SUPER_ADMIN y GERENTE
-  const isAdmin = Sesion.esSuperAdmin() || Sesion.rol === "GERENTE";
-  document.querySelectorAll(".admin-only").forEach(el => {
-    el.style.display = isAdmin ? "" : "none";
-  });
-
-  // Sección Comentarios: MESA_CONTROL, ADMINISTRADOR, GERENTE_ZONA, GERENTE, SUPER_ADMIN
-  const puedeVerComentarios = Sesion.esSuperAdmin() ||
-    ["GERENTE","GERENTE_ZONA","ADMINISTRADOR","MESA_CONTROL"].includes(Sesion.rol);
-  const elCom      = document.getElementById("sb-comentarios");
-  const elGrupoSup = document.getElementById("sb-grupo-supervision");
-  const elSupItems = document.getElementById("sbi-supervision");
-  if (elCom)      elCom.style.display      = puedeVerComentarios ? "" : "none";
-  if (elGrupoSup) elGrupoSup.style.display = puedeVerComentarios ? "" : "none";
-  if (elSupItems) elSupItems.style.display = puedeVerComentarios ? "" : "none";
+  _aplicarVisibilidadSidebar();
 
   // Firebase status verde
   _setStatus("firebase", true, "Firebase conectado");
@@ -255,6 +248,9 @@ function _initShell() {
     document.getElementById("tb-notif-bell"),
     document.getElementById("tb-notif-count")
   );
+
+  // Iniciar FCM push notifications (después de que el SW esté listo)
+  setTimeout(() => iniciarFCM(), 3000);
 
   // Sidebar nav — event delegation con guard de descarte
   document.getElementById("sidebar").addEventListener("click", e => {
@@ -515,3 +511,125 @@ function _initSidebarCollapse() {
 
 // ── Exponer navigate globalmente ───────────────────────────────
 window.navigate = _navigate;
+
+// ── Detector de red (S6 Offline resilience) ────────────────────
+(function _initNetworkDetector() {
+  let _banner = null;
+
+  function _showBanner() {
+    if (_banner) return;
+    _banner = document.createElement("div");
+    _banner.id = "offline-banner";
+    _banner.style.cssText = [
+      "position:fixed", "top:0", "left:0", "right:0", "z-index:9999",
+      "background:#B45309", "color:#fff", "text-align:center",
+      "padding:7px 16px", "font-size:12px", "font-weight:600",
+      "letter-spacing:.3px", "box-shadow:0 2px 8px rgba(0,0,0,.4)",
+    ].join(";");
+    _banner.textContent = "⚠️  Sin conexión — mostrando datos en caché";
+    document.body.prepend(_banner);
+    _setStatus("firebase", false, "Sin red");
+  }
+
+  function _hideBanner() {
+    _banner?.remove();
+    _banner = null;
+    _setStatus("firebase", true, "Firebase conectado");
+  }
+
+  window.addEventListener("offline", _showBanner);
+  window.addEventListener("online",  _hideBanner);
+
+  // Estado inicial
+  if (!navigator.onLine) _showBanner();
+}());
+
+// ── Visibilidad de sidebar por rol ────────────────────────────
+function _aplicarVisibilidadSidebar() {
+  const SA  = Sesion.esSuperAdmin();
+  const rol = Sesion.rol;
+  const f   = k => Sesion.tieneFlag(k); // SA siempre true via tieneFlag
+
+  // pv: visible si es SA o alguno de los roles dados
+  const pv  = (...roles) => SA || roles.includes(rol);
+  // pvF: visible si pv(...roles) O tiene el flag k
+  const pvF = (k, ...roles) => pv(...roles) || f(k);
+
+  // Mapa vista → visible
+  const vis = {
+    // Principal: todos
+    dashboard:  true,
+    mapa:       true,
+    feed:       true,
+    // Campo
+    ingenieros:  pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
+    clientes:    pvF("PUEDE_CREAR_CLIENTES","GERENTE","MESA_CONTROL","RECUPERADOR","INGENIERO","JURIDICO","ADMINISTRADOR"),
+    pedidos:     pvF("PUEDE_VER_PEDIDOS","GERENTE","MESA_CONTROL","ADMINISTRADOR"),
+    remisiones:  pvF("PUEDE_REGISTRAR_REMISION","GERENTE","MESA_CONTROL","RECUPERADOR","ADMINISTRADOR"),
+    cobranza:    pvF("PUEDE_REGISTRAR_ABONO","GERENTE","MESA_CONTROL","RECUPERADOR","ADMINISTRADOR"),
+    // Supervisión
+    comentarios: pv("GERENTE","GERENTE_ZONA","ADMINISTRADOR","MESA_CONTROL"),
+    // Admin — Operaciones
+    usuarios:    pv("GERENTE"),
+    comisiones:  pvF("PUEDE_VER_COMISIONES","GERENTE","ADMINISTRADOR","INGENIERO"),
+    compras:     pv("GERENTE","ALMACENISTA","ADMINISTRADOR"),
+    kardex:      pv("GERENTE","ALMACENISTA","ADMINISTRADOR"),
+    cartera:     pvF("PUEDE_VER_CARTERA_GLOBAL","GERENTE","MESA_CONTROL","RECUPERADOR","ADMINISTRADOR"),
+    visitas:     pv("GERENTE","MESA_CONTROL","INGENIERO","ADMINISTRADOR"),
+    cotizaciones:pv("GERENTE","MESA_CONTROL","INGENIERO","ADMINISTRADOR"),
+    inventario:  pvF("PUEDE_ACCESO_STOCK","GERENTE","ALMACENISTA","ADMINISTRADOR"),
+    devoluciones:pv("GERENTE","MESA_CONTROL","RECUPERADOR","ADMINISTRADOR"),
+    chat:        true,
+    rh:          pvF("PUEDE_VER_RH","GERENTE","ADMINISTRADOR"),
+    crm:         pv("GERENTE","MESA_CONTROL","JURIDICO","ADMINISTRADOR"),
+    logistica:   pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
+    juridico:        pv("GERENTE","JURIDICO","RECUPERADOR","ADMINISTRADOR"),
+    observabilidad:  pv("GERENTE","ADMINISTRADOR"),
+    mi_rh:           pv("INGENIERO","RECUPERADOR","ALMACENISTA"),
+    // Admin — Control
+    precios:          pv("GERENTE","ADMINISTRADOR"),
+    geocercas:        pv("GERENTE","ADMINISTRADOR"),
+    metas:            pv("GERENTE","ADMINISTRADOR"),
+    autorizaciones:   pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
+    auditoria:        pv("GERENTE","ADMINISTRADOR"),
+    // Admin — Configuración
+    formularios:      pv("GERENTE","ADMINISTRADOR"),
+    promociones:      pv("GERENTE","ADMINISTRADOR"),
+    precios_segmento: pv("GERENTE","ADMINISTRADOR"),
+    productos:        pvF("PUEDE_IMPORTAR_CATALOGO","GERENTE","ALMACENISTA","ADMINISTRADOR"),
+    config:           pv("GERENTE","ADMINISTRADOR"),
+    reportes:         pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
+  };
+
+  // Aplicar visibilidad a cada sb-item
+  document.querySelectorAll(".sb-item[data-view]").forEach(el => {
+    const v = el.dataset.view;
+    el.style.display = vis[v] !== false ? "" : "none";
+  });
+
+  // Sección Supervisión
+  const supVis = pv("GERENTE","GERENTE_ZONA","ADMINISTRADOR","MESA_CONTROL");
+  const $sup   = id => document.getElementById(id);
+  if ($sup("sb-grupo-supervision")) $sup("sb-grupo-supervision").style.display = supVis ? "" : "none";
+  if ($sup("sbi-supervision"))      $sup("sbi-supervision").style.display      = supVis ? "" : "none";
+
+  // Sección Admin: visible si tiene al menos un item visible
+  const adminVis = pv("GERENTE","ADMINISTRADOR","MESA_CONTROL","ALMACENISTA","RECUPERADOR","JURIDICO","INGENIERO");
+  if ($sup("sb-admin-group")) $sup("sb-admin-group").style.display = adminVis ? "" : "none";
+  if ($sup("sbi-admin"))      $sup("sbi-admin").style.display      = adminVis ? "" : "none";
+
+  // Sublabels y divisores — ocultar si ningún item visible en su grupo
+  // Operaciones: usuarios → logistica (aprox las primeras 14 entradas del sbi-admin)
+  const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","devoluciones","chat","rh","crm","logistica"];
+  const ctrlViews = ["precios","geocercas","metas","autorizaciones","auditoria"];
+  const cfgViews  = ["formularios","promociones","precios_segmento","productos","config","reportes"];
+
+  const anyVis = views => views.some(v => vis[v]);
+  const showEl = (id, show) => { const e = $sup(id); if (e) e.style.display = show ? "" : "none"; };
+
+  showEl("sb-sublabel-ops", anyVis(opsViews));
+  showEl("sb-sublabel-ctrl", anyVis(ctrlViews));
+  showEl("sb-div-ctrl",      anyVis(ctrlViews));
+  showEl("sb-sublabel-cfg",  anyVis(cfgViews));
+  showEl("sb-div-cfg",       anyVis(cfgViews));
+}

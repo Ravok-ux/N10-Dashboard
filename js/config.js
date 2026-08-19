@@ -126,6 +126,30 @@ function _html() {
     </div>
   </div>
 
+  <!-- Alertas automáticas de cobranza -->
+  <div class="cfg-card" id="cfg-alertas-cobranza-card">
+    <div class="cfg-card-head">
+      <div class="cfg-card-icon">💸</div>
+      <div>
+        <div class="cfg-card-title">Alertas automáticas de cobranza</div>
+        <div class="cfg-card-sub">Se generan notificaciones diarias a las 09:00 AM</div>
+      </div>
+    </div>
+    <div class="cfg-fields">
+      <label class="cfg-label">
+        <input type="checkbox" id="cfg-alert-activo" style="margin-right:6px"> Activar alertas de cobranza
+      </label>
+      <label class="cfg-label">Días de aviso previo al vencimiento</label>
+      <input class="cfg-input" id="cfg-alert-aviso" type="number" min="1" max="30" value="3">
+      <label class="cfg-label">Alertar cuando ya venció hace (días)</label>
+      <input class="cfg-input" id="cfg-alert-postvenc" type="number" min="1" max="30" value="1">
+    </div>
+    <div style="display:flex;justify-content:flex-end;padding:12px 0 0">
+      <button class="cfg-btn-guardar" id="cfg-alert-guardar">Guardar alertas</button>
+    </div>
+    <div id="cfg-alert-status" style="font-size:12px;color:#16A34A;height:16px;margin-top:4px"></div>
+  </div>
+
 </div>`;
 }
 
@@ -326,6 +350,8 @@ export const ConfigModule = {
         _iniciarControlListener();
         this._cargarDatos(container);
         this._bindEventos(container);
+        this._cargarAlertasCobranza();
+        this._bindAlertasCobranza();
     },
 
     async _cargarDatos(container) {
@@ -391,8 +417,8 @@ export const ConfigModule = {
             document.getElementById(id)?.addEventListener("input", () => this._actualizarPreview());
         });
 
-        document.getElementById("cfg-btn-reset")?.addEventListener("click", () => {
-            if (!confirm("¿Restaurar los valores iniciales? Se perderán los cambios no guardados.")) return;
+        document.getElementById("cfg-btn-reset")?.addEventListener("click", async () => {
+            if (!await window.modal({ title: "Restaurar valores", message: "¿Restaurar los valores iniciales? Se perderán los cambios no guardados." })) return;
             this._poblarFormulario(DEFAULTS);
             this._actualizarPreview();
         });
@@ -425,6 +451,41 @@ export const ConfigModule = {
         } finally {
             if (btn) { btn.disabled = false; btn.textContent = "Guardar cambios"; }
         }
+    },
+
+    async _cargarAlertasCobranza() {
+        try {
+            const db = getFirestore();
+            const snap = await getDoc(doc(db, "configuracion", "alertas_cobranza"));
+            const d = snap.exists() ? snap.data() : {};
+            const el = id => document.getElementById(id);
+            if (el("cfg-alert-activo"))   el("cfg-alert-activo").checked  = d.activo !== false;
+            if (el("cfg-alert-aviso"))    el("cfg-alert-aviso").value     = d.diasAviso ?? 3;
+            if (el("cfg-alert-postvenc")) el("cfg-alert-postvenc").value  = d.diasPostVencimiento ?? 1;
+        } catch (e) { console.error("[Config] alertas cobranza:", e); }
+    },
+
+    _bindAlertasCobranza() {
+        document.getElementById("cfg-alert-guardar")?.addEventListener("click", async () => {
+            const db     = getFirestore();
+            const activo = document.getElementById("cfg-alert-activo")?.checked ?? true;
+            const aviso  = Number(document.getElementById("cfg-alert-aviso")?.value)  || 3;
+            const post   = Number(document.getElementById("cfg-alert-postvenc")?.value) || 1;
+            const btn    = document.getElementById("cfg-alert-guardar");
+            const status = document.getElementById("cfg-alert-status");
+            if (btn) { btn.disabled = true; btn.textContent = "Guardando…"; }
+            try {
+                await setDoc(doc(db, "configuracion", "alertas_cobranza"),
+                    { activo, diasAviso: aviso, diasPostVencimiento: post,
+                      ultimoEditor: Sesion.alias, fechaActualizacion: Date.now() });
+                if (status) status.textContent = "✓ Guardado";
+                setTimeout(() => { if (status) status.textContent = ""; }, 3000);
+            } catch (e) {
+                if (status) { status.textContent = "Error: " + e.message; status.style.color = "#DC2626"; }
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = "Guardar alertas"; }
+            }
+        });
     },
 
     destroy() {

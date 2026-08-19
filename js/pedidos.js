@@ -91,8 +91,10 @@ function _html() {
 
 // ── UI Bind ───────────────────────────────────────────────────
 function _bindUI() {
-  window._pedCancelar = _cancelarPedido;
-  window._pedEditar   = _editarPedido;
+  window._pedCancelar  = _cancelarPedido;
+  window._pedEditar    = _editarPedido;
+  window._pedAvanzar   = _avanzarStatus;
+  window._pedEntregado = _marcarEntregado;
   window.PedidosUI = {
     setStatus(s) {
       _filtroStatus = s;
@@ -180,10 +182,10 @@ function _renderTabla() {
     det.className = "tr-detalle";
     det.dataset.for = id;
 
-    const puedeEditar = Sesion.esSuperAdmin?.() ||
-      ["GERENTE","ADMINISTRADOR"].includes(Sesion.rol);
-    const puedeCancelar = puedeEditar || Sesion.rol === "MESA_CONTROL";
-    const yaCancel = ped.status === "CANCELADO";
+    const puedeEditar   = Sesion.esSuperAdmin?.() || ["GERENTE","ADMINISTRADOR"].includes(Sesion.rol);
+    const puedeMesa     = puedeEditar || Sesion.rol === "MESA_CONTROL";
+    const yaCancel      = ped.status === "CANCELADO";
+    const yaFacturado   = ped.status === "FACTURADO";
 
     const itms = ped.items || ped.productos || [];
     const itmsHtml = itms.length
@@ -204,19 +206,29 @@ function _renderTabla() {
         </table>`
       : `<span style="color:#9CA3AF;font-size:11px">Sin detalle de productos</span>`;
 
-    const acnsHtml = yaCancel
-      ? `<div style="margin-top:8px;font-size:11px;color:#B71C1C;font-weight:700">
-           ✕ Cancelado${ped.motivoCancelacion ? ': ' + esc(ped.motivoCancelacion) : ''}</div>`
-      : `<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
-          ${puedeCancelar
-            ? `<button onclick="window._pedCancelar('${esc(id)}')" style="font-size:11px;padding:4px 12px;
-               background:#DC2626;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">
-               ✕ Cancelar</button>` : ""}
-          ${puedeEditar
-            ? `<button onclick="window._pedEditar('${esc(id)}')" style="font-size:11px;padding:4px 12px;
-               background:#1D5C33;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">
-               ✏️ Editar cantidades</button>` : ""}
-        </div>`;
+    // ── Botones de workflow según status actual ─────────────────
+    const btn = (txt, onclick, bg="#1D5C33") =>
+      `<button onclick="${onclick}" style="font-size:11px;padding:4px 12px;
+       background:${bg};color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">${txt}</button>`;
+
+    let acnsHtml;
+    if (yaCancel) {
+      acnsHtml = `<div style="margin-top:8px;font-size:11px;color:#B71C1C;font-weight:700">
+        ✕ Cancelado${ped.motivoCancelacion ? ': ' + esc(ped.motivoCancelacion) : ''}</div>`;
+    } else if (yaFacturado) {
+      acnsHtml = `<div style="margin-top:8px;font-size:11px;color:#4527A0;font-weight:700">
+        🧾 Facturado${ped.facturadoEn ? ' · ' + fmtDt(ped.facturadoEn) : ''}</div>`;
+    } else {
+      const btns = [];
+      const s = ped.status;
+      if (s === "BORRADOR"   && puedeEditar) btns.push(btn("✓ Confirmar",  `window._pedAvanzar('${esc(id)}','CONFIRMADO')`, "#1565C0"));
+      if (s === "CONFIRMADO" && puedeMesa)   btns.push(btn("🚚 En ruta",   `window._pedAvanzar('${esc(id)}','EN_RUTA')`,    "#E65100"));
+      if (s === "EN_RUTA"    && puedeMesa)   btns.push(btn("📦 Entregado", `window._pedEntregado('${esc(id)}')`,            "#1B5E20"));
+      if (s === "ENTREGADO"  && puedeEditar) btns.push(btn("🧾 Facturado", `window._pedAvanzar('${esc(id)}','FACTURADO')`, "#4527A0"));
+      if (puedeEditar) btns.push(btn("✏️ Cantidades", `window._pedEditar('${esc(id)}')`, "#374151"));
+      if (puedeMesa)   btns.push(btn("✕ Cancelar",   `window._pedCancelar('${esc(id)}')`, "#DC2626"));
+      acnsHtml = `<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">${btns.join("")}</div>`;
+    }
 
     det.innerHTML = `<td colspan="99" style="padding:12px 16px;background:var(--surface,#f8fafc)">
   <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#374151">
@@ -235,9 +247,61 @@ function _renderTabla() {
   } // end if !_detListenerAttached
 }
 
+// ── Avanzar status ────────────────────────────────────────────
+async function _avanzarStatus(pedidoId, nuevoStatus) {
+  const labels = { CONFIRMADO:"confirmar", EN_RUTA:"marcar en ruta", FACTURADO:"marcar como facturado" };
+  const ok = await window.modal?.({
+    title:   "Cambiar status",
+    message: `¿${labels[nuevoStatus] || nuevoStatus} el pedido?`,
+    confirm: "Sí, continuar",
+    cancel:  "Cancelar"
+  });
+  if (!ok) return;
+  const campos = {
+    status: nuevoStatus,
+    [`${nuevoStatus.toLowerCase()}En`]: Date.now(),
+    [`${nuevoStatus.toLowerCase()}Por`]: Sesion.alias || Sesion.uid
+  };
+  // Mapeo de campo timestamp según status
+  if (nuevoStatus === "CONFIRMADO")  { campos.confirmadoEn  = Date.now(); campos.confirmadoPor  = Sesion.alias || Sesion.uid; }
+  if (nuevoStatus === "EN_RUTA")     { campos.enRutaEn      = Date.now(); campos.enRutaPor      = Sesion.alias || Sesion.uid; }
+  if (nuevoStatus === "FACTURADO")   { campos.facturadoEn   = Date.now(); campos.facturadoPor   = Sesion.alias || Sesion.uid; }
+  try {
+    await updateDoc(doc(db, "pedidos", pedidoId), campos);
+    window.toast?.(`Pedido marcado como ${nuevoStatus.replace(/_/g," ")}`, "success");
+    document.querySelector(`tr.tr-detalle[data-for="${pedidoId}"]`)?.remove();
+  } catch(e) {
+    console.error("[Pedidos] avanzar:", e);
+    window.toast?.("Error: " + e.message, "error");
+  }
+}
+
+async function _marcarEntregado(pedidoId) {
+  const receptor = await window.promptModal?.({
+    title:       "Confirmar entrega",
+    label:       "¿Quién recibió el pedido?",
+    placeholder: "Nombre del receptor…"
+  });
+  if (receptor === null) return;
+  if (!receptor.trim()) { window.toast?.("Ingresa el nombre del receptor", "warning"); return; }
+  try {
+    await updateDoc(doc(db, "pedidos", pedidoId), {
+      status:       "ENTREGADO",
+      entregadoEn:  Date.now(),
+      entregadoPor: Sesion.alias || Sesion.uid,
+      recibioCon:   receptor.trim()
+    });
+    window.toast?.("Entrega confirmada", "success");
+    document.querySelector(`tr.tr-detalle[data-for="${pedidoId}"]`)?.remove();
+  } catch(e) {
+    console.error("[Pedidos] entregado:", e);
+    window.toast?.("Error: " + e.message, "error");
+  }
+}
+
 // ── Cancelar pedido ───────────────────────────────────────────
 async function _cancelarPedido(pedidoId) {
-  const razon = window.prompt("Motivo de cancelación:");
+  const razon = await window.promptModal({ title: "Cancelar pedido", label: "Motivo de cancelación", placeholder: "Motivo…" });
   if (razon === null) return; // usuario canceló el diálogo
   if (!razon.trim()) { window.toast?.("Ingresa un motivo", "warning"); return; }
 

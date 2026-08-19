@@ -397,9 +397,9 @@ export const PromocionesModule = (() => {
   }
 
   async function _eliminarCampana(id) {
-    if (!confirm('¿Eliminar esta campaña?')) return;
+    if (!await window.modal({ title: "Eliminar campaña", message: "¿Eliminar esta campaña?", danger: true, confirmLabel: "Eliminar" })) return;
     try { await deleteDoc(doc(db, COL_CAMPANAS, id)); }
-    catch (err) { alert('Error al eliminar: ' + err.message); }
+    catch (err) { window.toast?.("Error al eliminar: " + err.message, "error"); }
   }
 
   // ── Puntos por cliente ────────────────────────────────────────────────

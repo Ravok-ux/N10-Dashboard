@@ -296,7 +296,7 @@ async function _cargarProgreso(m) {
 
 window._mEditar   = id => _abrirForm(id);
 window._mEliminar = async id => {
-  if (!confirm("¿Eliminar esta meta?")) return;
+  if (!await window.modal({ title: "Eliminar meta", message: "¿Eliminar esta meta?", danger: true, confirmLabel: "Eliminar" })) return;
   try {
     await deleteDoc(doc(db, "metas", id));
   } catch (e) {

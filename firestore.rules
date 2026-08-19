@@ -566,7 +566,11 @@ service cloud.firestore {
 
     // ── /rh_asistencia ────────────────────────────────────────────────────────
     match /rh_asistencia/{docId} {
-      allow read:   if cuentaActiva() && (esAdminOSuperior() || miRol() == 'MESA_CONTROL');
+      // Admins ven todo; cada empleado solo lee sus propios registros (módulo Mi RH)
+      allow read:   if cuentaActiva() && (
+                      esAdminOSuperior() || miRol() == 'MESA_CONTROL' ||
+                      (esRolConocido() && resource.data.uid == request.auth.uid)
+                    );
       allow create: if cuentaActiva() && (esAdminOSuperior() || miRol() == 'MESA_CONTROL');
       allow update: if cuentaActiva() && esAdminOSuperior();
       allow delete: if esSuperAdmin();
@@ -574,16 +578,32 @@ service cloud.firestore {
 
     // ── /rh_vacaciones ────────────────────────────────────────────────────────
     match /rh_vacaciones/{docId} {
-      allow read:   if cuentaActiva() && (esAdminOSuperior() || miRol() == 'MESA_CONTROL');
-      allow create: if cuentaActiva() && esRolConocido();
+      allow read:   if cuentaActiva() && (
+                      esAdminOSuperior() || miRol() == 'MESA_CONTROL' ||
+                      (esRolConocido() && resource.data.uid == request.auth.uid)
+                    );
+      // El empleado puede crear su propia solicitud; solo puede iniciarla como PENDIENTE
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.status == 'PENDIENTE'
+                    && request.resource.data.keys().hasAll(['uid','desde','hasta','status','solicitadaEn']);
       allow update: if cuentaActiva() && (esAdminOSuperior() || miRol() == 'GERENTE_ZONA');
       allow delete: if esSuperAdmin();
     }
 
     // ── /rh_anticipos ────────────────────────────────────────────────────────
     match /rh_anticipos/{docId} {
-      allow read:   if cuentaActiva() && (esAdminOSuperior() || miRol() == 'MESA_CONTROL');
-      allow create: if cuentaActiva() && esRolConocido();
+      allow read:   if cuentaActiva() && (
+                      esAdminOSuperior() || miRol() == 'MESA_CONTROL' ||
+                      (esRolConocido() && resource.data.uid == request.auth.uid)
+                    );
+      // El empleado puede solicitar un anticipo propio; monto mínimo 100
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.monto is number
+                    && request.resource.data.monto >= 100
+                    && strValido(request.resource.data.motivo, 500)
+                    && request.resource.data.status == 'PENDIENTE';
       allow update: if cuentaActiva() && esAdminOSuperior();
       allow delete: if esSuperAdmin();
     }
@@ -627,6 +647,74 @@ service cloud.firestore {
       allow read:   if cuentaActiva() && esAdminOSuperior();
       allow create: if cuentaActiva() && esAdminOSuperior();
       allow update, delete: if esSuperAdmin();
+    }
+
+    // ── /rh_nomina ────────────────────────────────────────────────────────────
+    match /rh_nomina/{docId} {
+      // Admins ven todos; empleado solo sus propios recibos (módulo Mi RH)
+      allow read:   if cuentaActiva() && (
+                      esAdminOSuperior() || miRol() == 'MESA_CONTROL' ||
+                      (esRolConocido() && resource.data.uid == request.auth.uid)
+                    );
+      allow create, update: if cuentaActiva() && esAdminOSuperior();
+      allow delete:         if esSuperAdmin();
+    }
+
+    // ── /juridico_notas ───────────────────────────────────────────────────────
+    match /juridico_notas/{notaId} {
+      // Solo roles con acceso al módulo Jurídico
+      allow read: if cuentaActiva()
+                  && miRol() in ['SUPER_ADMIN','GERENTE','GERENTE_ZONA','ADMINISTRADOR','JURIDICO','RECUPERADOR'];
+
+      allow create: if cuentaActiva()
+                    && miRol() in ['SUPER_ADMIN','GERENTE','GERENTE_ZONA','ADMINISTRADOR','JURIDICO','RECUPERADOR']
+                    && request.resource.data.keys().hasAll(['clienteId','clienteNombre','tipo','texto','autor','creadaEn'])
+                    && request.resource.data.tipo in ['NOTA','PROMESA']
+                    && strValido(request.resource.data.texto, 1000)
+                    && request.resource.data.autor == perfil().alias;
+
+      // Solo admins pueden editar o borrar notas existentes
+      allow update, delete: if cuentaActiva()
+                            && miRol() in ['SUPER_ADMIN','GERENTE','ADMINISTRADOR'];
+    }
+
+    // ── /metricas_diarias ─────────────────────────────────────────────────────
+    match /metricas_diarias/{docId} {
+      // Solo admins y gerentes pueden ver las métricas del sistema
+      allow read:  if cuentaActiva() && esAdminOSuperior();
+      allow write: if false; // Escritura exclusiva de Cloud Functions (Admin SDK)
+    }
+
+    // ── /backups_manifesto ────────────────────────────────────────────────────
+    match /backups_manifesto/{docId} {
+      allow read:  if cuentaActiva() && esAdminOSuperior();
+      allow write: if false; // Escritura exclusiva de Cloud Functions (Admin SDK)
+    }
+
+    // ── /geofence_eventos ─────────────────────────────────────────────────────
+    match /geofence_eventos/{docId} {
+      // Admins y mesa de control ven todos los eventos
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || miRol() == 'MESA_CONTROL');
+
+      // El APK escribe eventos de transición; tipo restringido a los válidos
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.keys().hasAll(['tipo','geocercaId','alias','timestamp'])
+                    && request.resource.data.tipo in ['ENTRADA','SALIDA','PERMANENCIA']
+                    && request.resource.data.alias == perfil().alias;
+
+      allow update, delete: if false; // Inmutable — auditoría de presencia
+    }
+
+    // ── /notificaciones_web (complemento APK geocerca) ────────────────────────
+    // La regla base de /notificaciones_web permite create solo a admins desde web.
+    // El APK necesita crear notificaciones de geocerca como usuario autenticado.
+    // Se extiende aquí con un match más específico por tipo de notificación.
+    // (Firestore aplica la regla más permisiva entre matches que se superponen)
+    match /notificaciones_web/{notifId} {
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.tipo in ['GEOCERCA_ENTRADA','GEOCERCA_SALIDA']
+                    && request.resource.data.keys().hasAll(['tipo','destinatarios','titulo','_ts']);
     }
 
     // ── Bloqueo por defecto ───────────────────────────────────────────────────

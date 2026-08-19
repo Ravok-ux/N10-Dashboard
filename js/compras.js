@@ -6,8 +6,8 @@ import { db } from "./firebase-config.js";
 import { esc } from "./app.js";
 import { Sesion } from "./auth.js";
 import {
-  collection, doc, onSnapshot, updateDoc, addDoc,
-  query, orderBy, serverTimestamp, Timestamp
+  collection, doc, onSnapshot, updateDoc, addDoc, getDoc,
+  query, orderBy, serverTimestamp, writeBatch, increment, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const fmtMXN = v => new Intl.NumberFormat("es-MX", { style:"currency", currency:"MXN" }).format(v || 0);
@@ -335,10 +335,10 @@ function _bindAcciones() {
           ✉ Marcar enviada</button>`;
       }
       if (puedeEditar && ["ENVIADA","PARCIAL"].includes(oc.status)) {
-        acciones += `<button onclick="ComprasUI.cambiarStatus('${ocId}','RECIBIDA')"
+        acciones += `<button onclick="ComprasUI.abrirRecepcion('${ocId}')"
           style="background:#166534;border:1px solid #16A34A;border-radius:6px;padding:7px 14px;
             font-size:11.5px;font-weight:700;color:#4ADE80;cursor:pointer;margin-left:8px">
-          ✔ Recibida</button>`;
+          📥 Registrar recepción</button>`;
       }
       if (puedeEditar && oc.status !== "CANCELADA") {
         acciones += `<button onclick="ComprasUI.cambiarStatus('${ocId}','CANCELADA')"
@@ -357,11 +357,11 @@ function _bindAcciones() {
         ENVIADA:   'marcar como enviada',
         PENDIENTE: 'regresar a pendiente'
       };
-      if (!confirm(`¿Deseas ${_labelStatus[nuevoStatus] || nuevoStatus}?`)) return;
+      if (!await window.modal({ title: "Cambiar status", message: `¿Deseas ${_labelStatus[nuevoStatus] || nuevoStatus}?` })) return;
       try {
         await updateDoc(doc(db, "ordenes_compra", ocId), {
           status: nuevoStatus,
-          modificadoPor: Sesion.uid,
+          modificadoPor: Sesion.alias || Sesion.uid,
           modificadoEn: serverTimestamp()
         });
         window.toast?.(`OC actualizada a ${nuevoStatus}`, "success");
@@ -370,6 +370,161 @@ function _bindAcciones() {
         const msg = /permission|PERMISSION/.test(e.message || "")
           ? "Sin permisos para realizar esta acción."
           : "Ocurrió un error. Intenta de nuevo.";
+        window.toast?.(msg, "error");
+      }
+    },
+
+    // ── Recepción de OC → entrada automática a stock ─────────
+    async abrirRecepcion(ocId) {
+      const snap = await getDoc(doc(db, "ordenes_compra", ocId));
+      if (!snap.exists()) return;
+      const oc    = snap.data();
+      const items = oc.items || [];
+
+      const filas = items.map((it, idx) => `
+        <tr style="border-bottom:1px solid var(--c-border)">
+          <td style="padding:8px 10px;font-size:12px;color:var(--c-text)">${esc(it.nombreProducto || it.nombre || "–")}</td>
+          <td style="padding:8px 10px;text-align:center;font-size:12px;color:#9CA3AF">${it.cantidad} ${it.unidad || ""}</td>
+          <td style="padding:8px 10px;text-align:center">
+            <input type="number" min="0" step="any" data-idx="${idx}"
+              data-idpret="${it.idPretoriano || it.productoId || ''}"
+              data-nombre="${esc(it.nombreProducto || it.nombre || '')}"
+              data-costo="${it.precioUnitario || 0}"
+              class="oc-rec-qty" value="${it.cantidad}"
+              style="width:80px;border:1px solid var(--c-border);border-radius:5px;
+                padding:4px 6px;font-size:12px;background:var(--c-surface);color:var(--c-text);
+                text-align:right">
+          </td>
+          <td style="padding:8px 10px;text-align:center">
+            <textarea class="oc-rec-nota" data-idx="${idx}" rows="1"
+              placeholder="Diferencia / merma…"
+              style="width:100%;border:1px solid var(--c-border);border-radius:5px;
+                padding:4px 6px;font-size:11px;background:var(--c-surface);color:var(--c-text);
+                resize:none"></textarea>
+          </td>
+        </tr>`).join("");
+
+      // Inyectar modal de recepción
+      let modal = document.getElementById("modal-oc-recepcion");
+      if (!modal) {
+        modal = document.createElement("div");
+        modal.id = "modal-oc-recepcion";
+        modal.className = "modal-overlay hidden";
+        document.body.appendChild(modal);
+      }
+      modal.innerHTML = `
+        <div class="modal" style="max-width:660px">
+          <div class="modal-title">📥 Recepción — ${esc(oc.folio || ocId)}</div>
+          <div style="font-size:11px;color:#9CA3AF;margin-bottom:12px">
+            Ajusta las cantidades reales recibidas. El stock se actualiza automáticamente al guardar.
+          </div>
+          <div style="overflow-x:auto;max-height:320px;overflow-y:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead>
+                <tr style="background:var(--c-surface-2,#F9FAFB)">
+                  <th style="padding:8px 10px;text-align:left;color:#6B7280;font-weight:600">Producto</th>
+                  <th style="padding:8px 10px;text-align:center;color:#6B7280;font-weight:600">OC Cant.</th>
+                  <th style="padding:8px 10px;text-align:center;color:#6B7280;font-weight:600">Recibido</th>
+                  <th style="padding:8px 10px;text-align:center;color:#6B7280;font-weight:600">Nota / Diferencia</th>
+                </tr>
+              </thead>
+              <tbody>${filas || '<tr><td colspan="4" style="padding:20px;text-align:center;color:#9CA3AF">Sin productos en esta OC</td></tr>'}</tbody>
+            </table>
+          </div>
+          ${items.length === 0 ? '<div style="font-size:11px;color:#FBBF24;margin-top:8px">⚠ Esta OC no tiene productos — agrega items desde el APK primero.</div>' : ''}
+          <div class="modal-actions" style="margin-top:16px">
+            <button class="btn-secondary" onclick="document.getElementById('modal-oc-recepcion').classList.add('hidden')">Cancelar</button>
+            <button class="btn-primary" style="width:auto;padding:8px 20px"
+              onclick="ComprasUI.confirmarRecepcion('${ocId}')">
+              ✔ Confirmar recepción y actualizar stock
+            </button>
+          </div>
+        </div>`;
+      modal.classList.remove("hidden");
+    },
+
+    async confirmarRecepcion(ocId) {
+      const entradas = [...document.querySelectorAll(".oc-rec-qty")].map(input => ({
+        idPretoriano: input.dataset.idpret ? Number(input.dataset.idpret) : null,
+        nombre:       input.dataset.nombre || "–",
+        costo:        Number(input.dataset.costo) || 0,
+        cantidad:     Number(input.value) || 0,
+        nota:         document.querySelector(`.oc-rec-nota[data-idx="${input.dataset.idx}"]`)?.value || ""
+      })).filter(e => e.cantidad > 0);
+
+      if (entradas.length === 0) {
+        window.toast?.("Ingresa al menos una cantidad mayor a 0", "error");
+        return;
+      }
+      if (!await window.modal({ title: "Confirmar recepción", message: `¿Confirmar recepción de ${entradas.length} producto(s) y actualizar stock?`, confirmLabel: "Confirmar" })) return;
+
+      try {
+        const batch = writeBatch(db);
+        const ts    = serverTimestamp();
+        const now   = Date.now();
+
+        for (const item of entradas) {
+          if (!item.idPretoriano) continue;
+
+          // Buscar producto en Firestore
+          const { getDocs: gd, query: qry, where, collection: col, limit: lim } =
+            await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+          const pSnap = await gd(qry(col(db, "productos"),
+            where("idPretoriano", "==", item.idPretoriano), lim(1)));
+
+          if (pSnap.empty) {
+            console.warn(`[Recepción] idPretoriano=${item.idPretoriano} no encontrado`);
+            continue;
+          }
+          const prodRef     = pSnap.docs[0].ref;
+          const stockActual = pSnap.docs[0].data().stock || 0;
+          const costoBefore = pSnap.docs[0].data().costo_base || pSnap.docs[0].data().costoBase || 0;
+
+          // Actualizar stock y costo_base si cambió
+          const prodUpd = { stock: increment(item.cantidad), updatedAt: ts };
+          if (item.costo > 0 && Math.abs(item.costo - costoBefore) > 0.01) {
+            prodUpd.costo_base = item.costo;
+            prodUpd.costoBase  = item.costo;
+          }
+          batch.update(prodRef, prodUpd);
+
+          // Registrar en kardex
+          const movRef = doc(collection(db, "movimientos_stock"));
+          batch.set(movRef, {
+            tipo:           "ENTRADA",
+            motivo:         "OC",
+            productoId:     pSnap.docs[0].id,
+            idPretoriano:   item.idPretoriano,
+            nombreProducto: item.nombre,
+            cantidad:       item.cantidad,
+            stockAntes:     stockActual,
+            stockDespues:   stockActual + item.cantidad,
+            costoUnitario:  item.costo,
+            ocId,
+            nota:           item.nota || "",
+            quienRegistro:  Sesion.alias || Sesion.uid,
+            timestamp:      ts,
+            _ts:            now
+          });
+        }
+
+        // Marcar OC como RECIBIDA (o PARCIAL si alguna cantidad difiere — simplificación: RECIBIDA)
+        batch.update(doc(db, "ordenes_compra", ocId), {
+          status:           "RECIBIDA",
+          fechaRecepcion:   ts,
+          recibidoPor:      Sesion.alias || Sesion.uid,
+          modificadoEn:     ts
+        });
+
+        await batch.commit();
+        window.toast?.(`Recepción registrada — stock actualizado en ${entradas.length} producto(s)`, "success");
+        document.getElementById("modal-oc-recepcion")?.classList.add("hidden");
+        document.getElementById("modal-oc-detalle")?.classList.add("hidden");
+      } catch (err) {
+        console.error("[confirmarRecepcion]", err);
+        const msg = /permission|PERMISSION/.test(err.message || "")
+          ? "Sin permisos para actualizar stock."
+          : "Error al registrar recepción. Intenta de nuevo.";
         window.toast?.(msg, "error");
       }
     }

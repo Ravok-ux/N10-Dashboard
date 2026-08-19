@@ -10,6 +10,158 @@ import {
   limit, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// ── Canvas chart helpers ───────────────────────────────────────
+function _cvs(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const dpr = window.devicePixelRatio || 1;
+  const w   = el.clientWidth  || parseInt(el.style.width)  || 300;
+  const h   = el.clientHeight || parseInt(el.style.height) || 110;
+  el.width  = w * dpr;
+  el.height = h * dpr;
+  const ctx = el.getContext("2d");
+  ctx.scale(dpr, dpr);
+  return { ctx, w, h };
+}
+function _dark() {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === "dark" : window.matchMedia("(prefers-color-scheme:dark)").matches;
+}
+
+function _chartLinea(id, labels, values) {
+  const c = _cvs(id); if (!c) return;
+  const { ctx, w, h } = c;
+  const dk   = _dark();
+  const C_LINE = "#16A34A", C_FILL = dk ? "rgba(22,163,74,.3)" : "rgba(22,163,74,.15)";
+  const C_TXT  = dk ? "#9CA3AF" : "#6B7280", C_GRID = dk ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.06)";
+  const PL=6, PR=6, PT=10, PB=22;
+  const cW = w-PL-PR, cH = h-PT-PB;
+  const max = Math.max(...values, 1);
+  const n   = values.length;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Horizontal grid
+  ctx.strokeStyle = C_GRID; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+  [0.5, 1].forEach(r => {
+    const y = PT + cH * (1 - r);
+    ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(PL+cW, y); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+
+  const pts = values.map((v, i) => ({
+    x: PL + (n > 1 ? (i / (n-1)) * cW : cW/2),
+    y: PT + cH - (v / max) * cH
+  }));
+
+  // Fill
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  pts.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(pts[n-1].x, PT+cH);
+  ctx.lineTo(pts[0].x, PT+cH);
+  ctx.closePath();
+  ctx.fillStyle = C_FILL; ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  pts.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.strokeStyle = C_LINE; ctx.lineWidth = 2; ctx.stroke();
+
+  // Dots + labels
+  pts.forEach((p, i) => {
+    ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
+    ctx.fillStyle = C_LINE; ctx.fill();
+    ctx.fillStyle = C_TXT; ctx.font = "9px system-ui,sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    ctx.fillText(labels[i], p.x, h-4);
+  });
+}
+
+function _chartBarras(id, entries) {
+  const c = _cvs(id); if (!c) return;
+  const { ctx, w, h } = c;
+  const dk  = _dark();
+  const C_BAR  = dk ? "#4ADE80" : "#16A34A";
+  const C_TXT  = dk ? "#9CA3AF" : "#6B7280";
+  const C_TRCK = dk ? "rgba(255,255,255,.06)" : "rgba(0,0,0,.05)";
+
+  ctx.clearRect(0, 0, w, h);
+  if (!entries.length) {
+    ctx.fillStyle = C_TXT; ctx.font = "11px system-ui,sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("Sin datos", w/2, h/2); return;
+  }
+
+  const LABEL_W = 74, PAD = 6;
+  const max   = entries[0][1] || 1;
+  const rowH  = (h - PAD*2) / entries.length;
+
+  entries.forEach(([nombre, valor], i) => {
+    const y    = PAD + i * rowH;
+    const bH   = Math.max(8, rowH - 6);
+    const bY   = y + (rowH - bH)/2;
+    const bW   = Math.max(2, ((valor/max) * (w - PAD - LABEL_W - PAD)));
+
+    ctx.fillStyle = C_TRCK;
+    ctx.fillRect(PAD + LABEL_W, bY, w - PAD - LABEL_W - PAD, bH);
+    ctx.fillStyle = C_BAR;
+    ctx.fillRect(PAD + LABEL_W, bY, bW, bH);
+
+    const lbl = nombre.length > 11 ? nombre.slice(0,10)+"…" : nombre;
+    ctx.fillStyle = C_TXT; ctx.font = "9px system-ui,sans-serif";
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    ctx.fillText(lbl, PAD + LABEL_W - 3, bY + bH/2);
+  });
+}
+
+function _chartDonut(id, cobrado, pendiente) {
+  const c = _cvs(id); if (!c) return;
+  const { ctx, w, h } = c;
+  const dk  = _dark();
+  const C_COB  = "#16A34A", C_PEN = dk ? "#374151" : "#E5E7EB";
+  const C_TXT  = dk ? "#E6EDF3" : "#111827", C_SUB = dk ? "#9CA3AF" : "#6B7280";
+  const C_HOLE = dk ? "#1C2029" : "#FFFFFF";
+
+  ctx.clearRect(0, 0, w, h);
+  const total = cobrado + pendiente || 1;
+  const cx = w/2, cy = (h-14)/2 + 4;
+  const R  = Math.min(cx, cy) - 8;
+  const r  = R * 0.58;
+  const a0 = -Math.PI/2;
+  const aC = (cobrado/total) * Math.PI * 2;
+
+  // Cobrado
+  ctx.beginPath(); ctx.arc(cx,cy,R,a0,a0+aC);
+  ctx.arc(cx,cy,r,a0+aC,a0,true); ctx.closePath();
+  ctx.fillStyle = C_COB; ctx.fill();
+  // Pendiente
+  ctx.beginPath(); ctx.arc(cx,cy,R,a0+aC,a0+Math.PI*2);
+  ctx.arc(cx,cy,r,a0+Math.PI*2,a0+aC,true); ctx.closePath();
+  ctx.fillStyle = C_PEN; ctx.fill();
+  // Hole
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.fillStyle = C_HOLE; ctx.fill();
+
+  // Center %
+  const pct = Math.round((cobrado/total)*100);
+  ctx.fillStyle = C_TXT; ctx.font = "bold 13px system-ui,sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(pct+"%", cx, cy-2);
+  ctx.fillStyle = C_SUB; ctx.font = "8px system-ui,sans-serif";
+  ctx.fillText("cobrado", cx, cy+9);
+
+  // Legend
+  const lY = h - 7;
+  ctx.fillStyle = C_COB; ctx.fillRect(4, lY-5, 7, 7);
+  ctx.fillStyle = C_SUB; ctx.font = "8px system-ui,sans-serif";
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  ctx.fillText("Cobrado", 14, lY);
+  ctx.fillStyle = C_PEN; ctx.fillRect(w/2+2, lY-5, 7, 7);
+  ctx.fillStyle = C_SUB; ctx.fillText("Pendiente", w/2+12, lY);
+}
+
 let _unsubs = [];
 
 export const DashboardModule = {
@@ -18,11 +170,16 @@ export const DashboardModule = {
     _bindMapBtn();
 
     const unsub1 = _escucharKPIs();
-    const unsub2 = _escucharRanking();
-    const unsub3 = _escucharUbicaciones();
-    const unsub4 = _escucharFeedDash();
+    const unsub2 = _escucharCobranzaKPI();
+    const unsub3 = _escucharCotizacionesKPI();
+    const unsub4 = _escucharStockKPI();
+    const unsub5 = _escucharDevolucionesKPI();
+    const unsub6 = _escucharRanking();
+    const unsub7 = _escucharUbicaciones();
+    const unsub8 = _escucharFeedDash();
+    const unsub9 = _escucharCharts();
 
-    _unsubs = [unsub1, unsub2, unsub3, unsub4];
+    _unsubs = [unsub1, unsub2, unsub3, unsub4, unsub5, unsub6, unsub7, unsub8, unsub9];
     return () => this.destroy();
   },
 
@@ -39,12 +196,35 @@ function _html() {
 
     <!-- LEFT -->
     <div class="dash-left">
-      <!-- KPIs -->
+      <!-- KPIs fila 1: operación -->
       <div class="kpi-row" id="kpi-row">
-        ${_kpiSkeleton("💰", "Vendido hoy",     "green")}
-        ${_kpiSkeleton("🏦", "Cobrado hoy",     "blue")}
-        ${_kpiSkeleton("🛒", "Pedidos activos", "amber")}
-        ${_kpiSkeleton("👷", "En campo",        "violet")}
+        ${_kpiSkeleton("💰", "Vendido hoy",       "green")}
+        ${_kpiSkeleton("🏦", "Cobrado hoy",       "blue")}
+        ${_kpiSkeleton("🛒", "Pedidos activos",   "amber")}
+        ${_kpiSkeleton("👷", "En campo",          "violet")}
+      </div>
+      <!-- KPIs fila 2: alertas -->
+      <div class="kpi-row" id="kpi-row-2" style="margin-top:8px">
+        ${_kpiSkeleton("📋", "Cotizaciones activas", "violet")}
+        ${_kpiSkeleton("💸", "Cobranza vencida",     "red")}
+        ${_kpiSkeleton("⚠️",  "Stock crítico",        "amber")}
+        ${_kpiSkeleton("↩️",  "Devoluciones pend.",   "red")}
+      </div>
+
+      <!-- Gráficas S4 -->
+      <div class="charts-row" id="dash-charts-row">
+        <div class="chart-card" style="flex:2">
+          <div class="chart-label">📈 Ventas 7 días</div>
+          <canvas id="ch-ventas" style="width:100%;height:110px;display:block"></canvas>
+        </div>
+        <div class="chart-card" style="flex:2">
+          <div class="chart-label">📦 Top 5 productos</div>
+          <canvas id="ch-productos" style="width:100%;height:110px;display:block"></canvas>
+        </div>
+        <div class="chart-card" style="flex:1;min-width:130px">
+          <div class="chart-label">💰 Cobrado vs Cartera</div>
+          <canvas id="ch-donut" style="width:100%;height:110px;display:block"></canvas>
+        </div>
       </div>
 
       <!-- Ranking -->
@@ -134,6 +314,78 @@ function _escucharKPIs() {
     _renderKPI(0, "💰", "Vendido hoy",     _fmt(vendido),   "+18%", "up",  "#16A34A");
     _renderKPI(2, "🛒", "Pedidos activos", String(activos), "8 ruta · "+(activos-8)+" conf.", "nt", "#D97706");
   }, _logErr("KPIs-pedidos"));
+}
+
+// ── KPI: Cotizaciones activas ─────────────────────────────────
+function _escucharCotizacionesKPI() {
+  const q = query(
+    collection(db, "cotizaciones"),
+    where("status", "in", ["BORRADOR", "ENVIADA", "APROBADA"])
+  );
+  return onSnapshot(q, snap => {
+    const total = snap.size;
+    const vencenHoy = snap.docs.filter(d => {
+      const v = d.data().venceEn;
+      if (!v) return false;
+      const diff = v - Date.now();
+      return diff > 0 && diff < 86400000;
+    }).length;
+    _renderKPI2(0, "📋", "Cotizaciones activas", String(total),
+      vencenHoy > 0 ? `${vencenHoy} vencen hoy` : "Al día",
+      vencenHoy > 0 ? "dn" : "nt", "#7C3AED");
+  }, _logErr("kpi-cotizaciones"));
+}
+
+// ── KPI: Cobranza vencida ─────────────────────────────────────
+function _escucharCobranzaKPI() {
+  const q = query(
+    collection(db, "clientes"),
+    where("semaforoColor", "in", ["NARANJA", "ROJO"])
+  );
+  return onSnapshot(q, snap => {
+    let saldoVencido = 0;
+    snap.forEach(d => { saldoVencido += (d.data().saldoPendiente || 0); });
+    _renderKPI2(1, "💸", "Cobranza vencida", _fmt(saldoVencido),
+      `${snap.size} clientes`, snap.size > 0 ? "dn" : "nt", "#DC2626");
+  }, _logErr("kpi-cobranza"));
+}
+
+// ── KPI: Stock crítico ────────────────────────────────────────
+function _escucharStockKPI() {
+  const q = query(
+    collection(db, "alertas_stock"),
+    where("resuelta", "==", false)
+  );
+  return onSnapshot(q, snap => {
+    _renderKPI2(2, "⚠️", "Stock crítico", String(snap.size),
+      snap.size > 0 ? "Requiere compra" : "Inventario OK",
+      snap.size > 0 ? "dn" : "nt", "#D97706");
+  }, _logErr("kpi-stock"));
+}
+
+// ── KPI: Devoluciones pendientes ──────────────────────────────
+function _escucharDevolucionesKPI() {
+  const q = query(
+    collection(db, "devoluciones"),
+    where("status", "==", "PENDIENTE")
+  );
+  return onSnapshot(q, snap => {
+    const monto = snap.docs.reduce((s, d) => s + (d.data().monto || 0), 0);
+    _renderKPI2(3, "↩️", "Devoluciones pend.", String(snap.size),
+      snap.size > 0 ? _fmt(monto) + " acumulado" : "Sin pendientes",
+      snap.size > 0 ? "dn" : "nt", "#DC2626");
+  }, _logErr("kpi-devoluciones"));
+}
+
+function _renderKPI2(idx, icon, label, val, delta, deltaClass, borderColor) {
+  const cards = document.querySelectorAll("#kpi-row-2 .kpi-card");
+  if (!cards[idx]) return;
+  cards[idx].style.borderLeftColor = borderColor;
+  cards[idx].innerHTML = `
+    <div class="kpi-icon">${icon}</div>
+    <div class="kpi-val">${val}</div>
+    <div class="kpi-label">${label}</div>
+    <div class="kpi-delta ${deltaClass}">${delta}</div>`;
 }
 
 function _escucharRanking() {
@@ -242,6 +494,57 @@ function _escucharUbicaciones() {
       pinsEl.appendChild(pin);
     });
   }, _logErr("ubicaciones-map"));
+}
+
+// ── Gráficas S4 ───────────────────────────────────────────────
+function _escucharCharts() {
+  const hace7 = new Date(Date.now() - 7 * 86400000);
+  hace7.setHours(0, 0, 0, 0);
+  const q = query(
+    collection(db, "pedidos"),
+    where("timestamp", ">=", Timestamp.fromDate(hace7)),
+    limit(1000)
+  );
+  return onSnapshot(q, snap => {
+    // Construir días de los últimos 7
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const diasKeys = [];
+    const diasVenta = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(hoy.getTime() - i * 86400000);
+      const k = d.toISOString().slice(0, 10);
+      diasKeys.push(k); diasVenta[k] = 0;
+    }
+
+    const prods = {};
+    let cobrado = 0, pendiente = 0;
+
+    snap.forEach(d => {
+      const p  = d.data();
+      const ts = p.timestamp?.toDate?.() ?? new Date(p.timestamp || 0);
+      const k  = ts.toISOString().slice(0, 10);
+      if (k in diasVenta) diasVenta[k] += (p.total || 0);
+
+      (p.items || p.productos || []).forEach(it => {
+        const nombre = it.nombre || it.producto || "Producto";
+        prods[nombre] = (prods[nombre] || 0) + ((it.cantidad || 1) * (it.precio || 0));
+      });
+
+      if (["ENTREGADO","FACTURADO"].includes(p.status)) cobrado   += (p.total || 0);
+      else                                               pendiente += (p.total || 0);
+    });
+
+    const labels = diasKeys.map(k => {
+      const d = new Date(k + "T12:00:00");
+      return d.toLocaleDateString("es-MX", { weekday: "short" });
+    });
+    const values = diasKeys.map(k => diasVenta[k]);
+    const top5   = Object.entries(prods).sort((a,b) => b[1]-a[1]).slice(0,5);
+
+    _chartLinea("ch-ventas", labels, values);
+    _chartBarras("ch-productos", top5);
+    _chartDonut("ch-donut", cobrado, pendiente);
+  }, _logErr("charts-s4"));
 }
 
 function _escucharFeedDash() {

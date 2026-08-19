@@ -198,7 +198,8 @@ function _flagsDefault() {
     PUEDE_IMPORTAR_CATALOGO:  false,
     PUEDE_EXPORTAR_BACKUP:    false,
     PUEDE_REGISTRAR_REMISION: true,
-    PUEDE_REGISTRAR_ABONO:    true
+    PUEDE_REGISTRAR_ABONO:    true,
+    PUEDE_VER_RH:             false
   };
 }
 

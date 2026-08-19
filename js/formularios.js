@@ -77,7 +77,7 @@ export const FormulariosModule = {
         .frm-tab   { background:none; border:none; padding:5px 14px; border-radius:6px;
                      cursor:pointer; font-size:.85rem; color:var(--text-muted,#64748b); }
         .frm-tab.active { background:var(--card-bg,#fff); color:var(--text,#1e293b); font-weight:600; }
-        .frm-contenido { flex:1; overflow-y:auto; padding:16px;
+        .frm-contenido { flex:1; overflow-y:auto; padding:16px; min-height:0;
                          display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
                          gap:12px; align-content:start; }
         .frm-card  { background:var(--card-bg,#fff); border:1px solid var(--border,#e2e8f0);
@@ -325,7 +325,7 @@ window._frmVerRespuesta = id => {
 // ── Acciones de plantilla ──────────────────────────────────────────────────────
 window._frmEditar   = id => _abrirModal(id);
 window._frmEliminar = async id => {
-  if (!confirm("¿Eliminar esta plantilla? Las respuestas existentes no se borrarán.")) return;
+  if (!await window.modal({ title: "Eliminar plantilla", message: "¿Eliminar esta plantilla? Las respuestas existentes no se borrarán.", danger: true, confirmLabel: "Eliminar" })) return;
   await deleteDoc(doc(db, "formularios", id));
 };
 

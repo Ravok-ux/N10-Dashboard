@@ -17,7 +17,8 @@ const PRIVILEGIOS = [
   { key:"PUEDE_IMPORTAR_CATALOGO",  label:"Import. catálogo",       icon:"📦", soloSA: false },
   { key:"PUEDE_EXPORTAR_BACKUP",    label:"Export. reportes",       icon:"💾", soloSA: false },
   { key:"PUEDE_REGISTRAR_REMISION", label:"Remisión / liquidar",    icon:"📄", soloSA: false },
-  { key:"PUEDE_REGISTRAR_ABONO",    label:"Abono / cobro",          icon:"💳", soloSA: false }
+  { key:"PUEDE_REGISTRAR_ABONO",    label:"Abono / cobro",          icon:"💳", soloSA: false },
+  { key:"PUEDE_VER_RH",             label:"Acceso a RH / Nómina",  icon:"👥", soloSA: false }
 ];
 
 const MODULOS = [
@@ -194,6 +195,7 @@ export const UsuariosModule = {
       return;
     }
     container.innerHTML = _html();
+    document.getElementById("users-tbody").innerHTML = window.skeleton?.(5, 8) ?? "";
     _bindAcciones();
     _escucharUsuarios();
     return () => this.destroy();
@@ -621,7 +623,7 @@ function _bindAcciones() {
 
     async toggleActivo(uid, nuevoEstado) {
       const accion = nuevoEstado ? "reactivar" : "dar de baja";
-      if (!confirm(`¿Deseas ${accion} a este usuario?`)) return;
+      if (!await window.modal({ title: nuevoEstado ? "Reactivar usuario" : "Dar de baja", message: `¿Deseas ${accion} a este usuario?`, danger: !nuevoEstado })) return;
       try {
         await updateDoc(doc(db, "usuarios", uid), {
           activo: nuevoEstado,

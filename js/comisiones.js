@@ -307,7 +307,7 @@ function _bindAcciones() {
     },
 
     async marcarPagado(liquidacionId) {
-      if (!confirm("¿Marcar esta liquidación como pagada?")) return;
+      if (!await window.modal({ title: "Marcar como pagada", message: "¿Marcar esta liquidación como pagada?", confirmLabel: "Sí, marcar" })) return;
       try {
         const { updateDoc, doc: fsDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
         await updateDoc(fsDoc(db, "liquidacion_comision", liquidacionId), {

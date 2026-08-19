@@ -22,3 +22,6 @@ package-lock.json
 Thumbs.db
 
 index.html
+
+# Firebase Messaging SW — contiene credenciales reales, nunca al repo
+firebase-messaging-sw.js

@@ -250,12 +250,12 @@ export const SegmentoPrecioModule = (() => {
       }
       container.querySelector('#panelSegmento').classList.add('hidden');
     } catch (err) {
-      alert('Error al guardar: ' + err.message);
+      window.toast?.("Error al guardar: " + err.message, "error");
     }
   }
 
   async function _eliminarSegmento(id) {
-    if (!confirm('¿Eliminar este segmento? Los precios asociados también se eliminarán.')) return;
+    if (!await window.modal({ title: "Eliminar segmento", message: "¿Eliminar este segmento? Los precios asociados también se eliminarán.", danger: true, confirmLabel: "Eliminar" })) return;
     try {
       // Borrar precios_segmento asociados
       const preciosSnap = await getDocs(query(collection(db, 'precios_segmento'),

@@ -207,7 +207,7 @@ window._gCentrar  = id => {
   if (g && _map) _map.panTo({ lat: g.lat, lng: g.lng });
 };
 window._gEliminar = async id => {
-  if (!confirm("¿Eliminar esta geocerca permanentemente?")) return;
+  if (!await window.modal({ title: "Eliminar geocerca", message: "¿Eliminar esta geocerca permanentemente?", danger: true, confirmLabel: "Eliminar" })) return;
   try {
     await deleteDoc(doc(db, "geocercas", id));
   } catch (e) {

@@ -6,7 +6,7 @@ import { db } from "./firebase-config.js";
 import {
   collection, query, orderBy, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { exportarExcel, descargarPlantilla, importarExcel, toolbarHTML, puedeImportar } from "./excel-utils.js";
+import { exportarExcel } from "./excel-utils.js";
 
 const _COLS_ING = [
   { key: "alias",     header: "Alias",           width: 14, required: true,  ejemplo: "jperez" },
@@ -71,9 +71,6 @@ function _html() {
   return `
   <div style="padding:0 0 20px">
 
-    <!-- Toolbar Excel -->
-    ${toolbarHTML("Ing")}
-
     <!-- Controles -->
     <div style="background:#fff;border-radius:10px;border:1px solid #E5E7EB;padding:12px 16px;
       margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -84,8 +81,11 @@ function _html() {
           onclick="IngenierosUI.setFiltro('${f}')">
           ${{TODOS:"Todos",EN_JORNADA:"En jornada",FUERA:"Fuera"}[f]}
         </button>`).join("")}
-      <button class="xl-btn xl-btn-export" onclick="Cli_xlExport()" style="margin-left:auto">
-        ⬇ Exportar Clientes Excel
+      <button class="xl-btn xl-btn-export" onclick="Ing_xlExport()" style="margin-left:auto">
+        ⬇ Exportar Excel
+      </button>
+      <button class="xl-btn xl-btn-export" onclick="Cli_xlExport()" style="background:#1565C0">
+        ⬇ Exportar Clientes
       </button>
       <button onclick="IngenierosUI.abrirAlta()"
         style="padding:6px 14px;border-radius:6px;border:none;background:#1B5E20;
@@ -388,28 +388,3 @@ window.Ing_xlExport = async function() {
   }
 };
 
-window.Ing_xlPlantilla = function() {
-  descargarPlantilla(_COLS_ING, "Ingenieros", "Ingenieros");
-};
-
-window.Ing_xlImport = async function() {
-  if (!puedeImportar()) { window.toast?.("Sin permisos para importar.", "error"); return; }
-  try {
-    const registros = await importarExcel(_COLS_ING);
-    if (!registros.length) return;
-    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-    const { db: fdb } = await import("./firebase-config.js");
-    let ok = 0, err = 0;
-    for (const r of registros) {
-      try {
-        await setDoc(doc(fdb, "usuarios", r.alias), {
-          ...r, actualizadoPor: window.Sesion?.alias ?? "import", actualizadoEn: serverTimestamp()
-        }, { merge: true });
-        ok++;
-      } catch(e2) { err++; }
-    }
-    window.toast?.(`Importación completa: ${ok} ingenieros${err ? `, ${err} errores` : ""}.`, ok > 0 ? "success" : "error");
-  } catch(e) {
-    window.toast?.("Error en importación.", "error");
-  }
-};

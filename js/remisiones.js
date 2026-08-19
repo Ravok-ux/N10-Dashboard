@@ -19,7 +19,7 @@ const fmtDia = d => new Date(d?.toDate?.() ?? d).toLocaleDateString("es-MX", { d
 export const RemisionesModule = {
   mount(container) {
     container.innerHTML = _html();
-    document.getElementById("rem-tbody").innerHTML = window.skeleton?.(5, 7) ?? "";
+    document.getElementById("rst-tbody").innerHTML = window.skeleton?.(5, 7) ?? "";
     _bindUI();
     _escuchar();
     return () => this.destroy();

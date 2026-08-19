@@ -1,10 +1,11 @@
 // ══════════════════════════════════════════════════════════════
-// productos-control.js — Catálogo de productos (layout Pretoriano)
+// productos-control.js — Catálogo de productos
 // ══════════════════════════════════════════════════════════════
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { exportarExcel, descargarPlantilla, importarExcel, toolbarHTML, puedeImportar } from "./excel-utils.js";
+import { exportarExcel, descargarPlantilla, importarExcel, toolbarHTML, puedeImportar,
+         descargarPlantillaStock, importarPlantillaStock } from "./excel-utils.js";
 import {
   collection, doc, query, orderBy, onSnapshot,
   updateDoc, addDoc, serverTimestamp, limit
@@ -25,6 +26,37 @@ const _COLS_PROD = [
   { key: "activo",         header: "Activo (SI/NO)",    width: 12, tipo: "booleano" },
 ];
 
+// ── Definición de todas las columnas disponibles ──────────────
+const ALL_COLS = [
+  { key: "check",          label: "✓",              locked: true  },
+  { key: "numero",         label: "ID"                            },
+  { key: "codigo",         label: "CÓDIGO"                        },
+  { key: "clave_sat",      label: "CLAVE SAT"                     },
+  { key: "nombre_sucursal",label: "NOMBRE SUCURSAL"               },
+  { key: "nombre",         label: "NOMBRE"                        },
+  { key: "precio_base",    label: "PRECIO"                        },
+  { key: "marca",          label: "MARCA"                         },
+  { key: "categoria",      label: "CATEGORÍA"                     },
+  { key: "peso",           label: "PESO"                          },
+  { key: "stock",          label: "STOCK"                         },
+  { key: "descripcion",    label: "DESCRIPCIÓN"                   },
+  { key: "impuesto",       label: "CON O SIN IMPUESTO"            },
+  { key: "materia_prima",  label: "MAT. PRIMA"                    },
+  { key: "estado",         label: "ESTADO"                        },
+  { key: "acciones",       label: "ACCIONES",       locked: true  },
+];
+const DEFAULT_COLS = ALL_COLS.map(c => c.key);
+const LS_KEY = "n10_prod_cols";
+
+function _loadCols() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_KEY) || "null");
+    if (Array.isArray(saved) && saved.length > 0) return saved;
+  } catch {}
+  return [...DEFAULT_COLS];
+}
+function _saveCols(cols) { localStorage.setItem(LS_KEY, JSON.stringify(cols)); }
+
 // ── Funciones globales Excel ──────────────────────────────────
 window.Prod_xlExport = async function() {
   try {
@@ -36,6 +68,49 @@ window.Prod_xlExport = async function() {
   } catch(e) { window.toast?.("Error al exportar.", "error"); }
 };
 window.Prod_xlPlantilla = function() { descargarPlantilla(_COLS_PROD, "Productos", "Productos"); };
+
+// ── Stock: descargar plantilla e importar ─────────────────────
+window.Prod_stockPlantilla = async function() {
+  try {
+    const { getDocs, collection: col } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { db: fdb } = await import("./firebase-config.js");
+    const snap = await getDocs(col(fdb, "productos"));
+    const productos = snap.docs
+      .map(d => ({ codigo: d.data().codigo || d.id, nombre: d.data().nombre || "" }))
+      .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es"));
+    descargarPlantillaStock(productos);
+  } catch(e) { window.toast?.("Error al generar plantilla de stock.", "error"); console.error(e); }
+};
+
+window.Prod_stockImportar = async function() {
+  if (!puedeImportar()) { window.toast?.("Sin permisos para importar.", "error"); return; }
+  try {
+    const registros = await importarPlantillaStock();
+    if (!registros.length) return;
+    const { getDocs, collection: col, doc: d, updateDoc, writeBatch } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { db: fdb } = await import("./firebase-config.js");
+
+    // Construir mapa codigo → docId
+    const snap = await getDocs(col(fdb, "productos"));
+    const codigoMap = new Map();
+    snap.docs.forEach(doc => { if(doc.data().codigo) codigoMap.set(doc.data().codigo, doc.id); });
+
+    let ok = 0, noMatch = 0;
+    const batch = writeBatch(fdb);
+    let cnt = 0;
+    for (const r of registros) {
+      const docId = codigoMap.get(r.codigo);
+      if (!docId) { noMatch++; continue; }
+      batch.update(d(fdb, "productos", docId), { stock: r.stock, actualizadoEn: new Date() });
+      ok++; cnt++;
+      if (cnt === 499) break; // máx 499 por batch
+    }
+    await batch.commit();
+    window.toast?.(`Stock actualizado: ${ok} productos${noMatch ? `, ${noMatch} sin coincidencia` : ""}.`,
+      ok > 0 ? "success" : "warning");
+  } catch(e) { window.toast?.("Error al importar stock.", "error"); console.error(e); }
+};
 window.Prod_xlImport = async function() {
   if (!puedeImportar()) { window.toast?.("Sin permisos para importar.", "error"); return; }
   try {
@@ -64,6 +139,7 @@ let _unsubs       = [];
 let _todos        = [];
 let _busqueda     = "";
 let _filtroActivo = "todos";
+let _colsVisibles = _loadCols();
 
 export const ProductosControlModule = {
   mount(container) {
@@ -76,6 +152,7 @@ export const ProductosControlModule = {
       return;
     }
     container.innerHTML = _html();
+    document.getElementById("pc-tbody").innerHTML = window.skeleton?.(5, 6) ?? "";
     _bindUI();
     _escuchar();
     return () => this.destroy();
@@ -86,91 +163,103 @@ export const ProductosControlModule = {
   }
 };
 
-// ── HTML ──────────────────────────────────────────────────────
+// ── HTML principal ────────────────────────────────────────────
 function _html() {
   return `
-  <div style="display:flex;flex-direction:column;height:100%">
+  <div id="pc-root" style="display:flex;flex-direction:column;height:100%;position:relative">
 
-    <!-- Header -->
-    <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;
-      border-bottom:1px solid var(--c-border);flex-shrink:0;flex-wrap:wrap">
-      <div>
-        <div style="font-size:13px;font-weight:800;color:var(--c-text)">Catálogo de Productos</div>
-        <div style="font-size:10.5px;color:#9CA3AF" id="pc-subtitle">Cargando…</div>
+    <!-- ── Vista lista (tabla) ── -->
+    <div id="pc-list-view" style="display:flex;flex-direction:column;height:100%">
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;
+        border-bottom:1px solid var(--c-border);flex-shrink:0;flex-wrap:wrap">
+        <div>
+          <div style="font-size:13px;font-weight:800;color:var(--c-text)">Catálogo de Productos</div>
+          <div style="font-size:10.5px;color:#9CA3AF" id="pc-subtitle">Cargando…</div>
+        </div>
+        <div style="flex:1"></div>
+        <input id="pc-buscar" type="text"
+          placeholder="Buscar por Nombre / Descripción / Código / Clave SAT…"
+          style="padding:7px 12px;border-radius:6px;border:1px solid var(--c-border);
+            background:var(--c-surface);color:var(--c-text);font-size:12px;width:280px">
+        ${PUEDE_EDITAR() ? `
+          <button onclick="ProdCtrlUI.abrirAltaProducto()"
+            style="padding:7px 16px;border-radius:6px;border:none;background:#1B5E20;
+              color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">
+            Nuevo Normal
+          </button>
+          <button onclick="ProdCtrlUI.abrirAltaExpress()"
+            style="padding:7px 16px;border-radius:6px;border:1px solid var(--c-border);
+              background:transparent;color:var(--c-text);font-size:12px;font-weight:700;
+              cursor:pointer;white-space:nowrap">
+            Nuevo Express
+          </button>` : ""}
+        <button onclick="ProdCtrlUI.abrirConfigCols()" title="Configurar columnas"
+          style="padding:7px 10px;border-radius:6px;border:1px solid var(--c-border);
+            background:transparent;color:var(--c-text);font-size:13px;cursor:pointer"
+          >⚙ Columnas</button>
       </div>
-      <div style="flex:1"></div>
-      <input id="pc-buscar" type="text"
-        placeholder="Buscar por Nombre / Descripción / Código / Clave SAT…"
-        style="padding:7px 12px;border-radius:6px;border:1px solid var(--c-border);
-          background:var(--c-surface);color:var(--c-text);font-size:12px;width:300px">
-      ${PUEDE_EDITAR() ? `
-        <button onclick="ProdCtrlUI.abrirAltaProducto()"
-          style="padding:7px 16px;border-radius:6px;border:none;background:#1B5E20;
-            color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">
-          Nuevo Normal
-        </button>
-        <button onclick="ProdCtrlUI.abrirAltaExpress()"
-          style="padding:7px 16px;border-radius:6px;border:1px solid var(--c-border);
-            background:transparent;color:var(--c-text);font-size:12px;font-weight:700;
-            cursor:pointer;white-space:nowrap">
-          Nuevo Express
-        </button>` : ""}
-    </div>
 
-    <!-- KPIs -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;flex-shrink:0;
-      border-bottom:1px solid var(--c-border)">
-      ${[["pc-kpi-total","Total","#9CA3AF"],["pc-kpi-activos","Activos","#4ADE80"],
-         ["pc-kpi-inact","Inactivos","#F87171"],["pc-kpi-sinprecio","Sin precio","#FBBF24"]
-        ].map(([id,lbl,col]) => `
-        <div style="padding:12px 18px;border-right:1px solid var(--c-border)">
-          <div style="font-size:10px;color:#6B7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">${lbl}</div>
-          <div id="${id}" style="font-size:18px;font-weight:800;color:${col}">–</div>
-        </div>`).join("")}
-    </div>
+      <!-- KPIs -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;flex-shrink:0;
+        border-bottom:1px solid var(--c-border)">
+        ${[["pc-kpi-total","Total","#9CA3AF"],["pc-kpi-activos","Activos","#4ADE80"],
+           ["pc-kpi-inact","Inactivos","#F87171"],["pc-kpi-sinprecio","Sin precio","#FBBF24"]
+          ].map(([id,lbl,col]) => `
+          <div style="padding:12px 18px;border-right:1px solid var(--c-border)">
+            <div style="font-size:10px;color:#6B7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">${lbl}</div>
+            <div id="${id}" style="font-size:18px;font-weight:800;color:${col}">–</div>
+          </div>`).join("")}
+      </div>
 
-    <!-- Filtros + toolbar -->
-    <div style="display:flex;align-items:center;gap:8px;padding:10px 20px;
-      border-bottom:1px solid var(--c-border);flex-shrink:0;flex-wrap:wrap">
-      ${["todos","activos","inactivos"].map(f => `
-        <button class="filter-pill ${f==="todos"?"active":""}" data-filtro="${f}"
-          onclick="ProdCtrlUI.setFiltro('${f}')">
-          ${{todos:"Todos",activos:"Activos",inactivos:"Inactivos"}[f]}
-        </button>`).join("")}
-      <div style="flex:1"></div>
-      ${toolbarHTML("Prod")}
-    </div>
+      <!-- Filtros + toolbar -->
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 20px;
+        border-bottom:1px solid var(--c-border);flex-shrink:0;flex-wrap:wrap">
+        ${["todos","activos","inactivos"].map(f => `
+          <button class="filter-pill ${f==="todos"?"active":""}" data-filtro="${f}"
+            onclick="ProdCtrlUI.setFiltro('${f}')">
+            ${{todos:"Todos",activos:"Activos",inactivos:"Inactivos"}[f]}
+          </button>`).join("")}
+        <div style="flex:1"></div>
+        ${puedeImportar() ? `
+          <button onclick="Prod_stockPlantilla()" title="Descargar plantilla de actualización de stock"
+            style="padding:6px 12px;border-radius:6px;border:1px solid var(--c-border);
+              background:transparent;color:var(--c-text);font-size:11.5px;cursor:pointer;white-space:nowrap">
+            📦 Plantilla Stock
+          </button>
+          <button onclick="Prod_stockImportar()" title="Importar stock desde Excel"
+            style="padding:6px 12px;border-radius:6px;border:none;background:#1B5E20;
+              color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap">
+            ⬆ Importar Stock
+          </button>` : ""}
+        ${toolbarHTML("Prod")}
+      </div>
 
-    <!-- Tabla: scroll vertical e horizontal -->
-    <div style="flex:1;overflow:auto;min-height:0">
-      <table style="border-collapse:collapse;font-size:12px;min-width:1500px;width:100%" id="pc-table">
-          <thead>
+      <!-- Scrollbar espejo superior -->
+      <div id="pc-topscroll"
+        style="overflow-x:auto;overflow-y:hidden;height:14px;flex-shrink:0;
+          border-bottom:1px solid var(--c-border);background:var(--c-surface2,#1E293B)">
+        <div id="pc-topscroll-inner" style="height:1px;min-width:1500px"></div>
+      </div>
+
+      <!-- Tabla -->
+      <div id="pc-tablewrap" style="flex:1;overflow:auto;min-height:0">
+        <table style="border-collapse:collapse;font-size:12px;min-width:1500px;width:100%" id="pc-table">
+          <thead id="pc-thead">
             <tr style="background:var(--c-surface2,#1E293B);border-bottom:2px solid var(--c-border);
               position:sticky;top:0;z-index:2">
-              <th style="${_th()}"><input type="checkbox" id="pc-chk-all" onchange="ProdCtrlUI.toggleTodos(this.checked)"
-                style="cursor:pointer"></th>
-              <th style="${_th()}">ID</th>
-              <th style="${_th()}">CÓDIGO</th>
-              <th style="${_th()}">CLAVE SAT</th>
-              <th style="${_th()}">NOMBRE SUCURSAL</th>
-              <th style="${_th(true)}">NOMBRE</th>
-              <th style="${_th()}">PRECIO</th>
-              <th style="${_th()}">MARCA</th>
-              <th style="${_th()}">CATEGORÍA</th>
-              <th style="${_th()}">PESO</th>
-              <th style="${_th()}">STOCK</th>
-              <th style="${_th(true)}">DESCRIPCIÓN</th>
-              <th style="${_th()}">CON O SIN IMPUESTO</th>
-              <th style="${_th()}">MAT. PRIMA</th>
-              <th style="${_th()}">ESTADO</th>
-              ${PUEDE_EDITAR() ? `<th style="${_th()}">ACCIONES</th>` : ""}
             </tr>
           </thead>
           <tbody id="pc-tbody">
-            <tr><td colspan="15" style="text-align:center;color:#9CA3AF;padding:40px">Cargando…</td></tr>
+            <tr><td colspan="16" style="text-align:center;color:#9CA3AF;padding:40px">Cargando…</td></tr>
           </tbody>
         </table>
+      </div>
     </div>
+
+    <!-- ── Vista de detalle de producto ── -->
+    <div id="pc-detail-view" style="display:none;flex-direction:column;height:100%"></div>
 
     <!-- ── Modal Edición completa ── -->
     <div id="pc-modal-edit" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
@@ -239,7 +328,7 @@ function _html() {
       </div>
     </div>
 
-    <!-- ── Modal Nuevo Express (solo nombre + precio) ── -->
+    <!-- ── Modal Nuevo Express ── -->
     <div id="pc-modal-express" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
       z-index:1000;align-items:center;justify-content:center;padding:16px">
       <div style="background:var(--c-surface);border-radius:14px;width:360px;max-width:100%;
@@ -271,13 +360,36 @@ function _html() {
         </div>
       </div>
     </div>
+
+    <!-- ── Modal configuración de columnas ── -->
+    <div id="pc-modal-cols" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
+      z-index:1000;align-items:center;justify-content:center;padding:16px">
+      <div style="background:var(--c-surface);border-radius:14px;width:360px;max-width:100%;
+        border:1px solid var(--c-border);padding:24px;max-height:90vh;overflow-y:auto">
+        <div style="font-size:14px;font-weight:800;color:var(--c-text);margin-bottom:4px">Configurar columnas</div>
+        <div style="font-size:11px;color:#9CA3AF;margin-bottom:16px">Arrastra para reordenar · desmarca para ocultar</div>
+        <ul id="pc-cols-list" style="list-style:none;padding:0;margin:0 0 18px;display:flex;flex-direction:column;gap:6px"></ul>
+        <div style="display:flex;gap:8px;justify-content:space-between">
+          <button onclick="ProdCtrlUI.resetCols()"
+            style="padding:7px 14px;border:1px solid var(--c-border);border-radius:6px;
+              background:transparent;color:#9CA3AF;font-size:11px;cursor:pointer">Restablecer</button>
+          <div style="display:flex;gap:8px">
+            <button onclick="document.getElementById('pc-modal-cols').style.display='none'"
+              style="padding:7px 14px;border:1px solid var(--c-border);border-radius:6px;
+                background:transparent;color:var(--c-text);font-size:12px;cursor:pointer">Cancelar</button>
+            <button onclick="ProdCtrlUI.guardarCols()"
+              style="padding:7px 18px;border:none;border-radius:6px;
+                background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Aplicar</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>`;
 }
 
-function _th(wide) {
+function _th(extra) {
   return `padding:9px 10px;text-align:left;font-size:10px;font-weight:700;
-    color:#9CA3AF;letter-spacing:.05em;white-space:nowrap;
-    ${wide ? "min-width:180px;" : ""}`;
+    color:#9CA3AF;letter-spacing:.05em;white-space:nowrap;${extra || ""}`;
 }
 
 function _field(id, label, type, placeholder) {
@@ -296,6 +408,7 @@ function _escuchar() {
   const unsub = onSnapshot(q, snap => {
     _todos = snap.docs.map(d => ({ _docId: d.id, ...d.data() }));
     _renderizar();
+    _syncTopScrollWidth();
   }, err => {
     console.error("[Productos]", err);
     window.toast?.("Error al cargar productos", "error");
@@ -303,13 +416,29 @@ function _escuchar() {
   _unsubs.push(unsub);
 }
 
-// ── Render ────────────────────────────────────────────────────
+// ── Render tabla ──────────────────────────────────────────────
+function _renderizarHeader() {
+  const row = document.querySelector("#pc-thead tr");
+  if (!row) return;
+  const cols = _colsVisibles;
+  const puedeEditar = PUEDE_EDITAR();
+  row.innerHTML = cols.map(key => {
+    const meta = ALL_COLS.find(c => c.key === key);
+    if (!meta) return "";
+    if (key === "acciones" && !puedeEditar) return "";
+    const wide = ["nombre","descripcion"].includes(key);
+    return `<th style="${_th(wide ? "min-width:180px;" : "")}">${meta.label}</th>`;
+  }).join("");
+}
+
 function _renderizar() {
   const tbody = document.getElementById("pc-tbody");
   if (!tbody) return;
 
   const filtrados   = _aplicarFiltros();
   const puedeEditar = PUEDE_EDITAR();
+
+  _renderizarHeader();
 
   // KPIs
   _setText("pc-kpi-total",    _todos.length);
@@ -320,7 +449,7 @@ function _renderizar() {
   if (sub) sub.textContent = `${filtrados.length} de ${_todos.length} productos`;
 
   if (!filtrados.length) {
-    tbody.innerHTML = `<tr><td colspan="15" style="text-align:center;color:#9CA3AF;padding:40px">
+    tbody.innerHTML = `<tr><td colspan="${_colsVisibles.length}" style="text-align:center;color:#9CA3AF;padding:40px">
       <div style="font-size:24px;margin-bottom:8px">📦</div>
       ${_busqueda ? "Sin resultados para la búsqueda." : "Sin productos en catálogo."}
     </td></tr>`;
@@ -338,47 +467,70 @@ function _renderizar() {
                    : p.impuesto === "IVA" ? "Con IVA 16%"
                    : p.impuesto;
 
-    return `<tr style="${!activo ? "opacity:.45;" : ""}background:${i%2===1?"var(--c-surface2,rgba(255,255,255,.02))":"transparent"}">
-      <td style="${COL_TD}"><input type="checkbox" class="pc-chk-row" data-id="${esc(p._docId)}" style="cursor:pointer"></td>
-      <td style="${COL_TD}color:#9CA3AF;font-variant-numeric:tabular-nums">${num}</td>
-      <td style="${COL_TD}font-weight:700;color:var(--c-text);font-family:monospace">${esc(codigo)}</td>
-      <td style="${COL_TD}color:#6B7280">${esc(p.clave_sat || "–")}</td>
-      <td style="${COL_TD}color:#6B7280">${esc(p.nombre_sucursal || "Nutricion de 10")}</td>
-      <td style="${COL_TD}max-width:200px;overflow:hidden;text-overflow:ellipsis;
-        font-weight:600;color:var(--c-text);white-space:nowrap" title="${esc(p.nombre)}">${esc(p.nombre || "–")}</td>
-      <td style="${COL_TD}text-align:right;font-weight:700;font-variant-numeric:tabular-nums;
-        color:${p.precio_base > 0 ? "#4ADE80" : "#9CA3AF"}">
-        ${p.precio_base > 0 ? fmtMXN(p.precio_base) : "–"}
-      </td>
-      <td style="${COL_TD}color:#6B7280">${esc(p.marca || "–")}</td>
-      <td style="${COL_TD}color:#6B7280">${esc(p.categoria || "–")}</td>
-      <td style="${COL_TD}color:#6B7280;text-align:right">${p.peso > 0 ? p.peso : "–"}</td>
-      <td style="${COL_TD}color:#6B7280;text-align:right;font-variant-numeric:tabular-nums">${p.stock ?? "–"}</td>
-      <td style="${COL_TD}max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-        color:#9CA3AF" title="${esc(p.descripcion)}">${esc(p.descripcion || "–")}</td>
-      <td style="${COL_TD}color:#6B7280;white-space:nowrap">${esc(impuesto)}</td>
-      <td style="${COL_TD}color:#6B7280;text-align:center">${matPrima}</td>
-      <td style="${COL_TD}text-align:center">
-        <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:9px;
-          background:${activo?"#DCFCE7":"#FEE2E2"};color:${activo?"#166534":"#DC2626"}">
-          ${activo ? "Activo" : "Inactivo"}
-        </span>
-      </td>
-      ${puedeEditar ? `<td style="${COL_TD}">
-        <div style="display:flex;gap:5px;align-items:center;white-space:nowrap">
-          <button onclick="ProdCtrlUI.abrirEdicion('${esc(p._docId)}')" title="Editar"
-            style="padding:3px 10px;border-radius:5px;border:1px solid #374151;
-              background:transparent;color:var(--c-text);font-size:11px;cursor:pointer;font-weight:600">
-            ✏ Editar
-          </button>
-          <button onclick="ProdCtrlUI.toggleActivo('${esc(p._docId)}',${!activo})"
-            style="padding:3px 10px;border-radius:5px;border:none;font-size:11px;cursor:pointer;font-weight:600;
-              background:${activo?"#FEE2E2":"#DCFCE7"};color:${activo?"#DC2626":"#166534"}">
-            ${activo ? "Desactivar" : "Activar"}
-          </button>
-        </div>
-      </td>` : ""}
-    </tr>`;
+    const cells = _colsVisibles.map(key => {
+      if (key === "acciones" && !puedeEditar) return "";
+      switch(key) {
+        case "check":
+          return `<td style="${COL_TD}"><input type="checkbox" class="pc-chk-row" data-id="${esc(p._docId)}" style="cursor:pointer"></td>`;
+        case "numero":
+          return `<td style="${COL_TD}color:#9CA3AF;font-variant-numeric:tabular-nums">${num}</td>`;
+        case "codigo":
+          return `<td style="${COL_TD}font-weight:700;color:var(--c-text);font-family:monospace;cursor:pointer"
+            onclick="ProdCtrlUI.abrirDetalle('${esc(p._docId)}')" title="Ver detalle">${esc(codigo)}</td>`;
+        case "clave_sat":
+          return `<td style="${COL_TD}color:#6B7280">${esc(p.clave_sat || "–")}</td>`;
+        case "nombre_sucursal":
+          return `<td style="${COL_TD}color:#6B7280">${esc(p.nombre_sucursal || "Nutricion de 10")}</td>`;
+        case "nombre":
+          return `<td style="${COL_TD}max-width:200px;overflow:hidden;text-overflow:ellipsis;
+            font-weight:600;color:var(--c-text);white-space:nowrap;cursor:pointer"
+            title="${esc(p.nombre)}"
+            onclick="ProdCtrlUI.abrirDetalle('${esc(p._docId)}')">${esc(p.nombre || "–")}</td>`;
+        case "precio_base":
+          return `<td style="${COL_TD}text-align:right;font-weight:700;font-variant-numeric:tabular-nums;
+            color:${p.precio_base > 0 ? "#4ADE80" : "#9CA3AF"}">
+            ${p.precio_base > 0 ? fmtMXN(p.precio_base) : "–"}</td>`;
+        case "marca":
+          return `<td style="${COL_TD}color:#6B7280">${esc(p.marca || "–")}</td>`;
+        case "categoria":
+          return `<td style="${COL_TD}color:#6B7280">${esc(p.categoria || "–")}</td>`;
+        case "peso":
+          return `<td style="${COL_TD}color:#6B7280;text-align:right">${p.peso > 0 ? p.peso : "–"}</td>`;
+        case "stock":
+          return `<td style="${COL_TD}color:#6B7280;text-align:right;font-variant-numeric:tabular-nums">${p.stock ?? "–"}</td>`;
+        case "descripcion":
+          return `<td style="${COL_TD}max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+            color:#9CA3AF" title="${esc(p.descripcion)}">${esc(p.descripcion || "–")}</td>`;
+        case "impuesto":
+          return `<td style="${COL_TD}color:#6B7280;white-space:nowrap">${esc(impuesto)}</td>`;
+        case "materia_prima":
+          return `<td style="${COL_TD}color:#6B7280;text-align:center">${matPrima}</td>`;
+        case "estado":
+          return `<td style="${COL_TD}text-align:center">
+            <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:9px;
+              background:${activo?"#DCFCE7":"#FEE2E2"};color:${activo?"#166534":"#DC2626"}">
+              ${activo ? "Activo" : "Inactivo"}
+            </span></td>`;
+        case "acciones":
+          return `<td style="${COL_TD}">
+            <div style="display:flex;gap:5px;align-items:center;white-space:nowrap">
+              <button onclick="ProdCtrlUI.abrirEdicion('${esc(p._docId)}')" title="Editar"
+                style="padding:3px 10px;border-radius:5px;border:1px solid #374151;
+                  background:transparent;color:var(--c-text);font-size:11px;cursor:pointer;font-weight:600">
+                ✏ Editar
+              </button>
+              <button onclick="ProdCtrlUI.toggleActivo('${esc(p._docId)}',${!activo})"
+                style="padding:3px 10px;border-radius:5px;border:none;font-size:11px;cursor:pointer;font-weight:600;
+                  background:${activo?"#FEE2E2":"#DCFCE7"};color:${activo?"#DC2626":"#166534"}">
+                ${activo ? "Desactivar" : "Activar"}
+              </button>
+            </div></td>`;
+        default: return `<td style="${COL_TD}">–</td>`;
+      }
+    }).join("");
+
+    return `<tr style="${!activo ? "opacity:.45;" : ""}background:${i%2===1?"var(--c-surface2,rgba(255,255,255,.02))":"transparent"}"
+      >${cells}</tr>`;
   }).join("");
 }
 
@@ -400,6 +552,208 @@ function _aplicarFiltros() {
   return lista;
 }
 
+// ── Sync scrollbar superior ───────────────────────────────────
+function _syncTopScrollWidth() {
+  const inner = document.getElementById("pc-topscroll-inner");
+  const table = document.getElementById("pc-table");
+  if (inner && table) inner.style.width = table.scrollWidth + "px";
+}
+
+// ── Vista de detalle ──────────────────────────────────────────
+function _renderDetalle(docId) {
+  const p = _todos.find(x => x._docId === docId);
+  if (!p) return;
+
+  const activo   = p.activo !== false;
+  const num      = p.numero ?? "–";
+  const codigo   = p.codigo || ("N10-" + String(Math.round(p.numero ?? 0)).padStart(4,"0"));
+  const impuesto = !p.impuesto || p.impuesto === "Exento" ? "Exento de Impuesto"
+                 : p.impuesto === "IVA" ? "Con IVA 16%" : p.impuesto;
+  const granel   = p.granel === true;
+
+  const dv = document.getElementById("pc-detail-view");
+  dv.innerHTML = `
+    <!-- Barra superior -->
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;
+      border-bottom:1px solid var(--c-border);flex-shrink:0;flex-wrap:wrap">
+      <button onclick="ProdCtrlUI.cerrarDetalle()"
+        style="padding:6px 12px;border-radius:6px;border:1px solid var(--c-border);
+          background:transparent;color:var(--c-text);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">
+        ← Catálogo
+      </button>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:800;color:var(--c-text);white-space:nowrap;
+          overflow:hidden;text-overflow:ellipsis">${esc(p.nombre || "Producto")}</div>
+        <div style="font-size:11px;color:#9CA3AF;margin-top:1px">
+          ${esc(codigo)} · ID: ${num} · ${esc(p.marca || "Sin marca")} · ${esc(p.categoria || "Sin categoría")}
+        </div>
+      </div>
+      <span style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;
+        background:${activo?"#DCFCE7":"#FEE2E2"};color:${activo?"#166534":"#DC2626"}">
+        ${activo ? "Activo" : "Inactivo"}
+      </span>
+      ${PUEDE_EDITAR() ? `
+        <button onclick="ProdCtrlUI.abrirEdicion('${esc(docId)}')"
+          style="padding:7px 14px;border-radius:6px;border:1px solid var(--c-border);
+            background:transparent;color:var(--c-text);font-size:12px;cursor:pointer">
+          ✏ Editar
+        </button>
+        <button onclick="ProdCtrlUI.toggleActivo('${esc(docId)}',${!activo})"
+          style="padding:7px 14px;border-radius:6px;border:none;font-size:12px;font-weight:700;cursor:pointer;
+            background:${activo?"#FEE2E2":"#DCFCE7"};color:${activo?"#DC2626":"#166534"}">
+          ${activo ? "Desactivar" : "Activar"}
+        </button>` : ""}
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:0;flex-shrink:0;border-bottom:1px solid var(--c-border);padding:0 20px">
+      ${["general","precios","stock","granel"].map((t,i) => `
+        <button class="pd-tab ${i===0?"pd-tab-active":""}" data-tab="${t}"
+          onclick="ProdCtrlUI.switchTab('${t}')"
+          style="padding:10px 18px;border:none;background:none;cursor:pointer;font-size:12px;font-weight:600;
+            border-bottom:2px solid ${i===0?"#4ADE80":"transparent"};
+            color:${i===0?"#4ADE80":"#9CA3AF"};margin-bottom:-1px;transition:all .15s">
+          ${{general:"General",precios:"Precios",stock:"Stock",granel:"Venta a Granel"}[t]}
+        </button>`).join("")}
+    </div>
+
+    <!-- Contenido tabs -->
+    <div id="pd-body" style="flex:1;overflow:auto;padding:24px 20px;min-height:0">
+      <!-- Tab general -->
+      <div id="pd-tab-general">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px">
+          ${_dfield("Código N10",         esc(codigo))}
+          ${_dfield("Clave SAT",          esc(p.clave_sat || "–"))}
+          ${_dfield("Nombre Sucursal",     esc(p.nombre_sucursal || "Nutricion de 10"))}
+          ${_dfield("Marca",              esc(p.marca || "–"))}
+          ${_dfield("Categoría",          esc(p.categoria || "–"))}
+          ${_dfield("Subcategoría",       esc(p.subcategoria || "–"))}
+          ${_dfield("Peso",               p.peso > 0 ? p.peso + " kg" : "–")}
+          ${_dfield("Impuesto",           esc(impuesto))}
+          ${_dfield("Materia Prima",      p.materia_prima === true ? "Sí" : "No")}
+          ${_dfield("Creado por",         esc(p.creadoPor || "–"))}
+          ${_dfield("Modificado por",     esc(p.modificadoPor || "–"))}
+        </div>
+        ${p.descripcion ? `
+          <div style="margin-top:20px">
+            <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Descripción</div>
+            <div style="font-size:13px;color:var(--c-text);line-height:1.6;background:var(--c-surface2,rgba(255,255,255,.03));
+              border-radius:8px;padding:12px 16px;border:1px solid var(--c-border)">${esc(p.descripcion)}</div>
+          </div>` : ""}
+      </div>
+
+      <!-- Tab precios -->
+      <div id="pd-tab-precios" style="display:none">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">
+          ${_pkpi("Precio cliente", p.precio_base > 0 ? fmtMXN(p.precio_base) : "–", "#4ADE80")}
+          ${_pkpi("Costo base",     p.costo_base  > 0 ? fmtMXN(p.costo_base)  : "–", "#9CA3AF")}
+          ${p.precio_base > 0 && p.costo_base > 0 ? `
+            ${_pkpi("Margen bruto", fmtMXN(p.precio_base - p.costo_base), "#FBBF24")}
+            ${_pkpi("% Margen",     (((p.precio_base - p.costo_base) / p.precio_base) * 100).toFixed(1) + "%", "#60A5FA")}
+          ` : ""}
+        </div>
+        <div style="margin-top:20px;padding:16px;background:var(--c-surface2,rgba(255,255,255,.03));
+          border-radius:8px;border:1px solid var(--c-border);font-size:12px;color:#9CA3AF">
+          Los precios por segmento se gestionan en <b style="color:var(--c-text)">Precios por Segmento</b>.
+        </div>
+      </div>
+
+      <!-- Tab stock -->
+      <div id="pd-tab-stock" style="display:none">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">
+          ${_pkpi("Stock actual", p.stock ?? "–", p.stock > 0 ? "#4ADE80" : "#F87171")}
+          ${_pkpi("Mínimo stock", p.stock_minimo ?? "–", "#9CA3AF")}
+        </div>
+        <div style="margin-top:20px;padding:16px;background:var(--c-surface2,rgba(255,255,255,.03));
+          border-radius:8px;border:1px solid var(--c-border);font-size:12px;color:#9CA3AF">
+          El stock se actualiza desde los movimientos de almacén (entradas / salidas de pedidos).
+          Para ajuste manual usa el botón Editar en la barra superior.
+        </div>
+      </div>
+
+      <!-- Tab granel -->
+      <div id="pd-tab-granel" style="display:none">
+        <div style="margin-bottom:20px;padding:16px;background:var(--c-surface2,rgba(255,255,255,.03));
+          border-radius:10px;border:1px solid var(--c-border)">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:${granel?"16px":"0"}">
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:700;color:var(--c-text)">Venta a Granel</div>
+              <div style="font-size:11px;color:#9CA3AF;margin-top:2px">
+                Permite vender fracciones o cantidades especiales con precio diferenciado
+              </div>
+            </div>
+            ${PUEDE_EDITAR() ? `
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <div style="position:relative;width:40px;height:22px">
+                  <input type="checkbox" id="pd-granel-toggle" ${granel?"checked":""} style="opacity:0;position:absolute;inset:0;cursor:pointer;z-index:1"
+                    onchange="ProdCtrlUI.toggleGranel('${esc(docId)}', this.checked)">
+                  <div id="pd-granel-track" style="position:absolute;inset:0;border-radius:11px;
+                    background:${granel?"#4ADE80":"#374151"};transition:background .2s"></div>
+                  <div id="pd-granel-thumb" style="position:absolute;top:3px;left:${granel?"21px":"3px"};width:16px;height:16px;
+                    border-radius:50%;background:#fff;transition:left .2s"></div>
+                </div>
+                <span style="font-size:12px;font-weight:600;color:${granel?"#4ADE80":"#9CA3AF"}">
+                  ${granel?"Habilitado":"Deshabilitado"}
+                </span>
+              </label>` : `<span style="font-size:12px;font-weight:700;color:${granel?"#4ADE80":"#9CA3AF"}">${granel?"Habilitado":"Deshabilitado"}</span>`}
+          </div>
+          ${granel ? `
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding-top:16px;border-top:1px solid var(--c-border)">
+              <div>
+                <label style="font-size:10px;color:#9CA3AF;display:block;margin-bottom:4px">PRECIO GRANEL ($)</label>
+                <input type="number" id="pd-precio-granel" value="${p.precio_granel || ""}" min="0" step="0.01"
+                  ${!PUEDE_EDITAR() ? "disabled" : ""}
+                  style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
+                    font-size:13px;font-weight:700;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+              </div>
+              <div>
+                <label style="font-size:10px;color:#9CA3AF;display:block;margin-bottom:4px">MÍNIMO GRANEL</label>
+                <input type="number" id="pd-min-granel" value="${p.minimo_granel || ""}" min="0" step="0.1"
+                  ${!PUEDE_EDITAR() ? "disabled" : ""}
+                  style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
+                    font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+              </div>
+              <div>
+                <label style="font-size:10px;color:#9CA3AF;display:block;margin-bottom:4px">UNIDAD GRANEL</label>
+                <input type="text" id="pd-unidad-granel" value="${esc(p.unidad_granel || "kg")}" maxlength="20"
+                  ${!PUEDE_EDITAR() ? "disabled" : ""}
+                  style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
+                    font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+              </div>
+            </div>
+            ${PUEDE_EDITAR() ? `
+              <div style="margin-top:12px;text-align:right">
+                <button onclick="ProdCtrlUI.guardarGranel('${esc(docId)}')"
+                  style="padding:7px 18px;border:none;border-radius:6px;
+                    background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+                  Guardar configuración granel
+                </button>
+              </div>` : ""}
+          ` : `
+            <div style="text-align:center;padding:24px 0;color:#9CA3AF;font-size:12px">
+              Activa la venta a granel para configurar precio y unidad mínima.
+            </div>
+          `}
+        </div>
+      </div>
+    </div>`;
+}
+
+// Helpers para campos de detalle
+function _dfield(label, val) {
+  return `<div>
+    <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">${label}</div>
+    <div style="font-size:13px;font-weight:600;color:var(--c-text)">${val}</div>
+  </div>`;
+}
+function _pkpi(label, val, color) {
+  return `<div style="background:var(--c-surface2,rgba(255,255,255,.03));border:1px solid var(--c-border);
+    border-radius:10px;padding:16px">
+    <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">${label}</div>
+    <div style="font-size:22px;font-weight:800;color:${color};font-variant-numeric:tabular-nums">${val}</div>
+  </div>`;
+}
+
 // ── UI Actions ────────────────────────────────────────────────
 function _bindUI() {
   let _editandoId = null;
@@ -409,7 +763,24 @@ function _bindUI() {
     let t;
     input.addEventListener("input", () => {
       clearTimeout(t);
-      t = setTimeout(() => { _busqueda = input.value.trim(); _renderizar(); }, 250);
+      t = setTimeout(() => { _busqueda = input.value.trim(); _renderizar(); _syncTopScrollWidth(); }, 250);
+    });
+  }
+
+  // Sync scrollbars superior / inferior
+  const topScroll  = document.getElementById("pc-topscroll");
+  const tableWrap  = document.getElementById("pc-tablewrap");
+  if (topScroll && tableWrap) {
+    let _syncing = false;
+    topScroll.addEventListener("scroll", () => {
+      if (_syncing) return; _syncing = true;
+      tableWrap.scrollLeft = topScroll.scrollLeft;
+      _syncing = false;
+    });
+    tableWrap.addEventListener("scroll", () => {
+      if (_syncing) return; _syncing = true;
+      topScroll.scrollLeft = tableWrap.scrollLeft;
+      _syncing = false;
     });
   }
 
@@ -420,10 +791,137 @@ function _bindUI() {
       document.querySelectorAll("[data-filtro]").forEach(b =>
         b.classList.toggle("active", b.dataset.filtro === f));
       _renderizar();
+      _syncTopScrollWidth();
     },
 
     toggleTodos(checked) {
       document.querySelectorAll(".pc-chk-row").forEach(c => { c.checked = checked; });
+    },
+
+    // ── Vista de detalle ──────────────────────────────────────
+    abrirDetalle(docId) {
+      document.getElementById("pc-list-view").style.display = "none";
+      const dv = document.getElementById("pc-detail-view");
+      dv.style.display = "flex";
+      _renderDetalle(docId);
+    },
+
+    cerrarDetalle() {
+      document.getElementById("pc-detail-view").style.display = "none";
+      document.getElementById("pc-list-view").style.display = "flex";
+    },
+
+    switchTab(tab) {
+      ["general","precios","stock","granel"].forEach(t => {
+        const el = document.getElementById(`pd-tab-${t}`);
+        if (el) el.style.display = t === tab ? "block" : "none";
+      });
+      document.querySelectorAll(".pd-tab").forEach(btn => {
+        const active = btn.dataset.tab === tab;
+        btn.style.borderBottomColor = active ? "#4ADE80" : "transparent";
+        btn.style.color = active ? "#4ADE80" : "#9CA3AF";
+      });
+    },
+
+    async toggleGranel(docId, enabled) {
+      const track = document.getElementById("pd-granel-track");
+      const thumb = document.getElementById("pd-granel-thumb");
+      if (track) track.style.background = enabled ? "#4ADE80" : "#374151";
+      if (thumb) thumb.style.left = enabled ? "21px" : "3px";
+      try {
+        await updateDoc(doc(db, "productos", docId), {
+          granel: enabled, modificadoPor: Sesion.alias, modificadoEn: serverTimestamp()
+        });
+        // Re-render detail to show/hide granel fields
+        setTimeout(() => _renderDetalle(docId), 300);
+      } catch(e) {
+        window.toast?.("Error: " + e.message, "error");
+      }
+    },
+
+    async guardarGranel(docId) {
+      const precio  = parseFloat(document.getElementById("pd-precio-granel")?.value) || 0;
+      const minimo  = parseFloat(document.getElementById("pd-min-granel")?.value) || 0;
+      const unidad  = document.getElementById("pd-unidad-granel")?.value.trim() || "kg";
+      try {
+        await updateDoc(doc(db, "productos", docId), {
+          precio_granel: precio, minimo_granel: minimo, unidad_granel: unidad,
+          modificadoPor: Sesion.alias, modificadoEn: serverTimestamp()
+        });
+        window.toast?.("Configuración granel guardada.", "success");
+      } catch(e) {
+        window.toast?.("Error: " + e.message, "error");
+      }
+    },
+
+    // ── Configuración de columnas ─────────────────────────────
+    abrirConfigCols() {
+      const list = document.getElementById("pc-cols-list");
+      if (!list) return;
+
+      // Construir orden actual: primero los que están en _colsVisibles, luego los que no
+      const ordered = [
+        ..._colsVisibles,
+        ...ALL_COLS.map(c => c.key).filter(k => !_colsVisibles.includes(k))
+      ];
+
+      list.innerHTML = ordered.map(key => {
+        const meta = ALL_COLS.find(c => c.key === key);
+        if (!meta) return "";
+        const visible = _colsVisibles.includes(key);
+        return `<li data-col="${key}" draggable="${!meta.locked}"
+          style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;
+            border:1px solid var(--c-border);background:var(--c-surface);cursor:${meta.locked?"default":"grab"};
+            user-select:none;transition:opacity .15s;${!visible?"opacity:.45":""}">
+          <span style="font-size:14px;color:#9CA3AF">${meta.locked ? "⊝" : "⠿"}</span>
+          <span style="flex:1;font-size:12px;font-weight:600;color:var(--c-text)">${meta.label}</span>
+          <input type="checkbox" ${visible?"checked":""} ${meta.locked?"disabled":""} style="cursor:pointer"
+            onchange="this.closest('li').style.opacity=this.checked?'1':'.45'">
+        </li>`;
+      }).join("");
+
+      // Drag & drop
+      let _dragSrc = null;
+      list.querySelectorAll("li[draggable=true]").forEach(li => {
+        li.addEventListener("dragstart", e => { _dragSrc = li; li.style.opacity = ".4"; e.dataTransfer.effectAllowed = "move"; });
+        li.addEventListener("dragend",   () => { li.style.opacity = li.querySelector("input").checked ? "1" : ".45"; });
+        li.addEventListener("dragover",  e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; });
+        li.addEventListener("drop",      e => {
+          e.preventDefault();
+          if (_dragSrc && _dragSrc !== li) {
+            const items = [...list.querySelectorAll("li")];
+            const srcIdx = items.indexOf(_dragSrc);
+            const dstIdx = items.indexOf(li);
+            if (srcIdx < dstIdx) li.after(_dragSrc);
+            else li.before(_dragSrc);
+          }
+        });
+      });
+
+      document.getElementById("pc-modal-cols").style.display = "flex";
+    },
+
+    guardarCols() {
+      const list = document.getElementById("pc-cols-list");
+      if (!list) return;
+      const newCols = [...list.querySelectorAll("li")].filter(li => {
+        const meta = ALL_COLS.find(c => c.key === li.dataset.col);
+        return meta?.locked || li.querySelector("input")?.checked;
+      }).map(li => li.dataset.col);
+
+      _colsVisibles = newCols;
+      _saveCols(newCols);
+      document.getElementById("pc-modal-cols").style.display = "none";
+      _renderizar();
+      _syncTopScrollWidth();
+    },
+
+    resetCols() {
+      _colsVisibles = [...DEFAULT_COLS];
+      _saveCols(_colsVisibles);
+      document.getElementById("pc-modal-cols").style.display = "none";
+      _renderizar();
+      _syncTopScrollWidth();
     },
 
     // ── Editar producto completo ──────────────────────────────
@@ -434,6 +932,9 @@ function _bindUI() {
 
       _val("pc-e-nombre",       p.nombre      ?? "");
       _val("pc-e-codigo",       p.codigo      ?? docId);
+      // El código N10 es inmutable una vez asignado
+      const codigoEl = document.getElementById("pc-e-codigo");
+      if (codigoEl) { codigoEl.readOnly = true; codigoEl.style.opacity = "0.6"; codigoEl.title = "El código N10 es permanente y no puede modificarse"; }
       _val("pc-e-clave_sat",    p.clave_sat   ?? "");
       _val("pc-e-nombre_suc",   p.nombre_sucursal ?? "Nutricion de 10");
       _val("pc-e-marca",        p.marca       ?? "");
@@ -553,6 +1054,9 @@ function _bindUI() {
        "pc-e-precio","pc-e-costo","pc-e-peso","pc-e-descripcion"
       ].forEach(id => _val(id, ""));
       _val("pc-e-codigo",    nextCodigo);
+      // Código editable solo en productos nuevos
+      const codigoElN = document.getElementById("pc-e-codigo");
+      if (codigoElN) { codigoElN.readOnly = false; codigoElN.style.opacity = "1"; codigoElN.title = ""; }
       _val("pc-e-nombre_suc","Nutricion de 10");
       const selImp = document.getElementById("pc-e-impuesto");
       if (selImp) selImp.value = "Exento";
@@ -567,12 +1071,17 @@ function _bindUI() {
     async toggleActivo(docId, nuevoEstado) {
       const p = _todos.find(x => x._docId === docId);
       const accion = nuevoEstado ? "activar" : "desactivar";
-      if (!confirm(`¿Deseas ${accion} "${p?.nombre ?? docId}"?`)) return;
+      if (!await window.modal({ title: `${nuevoEstado ? "Activar" : "Desactivar"} producto`, message: `¿Deseas ${accion} "${p?.nombre ?? docId}"?` })) return;
       try {
         await updateDoc(doc(db, "productos", docId), {
           activo: nuevoEstado, modificadoPor: Sesion.alias, modificadoEn: serverTimestamp()
         });
         window.toast?.(`Producto ${nuevoEstado ? "activado" : "desactivado"}`, "success");
+        // Si estamos en el detalle, re-renderizarlo
+        const dv = document.getElementById("pc-detail-view");
+        if (dv && dv.style.display !== "none") {
+          setTimeout(() => _renderDetalle(docId), 200);
+        }
       } catch(e) { window.toast?.("Error: " + e.message, "error"); }
     }
   };

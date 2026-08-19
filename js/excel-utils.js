@@ -117,7 +117,7 @@ export function importarExcel(cols) {
 
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".xlsx,.xls,.csv";
+    input.accept = ".xlsx,.xls";
     input.style.display = "none";
     document.body.appendChild(input);
 
@@ -199,6 +199,101 @@ export function toolbarHTML(moduleId, { soloExport = false } = {}) {
       ⬆ Importar Excel
     </button>` : ""}
   </div>`;
+}
+
+// ── Plantilla de actualización de stock ──────────────────────
+/**
+ * Descarga plantilla con Código N10 y Nombre pre-rellenos listos para capturar stock.
+ * @param {Array<{codigo:string,nombre:string}>} productos
+ */
+export function descargarPlantillaStock(productos) {
+  const XLSX = window.XLSX;
+  if (!XLSX) { window.toast?.("SheetJS no disponible.", "error"); return; }
+
+  const cols = [
+    { header: "Código N10", wch: 14 },
+    { header: "Nombre",     wch: 36 },
+    { header: "Stock Nuevo",wch: 14 },
+  ];
+  const aoa = [
+    cols.map(c => c.header),
+    ...productos.map(p => [p.codigo || "", p.nombre || "", 0]),
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = cols.map(c => ({ wch: c.wch }));
+  ws["!autofilter"] = { ref: XLSX.utils.encode_range({
+    s: { r: 0, c: 0 }, e: { r: 0, c: cols.length - 1 }
+  })};
+
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+  for (let C = range.s.c; C <= range.e.c; C++) {
+    const h = ws[XLSX.utils.encode_cell({ r: 0, c: C })];
+    if (h) h.s = _HDR_STYLE;
+  }
+  // Highlight columna Stock Nuevo
+  for (let R = 1; R <= range.e.r; R++) {
+    const cell = ws[XLSX.utils.encode_cell({ r: R, c: 2 })];
+    if (cell) cell.s = { fill: { patternType: "solid", fgColor: { rgb: "FFF9C4" } } };
+  }
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Stock");
+  XLSX.writeFile(wb, `Plantilla_Stock_${_hoy()}.xlsx`);
+  window.toast?.("Plantilla de stock descargada.", "success");
+}
+
+/**
+ * Muestra file picker, lee la plantilla de stock y devuelve [{codigo, stock}].
+ * @returns {Promise<Array<{codigo:string,stock:number}>>}
+ */
+export function importarPlantillaStock() {
+  return new Promise((resolve, reject) => {
+    const XLSX = window.XLSX;
+    if (!XLSX) { reject(new Error("SheetJS no disponible.")); return; }
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".xlsx,.xls";
+    input.style.display = "none";
+    document.body.appendChild(input);
+
+    input.onchange = e => {
+      const file = e.target.files[0];
+      document.body.removeChild(input);
+      if (!file) { resolve([]); return; }
+
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const wb  = XLSX.read(ev.target.result, { type: "array" });
+          const ws  = wb.Sheets[wb.SheetNames[0]];
+          const raw = XLSX.utils.sheet_to_json(ws, { defval: "" });
+          const resultados = raw
+            .map(row => {
+              // Soporta encabezados exactos o aproximados
+              const codigo = String(row["Código N10"] || row["Codigo N10"] || row["codigo"] || "").trim();
+              const stockRaw = row["Stock Nuevo"] ?? row["stock"] ?? row["Stock"] ?? "";
+              const stock = parseFloat(stockRaw);
+              return { codigo, stock: isNaN(stock) ? null : stock };
+            })
+            .filter(r => r.codigo && r.stock !== null);
+
+          if (!resultados.length) {
+            window.toast?.("No se encontraron datos válidos en el archivo.", "error");
+            resolve([]);
+          } else {
+            resolve(resultados);
+          }
+        } catch(err) {
+          window.toast?.("Error al leer el archivo. Usa la plantilla descargada.", "error");
+          reject(err);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    };
+    input.click();
+  });
 }
 
 // ── Helpers ───────────────────────────────────────────────────
