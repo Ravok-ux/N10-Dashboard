@@ -40,6 +40,7 @@ import { LogisticaModule }        from "./logistica.js";
 import { JuridicoModule }         from "./juridico.js";
 import { ObservabilidadModule }   from "./observabilidad.js";
 import { MiRhModule }             from "./mi-rh.js";
+import { ManualesModule }          from "./manuales.js";
 import { iniciarNotificaciones, detenerNotificaciones } from "./notificaciones.js";
 import { iniciarFCM } from "./fcm.js";
 
@@ -175,6 +176,7 @@ const MODULES = {
   promociones:    PromocionesModule,
   precios_segmento: SegmentoPrecioModule,
   clientes:         ClientesModule,
+  manuales:         ManualesModule,
   config:       ConfigModule,
   comentarios:  ComentariosModule,
 };

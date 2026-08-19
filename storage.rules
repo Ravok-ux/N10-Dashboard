@@ -85,6 +85,19 @@ service firebase.storage {
                     && (esAdminOSuperior() || request.auth.uid == uid);
     }
 
+    // ── manuales/{docId}/{archivo} ────────────────────────────────────────────
+    // Imágenes adjuntas a manuales y políticas operativas.
+    match /manuales/{docId}/{archivo} {
+      // Lectura: todos los usuarios autenticados y activos
+      allow read: if cuentaActiva() && esRolConocido();
+      // Escritura: solo admins, solo imágenes, máx 5 MB
+      allow write: if cuentaActiva() && esAdminOSuperior()
+                   && request.resource.contentType.matches('image/(jpeg|png|webp)')
+                   && request.resource.size <= 5 * 1024 * 1024;
+      // Eliminación: solo admins
+      allow delete: if cuentaActiva() && esAdminOSuperior();
+    }
+
     // Bloqueo por defecto — cualquier ruta no listada queda denegada
     match /{allPaths=**} {
       allow read, write: if false;

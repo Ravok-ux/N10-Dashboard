@@ -840,6 +840,18 @@ service cloud.firestore {
       allow write: if cuentaActiva() && esAdminOSuperior();
     }
 
+    // ── /manuales ─────────────────────────────────────────────────────────────
+    match /manuales/{docId} {
+      // Cualquier usuario autenticado y activo puede consultar manuales
+      allow read: if cuentaActiva() && esRolConocido();
+      // Solo admins pueden crear, editar o eliminar
+      allow write: if cuentaActiva() && esAdminOSuperior()
+                   && request.resource.data.titulo is string
+                   && request.resource.data.titulo.size() > 0
+                   && request.resource.data.categoria in ['flujo','politica','proceso','formato','otro']
+                   && request.resource.data.tipo in ['texto','mermaid'];
+    }
+
     // ── Bloqueo por defecto ───────────────────────────────────────────────────
     // Cualquier colección no listada queda denegada
     match /{document=**} {
