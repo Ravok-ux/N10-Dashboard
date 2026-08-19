@@ -982,6 +982,78 @@ exports.onNominaPagada = onDocumentCreated(
   }
 );
 
+// S24 ── Reporte semanal automático para gerencia (lunes 07:00 CDMX)
+exports.reporteSemanalGerente = onSchedule(
+  { schedule: "0 7 * * 1", timeZone: "America/Mexico_City", region: "us-central1" },
+  async (_context) => {
+    const ahora = Date.now();
+
+    // Rango: semana anterior (lun-dom)
+    const hoy    = new Date();
+    const lunes  = new Date(hoy); lunes.setDate(hoy.getDate() - 7); lunes.setHours(0,0,0,0);
+    const domingo = new Date(hoy); domingo.setDate(hoy.getDate() - 1); domingo.setHours(23,59,59,999);
+    const tsLunes  = lunes.getTime();
+    const tsDomingo = domingo.getTime();
+    const fmtMXN = n => n.toLocaleString("es-MX", { style:"currency", currency:"MXN", maximumFractionDigits:0 });
+    const semanaStr = `${lunes.toLocaleDateString("es-MX",{day:"numeric",month:"short"})} – ${domingo.toLocaleDateString("es-MX",{day:"numeric",month:"short",year:"numeric"})}`;
+
+    // 1. Pedidos de la semana anterior
+    let totalVentas = 0, confirmados = 0, cancelados = 0;
+    const ventasPorIng = {}; // alias → monto
+    try {
+      const pedSnap = await db.collection("pedidos")
+        .where("fechaPedido", ">=", tsLunes)
+        .where("fechaPedido", "<=", tsDomingo)
+        .get();
+      pedSnap.docs.forEach(d => {
+        const p = d.data();
+        if (p.status === "CANCELADO" || p.status === "RECHAZADO") { cancelados++; return; }
+        confirmados++;
+        totalVentas += p.total || 0;
+        const alias = p.ingenieroAlias || "Sin asignar";
+        ventasPorIng[alias] = (ventasPorIng[alias] || 0) + (p.total || 0);
+      });
+    } catch (e) {
+      logger.error("[reporteSemanalGerente] Error leyendo pedidos:", e);
+      return;
+    }
+
+    // 2. Top 3 ingenieros
+    const top3 = Object.entries(ventasPorIng)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([alias, monto], i) => `${["🥇","🥈","🥉"][i]} ${alias}: ${fmtMXN(monto)}`)
+      .join(" · ");
+
+    const mensaje = `📊 Semana ${semanaStr} · Ventas: ${fmtMXN(totalVentas)} · ✅${confirmados} pedidos · ❌${cancelados} cancel. · ${top3 || "Sin ventas"}`;
+
+    // 3. Destinatarios: GERENTE + SUPER_ADMIN
+    const destinatarios = [];
+    try {
+      const uSnap = await db.collection("usuarios")
+        .where("rol", "in", ["GERENTE", "SUPER_ADMIN"])
+        .where("activo", "==", true)
+        .get();
+      uSnap.docs.forEach(d => destinatarios.push(d.id));
+    } catch (_) {}
+
+    if (destinatarios.length === 0) { logger.info("[reporteSemanalGerente] Sin gerentes activos."); return; }
+
+    await db.collection("notificaciones_web").add({
+      tipo:          "REPORTE_SEMANAL",
+      mensaje,
+      destinatarios,
+      accion:        { vista: "dashboard" },
+      leida:         false,
+      timestamp:     FieldValue.serverTimestamp(),
+      _ts:           ahora,
+      creadaPor:     "SISTEMA",
+    });
+
+    logger.info(`[reporteSemanalGerente] semana=${semanaStr} ventas=${totalVentas} dests=${destinatarios.length}`);
+  }
+);
+
 // S23 ── Recordatorio semanal de avance en metas de venta (lunes 08:00 y día 15 08:00 hora CDMX)
 exports.recordatorioMetas = onSchedule(
   { schedule: "0 8 * * 1", timeZone: "America/Mexico_City", region: "us-central1" },
@@ -1134,6 +1206,7 @@ function _tituloFCM(tipo) {
     SEMAFORO_ROJO:          "🔴 Semáforo rojo",
     FORMULARIO_RESPONDIDO:  "📋 Formulario respondido",
     RECORDATORIO_META:      "🎯 Avance de tu meta",
+    REPORTE_SEMANAL:        "📊 Reporte semanal",
   };
   return MAP[tipo] || "🔔 N-10 ERP";
 }
