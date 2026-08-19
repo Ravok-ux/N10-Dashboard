@@ -1181,6 +1181,222 @@ exports.onFormularioRespondido = onDocumentCreated(
   }
 );
 
+// S26 ── Liquidación automática de comisiones al inicio de cada mes
+//  Corre el día 1 a las 07:30 MX — después de limpiarDatosAntiguos (06:00)
+exports.liquidarComisionesMensual = onSchedule(
+  { schedule: "30 7 1 * *", timeZone: "America/Mexico_City", region: "us-central1" },
+  async (_ctx) => {
+    const hoy    = new Date();
+    // Rango: mes anterior completo
+    const inicio = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+    const fin    = new Date(hoy.getFullYear(), hoy.getMonth(),     1);
+    const tsIni  = inicio.getTime();
+    const tsFin  = fin.getTime();
+
+    const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
+                   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+    const periodoLabel = `${MESES[inicio.getMonth()]} ${inicio.getFullYear()}`;
+
+    logger.info(`[liquidarComisiones] Período: ${periodoLabel} (${tsIni}–${tsFin})`);
+
+    // 1. Pedidos ENTREGADO del mes anterior
+    let pedidosSnap;
+    try {
+      pedidosSnap = await db.collection("pedidos")
+        .where("status", "==", "ENTREGADO")
+        .where("_ts", ">=", tsIni)
+        .where("_ts", "<",  tsFin)
+        .get();
+    } catch (e) {
+      logger.error("[liquidarComisiones] Error al leer pedidos:", e.message);
+      return;
+    }
+
+    // 2. Agrupar ventas por alias de ingeniero
+    const ventasPorAlias = {};
+    pedidosSnap.docs.forEach(d => {
+      const p     = d.data();
+      const alias = p.ingenieroAlias || p.alias || "";
+      const total = typeof p.total === "number" ? p.total : 0;
+      if (!alias || total <= 0) return;
+      ventasPorAlias[alias] = (ventasPorAlias[alias] || 0) + total;
+    });
+
+    if (Object.keys(ventasPorAlias).length === 0) {
+      logger.info("[liquidarComisiones] Sin ventas ENTREGADO en el período.");
+      return;
+    }
+
+    // 3. Cargar todas las configs de comisión
+    const configsSnap = await db.collection("comision_config").get();
+    const configs = {};
+    configsSnap.docs.forEach(d => { configs[d.id] = d.data(); });
+
+    // 4. Calcular y guardar liquidación por alias
+    const batch = db.batch();
+    const notificaciones = [];
+
+    for (const [alias, totalVendido] of Object.entries(ventasPorAlias)) {
+      const cfg = configs[alias];
+      if (!cfg) {
+        logger.warn(`[liquidarComisiones] Sin config de comisión para alias="${alias}" — omitido`);
+        continue;
+      }
+
+      // Aplicar tramos progresivos
+      let tramos = [];
+      try { tramos = JSON.parse(cfg.tramosJson || "[]"); } catch (_) {}
+      tramos.sort((a, b) => a.meta - b.meta);
+
+      let montoComision = 0;
+      let volumenRestante = totalVendido;
+      let pisoAnterior = 0;
+
+      for (const t of tramos) {
+        if (volumenRestante <= 0) break;
+        const techo  = t.meta;
+        const tramo  = Math.min(volumenRestante, techo - pisoAnterior);
+        montoComision += tramo > 0 ? tramo * (t.pct / 100) : 0;
+        volumenRestante -= tramo;
+        pisoAnterior = techo;
+      }
+      // Si sigue habiendo volumen más allá del último tramo, aplica el % del último tramo
+      if (volumenRestante > 0 && tramos.length > 0) {
+        montoComision += volumenRestante * (tramos[tramos.length - 1].pct / 100);
+      }
+
+      const salarioBase = cfg.salarioBase || 0;
+      const totalPago   = salarioBase + montoComision;
+
+      // Documento de liquidación (id determinístico: alias_YYYY-MM evita duplicados)
+      const docId = `${alias}_${inicio.getFullYear()}-${String(inicio.getMonth() + 1).padStart(2, "0")}`;
+      const ref   = db.collection("liquidacion_comision").doc(docId);
+      batch.set(ref, {
+        aliasIngeniero: alias,
+        periodoLabel,
+        fechaInicio:   tsIni,
+        fechaFin:      tsFin,
+        totalVendido,
+        salarioBase,
+        montoComision,
+        totalPago,
+        status:        "PENDIENTE",
+        creadoPor:     "SISTEMA",
+        _ts:           Date.now(),
+      }, { merge: false });
+
+      notificaciones.push({ alias, montoComision, totalVendido, salarioBase, totalPago });
+    }
+
+    await batch.commit();
+    logger.info(`[liquidarComisiones] Liquidaciones guardadas para: ${Object.keys(ventasPorAlias).join(", ")}`);
+
+    // 5. Notificar a cada ingeniero
+    for (const { alias, montoComision, totalVendido, salarioBase, totalPago } of notificaciones) {
+      try {
+        // Buscar uid del ingeniero por alias
+        const uSnap = await db.collection("usuarios")
+          .where("alias", "==", alias).where("activo", "==", true).limit(1).get();
+        if (uSnap.empty) continue;
+        const uid = uSnap.docs[0].id;
+
+        const fmt = v => new Intl.NumberFormat("es-MX", { style:"currency", currency:"MXN", maximumFractionDigits:0 }).format(v);
+        await db.collection("notificaciones_web").add({
+          tipo:          "COMISION_LIQUIDADA",
+          mensaje:       `💰 Tu comisión de ${periodoLabel}: ventas ${fmt(totalVendido)} · comisión ${fmt(montoComision)} · total ${fmt(totalPago)}`,
+          destinatarios: [uid],
+          accion:        { vista: "comisiones" },
+          leida:         false,
+          timestamp:     FieldValue.serverTimestamp(),
+          _ts:           Date.now(),
+          creadaPor:     "SISTEMA",
+        });
+      } catch (e) {
+        logger.warn(`[liquidarComisiones] No se pudo notificar a ${alias}:`, e.message);
+      }
+    }
+
+    // 6. Notificar al GERENTE con resumen
+    try {
+      const gerSnap = await db.collection("usuarios")
+        .where("rol", "in", ["GERENTE", "SUPER_ADMIN"])
+        .where("activo", "==", true).get();
+      const destGer = gerSnap.docs.map(d => d.id);
+      if (destGer.length > 0) {
+        const totalComisiones = notificaciones.reduce((s, n) => s + n.montoComision, 0);
+        const fmt = v => new Intl.NumberFormat("es-MX", { style:"currency", currency:"MXN", maximumFractionDigits:0 }).format(v);
+        await db.collection("notificaciones_web").add({
+          tipo:          "REPORTE_COMISIONES",
+          mensaje:       `📊 Comisiones ${periodoLabel}: ${notificaciones.length} ingenieros · total ${fmt(totalComisiones)}`,
+          destinatarios: destGer,
+          accion:        { vista: "comisiones" },
+          leida:         false,
+          timestamp:     FieldValue.serverTimestamp(),
+          _ts:           Date.now(),
+          creadaPor:     "SISTEMA",
+        });
+      }
+    } catch (e) {
+      logger.warn("[liquidarComisiones] No se pudo notificar al gerente:", e.message);
+    }
+  }
+);
+
+// S25 ── Limpieza semanal de datos antiguos (control de costos Firestore)
+//  Lunes 06:00 Mexico City — antes que el reporte del gerente (07:00)
+exports.limpiarDatosAntiguos = onSchedule(
+  { schedule: "0 6 * * 1", timeZone: "America/Mexico_City", region: "us-central1" },
+  async (_ctx) => {
+    const ahora = Date.now();
+    const DIAS_NOTIF   = 30;
+    const DIAS_CHAT    = 60;
+    const DIAS_FORMS   = 90;
+    const MS_NOTIF  = DIAS_NOTIF  * 86_400_000;
+    const MS_CHAT   = DIAS_CHAT   * 86_400_000;
+    const MS_FORMS  = DIAS_FORMS  * 86_400_000;
+    let totalBorrados = 0;
+
+    // Borra en lotes de 400 para no exceder el límite de 500 por batch
+    async function borrarLote(snap) {
+      if (snap.empty) return 0;
+      const batch = db.batch();
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      return snap.size;
+    }
+
+    // 1. notificaciones_web leídas con más de 30 días
+    try {
+      const snap = await db.collection("notificaciones_web")
+        .where("leida", "==", true)
+        .where("_ts", "<", ahora - MS_NOTIF)
+        .limit(400)
+        .get();
+      totalBorrados += await borrarLote(snap);
+    } catch (e) { logger.error("[limpiar] notificaciones_web:", e.message); }
+
+    // 2. mensajes_internos (chat) con más de 60 días
+    try {
+      const snap = await db.collection("mensajes_internos")
+        .where("_ts", "<", ahora - MS_CHAT)
+        .limit(400)
+        .get();
+      totalBorrados += await borrarLote(snap);
+    } catch (e) { logger.error("[limpiar] mensajes_internos:", e.message); }
+
+    // 3. respuestas_formulario con más de 90 días
+    try {
+      const snap = await db.collection("respuestas_formulario")
+        .where("_ts", "<", ahora - MS_FORMS)
+        .limit(400)
+        .get();
+      totalBorrados += await borrarLote(snap);
+    } catch (e) { logger.error("[limpiar] respuestas_formulario:", e.message); }
+
+    logger.info(`[limpiarDatosAntiguos] Total eliminados: ${totalBorrados}`);
+  }
+);
+
 function _tituloFCM(tipo) {
   const MAP = {
     STOCK_BAJO:           "⚠️ Stock bajo",
@@ -1207,6 +1423,8 @@ function _tituloFCM(tipo) {
     FORMULARIO_RESPONDIDO:  "📋 Formulario respondido",
     RECORDATORIO_META:      "🎯 Avance de tu meta",
     REPORTE_SEMANAL:        "📊 Reporte semanal",
+    COMISION_LIQUIDADA:     "💰 Tu comisión está lista",
+    REPORTE_COMISIONES:     "📊 Comisiones del mes",
   };
   return MAP[tipo] || "🔔 N-10 ERP";
 }

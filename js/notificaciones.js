@@ -19,16 +19,41 @@ let _lista   = [];
 
 // ── Tipos y sus configuraciones visuales ──────────────────────
 const TIPOS = {
+  // Ventas y pedidos
   COTIZACION_NUEVA:       { icon: "📋", color: "#7C3AED", label: "Nueva cotización"        },
   COTIZACION_APROBADA:    { icon: "✅", color: "#16A34A", label: "Cotización aprobada"      },
   COTIZACION_RECHAZADA:   { icon: "❌", color: "#DC2626", label: "Cotización rechazada"     },
   PEDIDO_URGENTE:         { icon: "🚨", color: "#DC2626", label: "Pedido urgente"           },
+  PEDIDO_STATUS:          { icon: "📦", color: "#2563EB", label: "Estado de pedido"         },
+  // Visitas y campo
   SOLICITUD_VISITA:       { icon: "📍", color: "#2563EB", label: "Solicitud de visita"      },
+  FORMULARIO_RESPONDIDO:  { icon: "📋", color: "#0EA5E9", label: "Formulario respondido"    },
+  // Devoluciones
   DEVOLUCION_SOLICITADA:  { icon: "↩️",  color: "#D97706", label: "Solicitud de devolución" },
   DEVOLUCION_APROBADA:    { icon: "✅", color: "#16A34A", label: "Devolución aprobada"      },
   DEVOLUCION_RECHAZADA:   { icon: "❌", color: "#DC2626", label: "Devolución rechazada"     },
+  // Inventario
   STOCK_CRITICO:          { icon: "⚠️",  color: "#D97706", label: "Stock crítico"           },
+  STOCK_BAJO:             { icon: "📉", color: "#D97706", label: "Stock bajo"               },
+  // Cobranza y cartera
   ALERTA_COBRANZA:        { icon: "💰", color: "#DC2626", label: "Cobranza vencida"         },
+  CLIENTE_BLOQUEADO:      { icon: "🔒", color: "#DC2626", label: "Cliente bloqueado"        },
+  CLIENTE_DESBLOQUEADO:   { icon: "🔓", color: "#16A34A", label: "Cliente desbloqueado"     },
+  SEMAFORO_ROJO:          { icon: "🔴", color: "#DC2626", label: "Semáforo rojo"            },
+  // RH
+  NOMINA_PAGADA:          { icon: "💼", color: "#16A34A", label: "Pago de nómina"           },
+  VACACION_APROBADA:      { icon: "🏖️",  color: "#16A34A", label: "Vacaciones aprobadas"    },
+  VACACION_RECHAZADA:     { icon: "❌", color: "#DC2626", label: "Vacaciones rechazadas"    },
+  ANTICIPO_APROBADO:      { icon: "✅", color: "#16A34A", label: "Anticipo aprobado"        },
+  ANTICIPO_RECHAZADO:     { icon: "❌", color: "#DC2626", label: "Anticipo rechazado"       },
+  ANTICIPO_DESCONTADO:    { icon: "💸", color: "#D97706", label: "Anticipo descontado"      },
+  // Comisiones
+  COMISION_LIQUIDADA:     { icon: "💰", color: "#16A34A", label: "Comisión liquidada"        },
+  REPORTE_COMISIONES:     { icon: "📊", color: "#0EA5E9", label: "Resumen de comisiones"     },
+  // Metas y BI
+  RECORDATORIO_META:      { icon: "🎯", color: "#7C3AED", label: "Avance de meta"           },
+  REPORTE_SEMANAL:        { icon: "📊", color: "#0EA5E9", label: "Reporte semanal"          },
+  // General
   GENERAL:                { icon: "🔔", color: "#6B7280", label: "Notificación"             },
 };
 
