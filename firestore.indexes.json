@@ -15,6 +15,83 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "_ts",    "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "gastos_empleado",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid",  "order": "ASCENDING" },
+        { "fieldPath": "_ts",  "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "gastos_empleado",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "_ts",    "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "cortes_caja",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid",  "order": "ASCENDING" },
+        { "fieldPath": "_ts",  "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "cortes_caja",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "_ts",    "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "prospectos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ingenieroAlias", "order": "ASCENDING" },
+        { "fieldPath": "_ts",            "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sms_campanas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "_ts", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "asistencias",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "_ts", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "asistencias",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "_ts",   "order": "ASCENDING" },
+        { "fieldPath": "alias", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "historial_tipo_cambio",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "_ts", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "lealtad_config_producto",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "activo",  "order": "ASCENDING" },
+        { "fieldPath": "nombre",  "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

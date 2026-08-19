@@ -151,12 +151,14 @@ function _render(docs) {
     const st     = STATUS_CONFIG[g.status]  || STATUS_CONFIG.PENDIENTE;
     const fecha  = g._ts ? new Date(g._ts).toLocaleDateString("es-MX", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }) : "—";
     const monto  = `$${(g.monto || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`;
+    const fotoLink = g.fotoUrl ? `<a href="${g.fotoUrl}" target="_blank" style="font-size:.78rem;color:#2563EB;display:block;margin-bottom:.3rem">🖼️ Ver ticket</a>` : "";
     const acciones = g.status === "PENDIENTE" ? `
       <div>
+        ${fotoLink}
         <input class="comentario-input" placeholder="Comentario (opcional)" data-id="${g.id}" />
         <button class="btn-aprobar"  data-id="${g.id}">Aprobar</button>
         <button class="btn-rechazar" data-id="${g.id}">Rechazar</button>
-      </div>` : `<span style="color:var(--muted);font-size:.8rem">${g.aprobadoPor || "—"}</span>`;
+      </div>` : `<div>${fotoLink}<span style="color:var(--muted);font-size:.8rem">${g.aprobadoPor || "—"}</span></div>`;
     return `
 <tr>
   <td>${g.alias || g.uid}</td>

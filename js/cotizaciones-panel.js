@@ -1,6 +1,7 @@
 // Cotizaciones — Panel web S3
 import { db } from './firebase-config.js';
 import { Sesion } from './auth.js';
+import { getTipoCambio, formatMoneda } from './multimoneda.js';
 import {
   collection, doc, addDoc, updateDoc, getDoc,
   onSnapshot, query, orderBy, where, getDocs,
@@ -9,6 +10,9 @@ import {
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;'}[c]));
 const fmtMXN = v => Number(v || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+const fmtMoneda = (v, moneda) => moneda === 'USD'
+  ? `USD $${Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+  : fmtMXN(v);
 const fmtFecha = ts => ts ? new Date(ts).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
 const STATUS_LABELS = {
@@ -111,7 +115,7 @@ export const CotizacionesPanelModule = (() => {
           <td><strong>${esc(c.folio)}</strong></td>
           <td>${esc(c.clienteNombre)}</td>
           <td>${esc(c.ingenieroAlias)}</td>
-          <td class="num">${fmtMXN(c.total)}</td>
+          <td class="num">${fmtMoneda(c.total, c.moneda)}${c.moneda === 'USD' ? ` <small style="color:var(--muted)">(TC ${c.tipoCambio?.toFixed(2) || '?'})</small>` : ''}</td>
           <td>${fmtFecha(c.creadaEn)}</td>
           <td style="${venceColor}">${fmtFecha(c.venceEn)}</td>
           <td><span class="${statusInfo.cls}">${statusInfo.label}</span></td>
@@ -163,6 +167,7 @@ export const CotizacionesPanelModule = (() => {
           <span class="${statusInfo.cls}">${statusInfo.label}</span>
           <span>Vigencia: ${c.vigenciaDias || 15} días</span>
           <span>Vence: ${fmtFecha(c.venceEn)}</span>
+          ${c.moneda === 'USD' ? `<span style="background:#DBEAFE;color:#1E40AF;border-radius:4px;padding:.15rem .4rem;font-size:.78rem;font-weight:700">💱 USD · TC $${c.tipoCambio?.toFixed(4) || '?'} · MXN ${fmtMXN(c.totalMxn || (c.total * (c.tipoCambio || 1)))}</span>` : '<span style="background:#D1FAE5;color:#065F46;border-radius:4px;padding:.15rem .4rem;font-size:.78rem;font-weight:700">🇲🇽 MXN</span>'}
         </div>
         <p><strong>Cliente:</strong> ${esc(c.clienteNombre)}</p>
         <p><strong>Ingeniero:</strong> ${esc(c.ingenieroAlias)}</p>
@@ -233,6 +238,9 @@ export const CotizacionesPanelModule = (() => {
         status:         'BORRADOR',
         subtotal:       c.subtotal,
         total:          c.total,
+        totalMxn:       c.totalMxn || c.total,
+        moneda:         c.moneda || 'MXN',
+        tipoCambio:     c.tipoCambio || 1,
         items:          c.items || [],
         cotizacionId:   cotizacionId,
         cotizacionFolio: c.folio,

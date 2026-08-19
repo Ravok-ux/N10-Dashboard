@@ -1427,7 +1427,7 @@ exports.onCorteCajaCreado = onDocumentCreated(
       destinatarios,
       leido:         false,
       _ts:           Date.now(),
-      timestamp:     admin.firestore.FieldValue.serverTimestamp(),
+      timestamp:     FieldValue.serverTimestamp(),
     });
   }
 );
@@ -1506,7 +1506,7 @@ exports.onPedidoEntregadoPuntos = onDocumentUpdated(
 //    obtiene Bearer token OAuth2 y envía SMS a todos los destinatarios.
 // ═══════════════════════════════════════════════════════════════
 exports.onSmsCampanaCreada = onDocumentCreated(
-  { document: "sms_campanas/{campanaId}", region: "us-central1" },
+  { document: "sms_campanas/{campanaId}", region: "us-central1", secrets: ["SENDPULSE_CLIENT_ID", "SENDPULSE_CLIENT_SECRET"] },
   async (event) => {
     const campanaRef = event.data.ref;
     const campana    = event.data.data();
