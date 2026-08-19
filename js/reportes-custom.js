@@ -1,5 +1,6 @@
 // reportes-custom.js — Reportes configurables por el usuario
-import { db, Sesion } from "./firebase-config.js";
+import { db } from "./firebase-config.js";
+import { Sesion } from "./auth.js";
 import {
   collection, query, where, orderBy, getDocs,
   limit as fsLimit, Timestamp

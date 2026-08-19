@@ -1,5 +1,6 @@
 // multimoneda.js — Gestión de tipo de cambio y configuración multi-moneda
-import { db, Sesion } from "./firebase-config.js";
+import { db } from "./firebase-config.js";
+import { Sesion } from "./auth.js";
 import {
   doc, getDoc, setDoc, onSnapshot, collection, query,
   orderBy, limit, addDoc, serverTimestamp

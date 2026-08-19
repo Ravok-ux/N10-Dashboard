@@ -1,5 +1,6 @@
 // caja.js — Arqueo/Corte de Caja (MESA_CONTROL / GERENTE — vista cajero web)
-import { db, Sesion } from "./firebase-config.js";
+import { db } from "./firebase-config.js";
+import { Sesion } from "./auth.js";
 import {
   collection, query, orderBy, onSnapshot, doc, getDoc,
   where, getDocs, addDoc, updateDoc, serverTimestamp

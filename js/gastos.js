@@ -1,5 +1,6 @@
 // gastos.js — Módulo de Gastos de Empleado (MESA_CONTROL / GERENTE)
-import { db, Sesion } from "./firebase-config.js";
+import { db } from "./firebase-config.js";
+import { Sesion } from "./auth.js";
 import {
   collection, query, where, orderBy, onSnapshot,
   doc, updateDoc, serverTimestamp, Timestamp

@@ -1,5 +1,6 @@
 // sms.js — Módulo de SMS Masivo vía SendPulse (GERENTE / MESA_CONTROL)
-import { db, Sesion } from "./firebase-config.js";
+import { db } from "./firebase-config.js";
+import { Sesion } from "./auth.js";
 import {
   collection, addDoc, query, orderBy, onSnapshot,
   serverTimestamp

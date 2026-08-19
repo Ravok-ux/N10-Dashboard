@@ -1,5 +1,6 @@
 // asistencia.js — Control de Asistencia y Horarios (GERENTE / MESA_CONTROL)
-import { db, Sesion } from "./firebase-config.js";
+import { db } from "./firebase-config.js";
+import { Sesion } from "./auth.js";
 import {
   collection, query, where, orderBy, onSnapshot, doc,
   setDoc, getDoc, getDocs, serverTimestamp, limit
