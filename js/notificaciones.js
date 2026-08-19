@@ -50,6 +50,12 @@ const TIPOS = {
   // Comisiones
   COMISION_LIQUIDADA:     { icon: "💰", color: "#16A34A", label: "Comisión liquidada"        },
   REPORTE_COMISIONES:     { icon: "📊", color: "#0EA5E9", label: "Resumen de comisiones"     },
+  // Gastos de empleado
+  GASTO_SOLICITADO:       { icon: "💸", color: "#D97706", label: "Gasto solicitado"          },
+  GASTO_APROBADO:         { icon: "✅", color: "#16A34A", label: "Gasto aprobado"            },
+  GASTO_RECHAZADO:        { icon: "❌", color: "#DC2626", label: "Gasto rechazado"           },
+  // Caja
+  CORTE_CAJA:             { icon: "🏦", color: "#0EA5E9", label: "Corte de caja"             },
   // Metas y BI
   RECORDATORIO_META:      { icon: "🎯", color: "#7C3AED", label: "Avance de meta"           },
   REPORTE_SEMANAL:        { icon: "📊", color: "#0EA5E9", label: "Reporte semanal"          },

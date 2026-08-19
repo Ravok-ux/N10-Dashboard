@@ -533,3 +533,162 @@ export const PromocionesModule = (() => {
 
   return { init, mount: init, destroy };
 })();
+
+// ─── S31: Configuración de lealtad por producto / categoría ──────────────────
+// Colección: lealtad_config_producto/{id}
+//   { tipo: "producto"|"categoria", refId, nombre, puntosPorPeso, activo }
+// ─────────────────────────────────────────────────────────────────────────────
+export const LealtadConfigModule = (() => {
+  const COL = 'lealtad_config_producto';
+  let _unsub   = null;
+  let _container = null;
+
+  function mount(container) {
+    _container = container;
+    _container.innerHTML = _html();
+    _bindEvents();
+    _cargar();
+  }
+
+  function destroy() { if (_unsub) { _unsub(); _unsub = null; } }
+
+  function _html() {
+    return `
+<div style="padding:1rem">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+    <h3 style="margin:0">⭐ Lealtad por Producto / Categoría</h3>
+    <button id="lc-btn-nuevo" style="background:#7C3AED;color:#fff;border:none;border-radius:7px;padding:.5rem 1rem;cursor:pointer;font-weight:700">+ Nueva regla</button>
+  </div>
+  <p style="font-size:.85rem;color:var(--muted);margin-bottom:1rem">
+    Define puntos específicos por producto o categoría. Si un producto tiene regla propia, se usa esa; si no, la de su categoría; si no, la global de la campaña.
+  </p>
+  <div id="lc-tabla-wrap" style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <thead>
+        <tr style="background:var(--bg2)">
+          <th style="padding:.6rem .8rem;text-align:left;border-bottom:2px solid var(--border)">Tipo</th>
+          <th style="padding:.6rem .8rem;text-align:left;border-bottom:2px solid var(--border)">Nombre</th>
+          <th style="padding:.6rem .8rem;text-align:left;border-bottom:2px solid var(--border)">Pts / $1</th>
+          <th style="padding:.6rem .8rem;text-align:left;border-bottom:2px solid var(--border)">Activo</th>
+          <th style="padding:.6rem .8rem;text-align:left;border-bottom:2px solid var(--border)">Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="lc-tbody"></tbody>
+    </table>
+    <p id="lc-empty" style="text-align:center;color:var(--muted);padding:2rem;display:none">Sin reglas configuradas.</p>
+  </div>
+</div>
+<div id="lc-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;justify-content:center;align-items:center">
+  <div style="background:var(--bg);border-radius:12px;padding:1.5rem;width:min(400px,95vw)">
+    <h4 id="lc-modal-title" style="margin:0 0 1rem">Nueva regla de lealtad</h4>
+    <label style="display:block;font-size:.82rem;font-weight:700;margin-bottom:.3rem">Tipo</label>
+    <select id="lc-tipo" style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);margin-bottom:.75rem">
+      <option value="producto">Producto específico</option>
+      <option value="categoria">Categoría de productos</option>
+    </select>
+    <label style="display:block;font-size:.82rem;font-weight:700;margin-bottom:.3rem">ID de referencia (refId)</label>
+    <input id="lc-refid" type="text" placeholder="ID del producto o nombre de categoría"
+      style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);box-sizing:border-box;margin-bottom:.75rem" />
+    <label style="display:block;font-size:.82rem;font-weight:700;margin-bottom:.3rem">Nombre descriptivo</label>
+    <input id="lc-nombre" type="text" placeholder="Ej: Fertilizante Premium / Categoría Herbicidas"
+      style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);box-sizing:border-box;margin-bottom:.75rem" />
+    <label style="display:block;font-size:.82rem;font-weight:700;margin-bottom:.3rem">Puntos por cada $1</label>
+    <input id="lc-puntos" type="number" min="0.01" step="0.01" value="2"
+      style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);box-sizing:border-box;margin-bottom:.75rem" />
+    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin-bottom:1rem">
+      <input id="lc-activo" type="checkbox" checked /> Activo
+    </label>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end">
+      <button id="lc-btn-cancelar" style="padding:.5rem 1rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer">Cancelar</button>
+      <button id="lc-btn-guardar" style="padding:.5rem 1rem;background:#7C3AED;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700">Guardar</button>
+    </div>
+  </div>
+</div>`;
+  }
+
+  function _bindEvents() {
+    _container.querySelector("#lc-btn-nuevo").addEventListener("click", () => _abrirModal());
+    _container.querySelector("#lc-btn-cancelar").addEventListener("click", _cerrarModal);
+    _container.querySelector("#lc-btn-guardar").addEventListener("click", _guardar);
+  }
+
+  function _cargar() {
+    _unsub = onSnapshot(query(collection(db, COL), orderBy("nombre")), snap => {
+      const tbody = _container?.querySelector("#lc-tbody");
+      const empty = _container?.querySelector("#lc-empty");
+      if (!tbody) return;
+      if (snap.empty) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
+      empty.style.display = "none";
+      tbody.innerHTML = snap.docs.map(doc => {
+        const d = doc.data();
+        return `<tr>
+          <td style="padding:.5rem .8rem;border-bottom:1px solid var(--border)">${d.tipo === "producto" ? "📦 Producto" : "🗂️ Categoría"}</td>
+          <td style="padding:.5rem .8rem;border-bottom:1px solid var(--border)">${d.nombre || d.refId}</td>
+          <td style="padding:.5rem .8rem;border-bottom:1px solid var(--border);font-weight:700;color:#7C3AED">${d.puntosPorPeso ?? 1}</td>
+          <td style="padding:.5rem .8rem;border-bottom:1px solid var(--border)">${d.activo ? "✅" : "⏸️"}</td>
+          <td style="padding:.5rem .8rem;border-bottom:1px solid var(--border)">
+            <button class="lc-edit" data-id="${doc.id}" style="background:none;border:1px solid var(--border);border-radius:5px;padding:.2rem .5rem;cursor:pointer;font-size:.8rem">Editar</button>
+            <button class="lc-del" data-id="${doc.id}" style="background:none;border:1px solid #DC2626;color:#DC2626;border-radius:5px;padding:.2rem .5rem;cursor:pointer;font-size:.8rem;margin-left:.3rem">Borrar</button>
+          </td>
+        </tr>`;
+      }).join("");
+
+      tbody.querySelectorAll(".lc-edit").forEach(btn => {
+        const doc2 = snap.docs.find(d => d.id === btn.dataset.id);
+        if (doc2) btn.addEventListener("click", () => _abrirModal(doc2.id, doc2.data()));
+      });
+      tbody.querySelectorAll(".lc-del").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          if (!confirm("¿Eliminar esta regla?")) return;
+          await deleteDoc(doc(db, COL, btn.dataset.id));
+        });
+      });
+    });
+  }
+
+  let _editId = null;
+
+  function _abrirModal(id = null, data = null) {
+    _editId = id;
+    const overlay = _container.querySelector("#lc-modal-overlay");
+    _container.querySelector("#lc-modal-title").textContent = id ? "Editar regla" : "Nueva regla de lealtad";
+    if (data) {
+      _container.querySelector("#lc-tipo").value    = data.tipo    || "producto";
+      _container.querySelector("#lc-refid").value   = data.refId   || "";
+      _container.querySelector("#lc-nombre").value  = data.nombre  || "";
+      _container.querySelector("#lc-puntos").value  = data.puntosPorPeso ?? 1;
+      _container.querySelector("#lc-activo").checked = data.activo !== false;
+    } else {
+      _container.querySelector("#lc-tipo").value    = "producto";
+      _container.querySelector("#lc-refid").value   = "";
+      _container.querySelector("#lc-nombre").value  = "";
+      _container.querySelector("#lc-puntos").value  = "2";
+      _container.querySelector("#lc-activo").checked = true;
+    }
+    overlay.style.display = "flex";
+  }
+
+  function _cerrarModal() {
+    _container.querySelector("#lc-modal-overlay").style.display = "none";
+    _editId = null;
+  }
+
+  async function _guardar() {
+    const tipo   = _container.querySelector("#lc-tipo").value;
+    const refId  = _container.querySelector("#lc-refid").value.trim();
+    const nombre = _container.querySelector("#lc-nombre").value.trim();
+    const pts    = parseFloat(_container.querySelector("#lc-puntos").value) || 1;
+    const activo = _container.querySelector("#lc-activo").checked;
+    if (!refId) { alert("Ingresa el ID de referencia."); return; }
+
+    const payload = { tipo, refId, nombre: nombre || refId, puntosPorPeso: pts, activo, timestamp: serverTimestamp() };
+    if (_editId) {
+      await setDoc(doc(db, COL, _editId), payload, { merge: true });
+    } else {
+      await addDoc(collection(db, COL), payload);
+    }
+    _cerrarModal();
+  }
+
+  return { mount, destroy };
+})();

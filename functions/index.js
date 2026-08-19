@@ -10,6 +10,8 @@ const { logger }             = require("firebase-functions");
 const { initializeApp }      = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp: FSTimestamp } = require("firebase-admin/firestore");
 const { getMessaging }       = require("firebase-admin/messaging");
+const https                  = require("https");
+const { defineString }       = require("firebase-functions/params");
 
 initializeApp();
 const db = getFirestore();
@@ -1397,6 +1399,281 @@ exports.limpiarDatosAntiguos = onSchedule(
   }
 );
 
+// ═══════════════════════════════════════════════════════════════
+// CF: onCorteCajaCreado (S32 — Arqueo/Corte de Caja)
+//    Trigger: cortes_caja/{corteId} created
+//    Notifica a MESA_CONTROL y GERENTE cuando un vendedor envía su corte.
+// ═══════════════════════════════════════════════════════════════
+exports.onCorteCajaCreado = onDocumentCreated(
+  { document: "cortes_caja/{corteId}", region: "us-central1" },
+  async (event) => {
+    const corte = event.data?.data();
+    if (!corte) return;
+
+    const { alias, totalDeclarado, totalSistema, turno } = corte;
+    const dif      = (totalDeclarado || 0) - (totalSistema || 0);
+    const difStr   = dif >= 0 ? `+$${dif.toFixed(2)}` : `-$${Math.abs(dif).toFixed(2)}`;
+    const turnoStr = turno ? ` · Turno: ${turno}` : "";
+
+    const rolesSnap = await db.collection("usuarios")
+      .where("rol", "in", ["MESA_CONTROL", "GERENTE"])
+      .get();
+    const destinatarios = rolesSnap.docs.map(d => d.id);
+    if (!destinatarios.length) return;
+
+    await db.collection("notificaciones_web").add({
+      tipo:          "CORTE_CAJA",
+      mensaje:       `${alias} envió corte de caja${turnoStr} · Declarado: $${(totalDeclarado||0).toFixed(2)} · Diferencia: ${difStr}`,
+      destinatarios,
+      leido:         false,
+      _ts:           Date.now(),
+      timestamp:     admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════
+// CF: onPedidoEntregadoPuntos (S31 — Lealtad por producto/categoría)
+//    Trigger: pedidos/{pedidoId} updated → status cambia a ENTREGADO
+//    Acumula puntos en puntos_cliente usando lealtad_config_producto.
+//    Jerarquía: regla de producto > regla de categoría > puntosPorPeso global.
+// ═══════════════════════════════════════════════════════════════
+exports.onPedidoEntregadoPuntos = onDocumentUpdated(
+  { document: "pedidos/{pedidoId}", region: "us-central1" },
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (!before || !after) return;
+    if (before.status === after.status || after.status !== "ENTREGADO") return;
+
+    const clienteId = after.clienteId || after.cliente_id;
+    if (!clienteId) return;
+
+    const productos = after.productos || after.items || [];
+    if (!productos.length) return;
+
+    // Cargar todas las reglas de lealtad por producto/categoría
+    const reglasSnap = await db.collection("lealtad_config_producto")
+      .where("activo", "==", true).get();
+    const reglasProducto   = {};
+    const reglasCategoria  = {};
+    reglasSnap.docs.forEach(d => {
+      const r = d.data();
+      if (r.tipo === "producto")  reglasProducto[r.refId]  = r.puntosPorPeso || 1;
+      if (r.tipo === "categoria") reglasCategoria[r.refId] = r.puntosPorPeso || 1;
+    });
+
+    const puntosPorPesoGlobal = 1; // fallback cuando no hay regla
+
+    let totalPuntos = 0;
+    for (const item of productos) {
+      const subtotal   = (item.precio || 0) * (item.cantidad || 1);
+      const prodId     = item.productoId || item.id || "";
+      const categoria  = item.categoria || "";
+      const ppp = reglasProducto[prodId] ?? reglasCategoria[categoria] ?? puntosPorPesoGlobal;
+      totalPuntos += Math.floor(subtotal * ppp);
+    }
+
+    if (totalPuntos <= 0) return;
+
+    const pedidoId = event.params.pedidoId;
+    const batch    = db.batch();
+
+    // Actualizar saldo en puntos_cliente
+    const puntosRef = db.collection("puntos_cliente").doc(clienteId);
+    batch.set(puntosRef, { puntos: FieldValue.increment(totalPuntos), clienteId }, { merge: true });
+
+    // Registrar en historial_puntos
+    const histRef = db.collection("historial_puntos").doc(`${clienteId}_${pedidoId}`);
+    batch.set(histRef, {
+      clienteId,
+      pedidoId,
+      puntos:    totalPuntos,
+      motivo:    "PEDIDO_ENTREGADO",
+      _ts:       Date.now(),
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+    logger.info(`[onPedidoEntregadoPuntos] ${totalPuntos} puntos → cliente ${clienteId}`);
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════
+// CF: onSmsCampanaCreada (S29 — SMS vía SendPulse)
+//    Trigger: sms_campanas/{campanaId} created
+//    Lee SENDPULSE_CLIENT_ID + SENDPULSE_CLIENT_SECRET del entorno,
+//    obtiene Bearer token OAuth2 y envía SMS a todos los destinatarios.
+// ═══════════════════════════════════════════════════════════════
+exports.onSmsCampanaCreada = onDocumentCreated(
+  { document: "sms_campanas/{campanaId}", region: "us-central1" },
+  async (event) => {
+    const campanaRef = event.data.ref;
+    const campana    = event.data.data();
+    if (!campana || campana.status !== "PENDIENTE") return;
+
+    const clientId     = process.env.SENDPULSE_CLIENT_ID;
+    const clientSecret = process.env.SENDPULSE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      logger.error("[onSmsCampanaCreada] Credenciales SendPulse no configuradas.");
+      await campanaRef.update({ status: "ERROR", errorMsg: "Credenciales no configuradas" });
+      return;
+    }
+
+    await campanaRef.update({ status: "PROCESANDO" });
+
+    try {
+      // 1. Obtener token OAuth2
+      const token = await _sendpulseToken(clientId, clientSecret);
+
+      // 2. Enviar SMS a cada destinatario
+      const { destinatarios, mensaje, sender } = campana;
+      let enviados = 0;
+      let errores  = 0;
+
+      for (const telefono of destinatarios) {
+        try {
+          // Personalizar {nombre} si el cliente existe en Firestore
+          let texto = mensaje;
+          const clienteSnap = await db.collection("clientes").where("telefono", "==", telefono).limit(1).get();
+          if (!clienteSnap.empty) {
+            const nombre = clienteSnap.docs[0].data().nombre || "";
+            texto = texto.replace(/\{nombre\}/gi, nombre.split(" ")[0]);
+          } else {
+            texto = texto.replace(/\{nombre\}/gi, "");
+          }
+
+          await _sendpulseSms(token, telefono, texto, sender || "N10ERP");
+          enviados++;
+        } catch (e) {
+          logger.warn(`[SMS] Error enviando a ${telefono}: ${e.message}`);
+          errores++;
+        }
+      }
+
+      await campanaRef.update({ status: "COMPLETADO", enviados, errores, timestamp: FieldValue.serverTimestamp() });
+      logger.info(`[onSmsCampanaCreada] Completado: ${enviados} enviados, ${errores} errores`);
+    } catch (e) {
+      logger.error(`[onSmsCampanaCreada] Error general: ${e.message}`);
+      await campanaRef.update({ status: "ERROR", errorMsg: e.message });
+    }
+  }
+);
+
+/** Obtiene Bearer token de SendPulse vía OAuth2 */
+function _sendpulseToken(clientId, clientSecret) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret });
+    const req  = https.request({
+      hostname: "api.sendpulse.com",
+      path:     "/oauth/access_token",
+      method:   "POST",
+      headers:  { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) },
+    }, res => {
+      let data = "";
+      res.on("data", d => (data += d));
+      res.on("end", () => {
+        try { const j = JSON.parse(data); j.access_token ? resolve(j.access_token) : reject(new Error(j.message || "token error")); }
+        catch (e) { reject(e); }
+      });
+    });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+/** Envía un SMS vía SendPulse */
+function _sendpulseSms(token, phone, text, senderId) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ sender: senderId, body: text, phones: [`52${phone}`] });
+    const req  = https.request({
+      hostname: "api.sendpulse.com",
+      path:     "/sms/send",
+      method:   "POST",
+      headers:  { "Authorization": `Bearer ${token}`, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) },
+    }, res => {
+      let data = "";
+      res.on("data", d => (data += d));
+      res.on("end", () => {
+        res.statusCode >= 200 && res.statusCode < 300 ? resolve() : reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+      });
+    });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CF: onGastoCreado
+//    Trigger: gastos_empleado/{gastoId} created
+//    Notifica a MESA_CONTROL cuando un empleado registra un gasto.
+//    Notifica al empleado cuando su gasto es aprobado o rechazado.
+// ═══════════════════════════════════════════════════════════════
+exports.onGastoCreado = onDocumentCreated(
+  { document: "gastos_empleado/{gastoId}", region: "us-central1" },
+  async (event) => {
+    const gasto = event.data?.data();
+    if (!gasto) return;
+
+    const { alias, categoria, monto, uid } = gasto;
+    const cat = { GASOLINA:"⛽", ALIMENTACION:"🍽️", HOSPEDAJE:"🏨", TRANSPORTE:"🚌", COMUNICACION:"📱", OTRO:"📎" }[categoria] || "📎";
+    const montoFmt = `$${(monto || 0).toLocaleString("es-MX", { minimumFractionDigits:2 })}`;
+
+    // Obtener uids de MESA_CONTROL y GERENTE para notificar
+    const rolesSnap = await db.collection("usuarios")
+      .where("rol", "in", ["MESA_CONTROL", "GERENTE"])
+      .get();
+    const destinatarios = rolesSnap.docs.map(d => d.id);
+
+    if (destinatarios.length > 0) {
+      await db.collection("notificaciones_web").add({
+        tipo:           "GASTO_SOLICITADO",
+        mensaje:        `${alias} solicitó reembolso ${cat} por ${montoFmt}`,
+        destinatarios,
+        leido:          false,
+        _ts:            Date.now(),
+        timestamp:      admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════
+// CF: onGastoActualizado
+//    Trigger: gastos_empleado/{gastoId} updated → status cambia
+//    Notifica al empleado si fue aprobado o rechazado.
+// ═══════════════════════════════════════════════════════════════
+exports.onGastoActualizado = onDocumentUpdated(
+  { document: "gastos_empleado/{gastoId}", region: "us-central1" },
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (!before || !after) return;
+    if (before.status === after.status) return; // no cambió
+
+    const { uid, alias, categoria, monto, comentario, status } = after;
+    if (status !== "APROBADO" && status !== "RECHAZADO") return;
+
+    const cat = { GASOLINA:"⛽", ALIMENTACION:"🍽️", HOSPEDAJE:"🏨", TRANSPORTE:"🚌", COMUNICACION:"📱", OTRO:"📎" }[categoria] || "📎";
+    const montoFmt = `$${(monto || 0).toLocaleString("es-MX", { minimumFractionDigits:2 })}`;
+    const tipo    = status === "APROBADO" ? "GASTO_APROBADO" : "GASTO_RECHAZADO";
+    const emoji   = status === "APROBADO" ? "✅" : "❌";
+    let msg       = `${emoji} Tu gasto ${cat} de ${montoFmt} fue ${status === "APROBADO" ? "aprobado" : "rechazado"}`;
+    if (comentario) msg += `. Comentario: ${comentario}`;
+
+    await db.collection("notificaciones_web").add({
+      tipo,
+      mensaje:        msg,
+      destinatarios:  [uid],
+      leido:          false,
+      _ts:            Date.now(),
+      timestamp:      admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+);
+
 function _tituloFCM(tipo) {
   const MAP = {
     STOCK_BAJO:           "⚠️ Stock bajo",
@@ -1425,6 +1702,10 @@ function _tituloFCM(tipo) {
     REPORTE_SEMANAL:        "📊 Reporte semanal",
     COMISION_LIQUIDADA:     "💰 Tu comisión está lista",
     REPORTE_COMISIONES:     "📊 Comisiones del mes",
+    GASTO_SOLICITADO:       "💸 Nuevo gasto para aprobar",
+    GASTO_APROBADO:         "✅ Gasto aprobado",
+    GASTO_RECHAZADO:        "❌ Gasto rechazado",
+    CORTE_CAJA:             "🏦 Corte de caja recibido",
   };
   return MAP[tipo] || "🔔 N-10 ERP";
 }
