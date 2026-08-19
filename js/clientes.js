@@ -130,7 +130,12 @@ function _html() {
       <button onclick="ClientesUI.exportar()"
         style="padding:6px 14px;border:1px solid #D1D5DB;border-radius:6px;background:transparent;
           color:var(--c-text,#374151);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">
-        ⬇ Excel
+        ⬇ Exportar Excel
+      </button>
+      <button onclick="Cli_xlExport()"
+        style="padding:6px 14px;border-radius:6px;border:none;background:#1565C0;
+          color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">
+        ⬇ Exportar Clientes
       </button>
 
       <!-- Contador -->

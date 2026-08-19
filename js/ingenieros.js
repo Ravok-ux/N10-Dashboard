@@ -84,9 +84,6 @@ function _html() {
       <button class="xl-btn xl-btn-export" onclick="Ing_xlExport()" style="margin-left:auto">
         ⬇ Exportar Excel
       </button>
-      <button class="xl-btn xl-btn-export" onclick="Cli_xlExport()" style="background:#1565C0">
-        ⬇ Exportar Clientes
-      </button>
       <button onclick="IngenierosUI.abrirAlta()"
         style="padding:6px 14px;border-radius:6px;border:none;background:#1B5E20;
           color:#fff;font-size:12px;font-weight:700;cursor:pointer">
