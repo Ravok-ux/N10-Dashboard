@@ -5,6 +5,9 @@ import {
   collection, query, where, orderBy, onSnapshot,
   doc, updateDoc, serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { crearNotificacion } from "./notificaciones.js";
+
+const ROLES_APROBADOR = ["GERENTE", "ADMINISTRADOR", "SUPER_ADMIN"];
 
 const CATEGORIAS = {
   GASOLINA:     { icon: "⛽", label: "Gasolina"      },
@@ -153,13 +156,21 @@ function _render(docs) {
     const fecha  = g._ts ? new Date(g._ts).toLocaleDateString("es-MX", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }) : "—";
     const monto  = `$${(g.monto || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`;
     const fotoLink = g.fotoUrl ? `<a href="${g.fotoUrl}" target="_blank" style="font-size:.78rem;color:#2563EB;display:block;margin-bottom:.3rem">🖼️ Ver ticket</a>` : "";
-    const acciones = g.status === "PENDIENTE" ? `
-      <div>
+    const esAprobador = ROLES_APROBADOR.includes(Sesion.rol);
+    let acciones;
+    if (g.status === "PENDIENTE" && esAprobador) {
+      acciones = `<div>
         ${fotoLink}
-        <input class="comentario-input" placeholder="Comentario (opcional)" data-id="${g.id}" />
-        <button class="btn-aprobar"  data-id="${g.id}">Aprobar</button>
-        <button class="btn-rechazar" data-id="${g.id}">Rechazar</button>
-      </div>` : `<div>${fotoLink}<span style="color:var(--muted);font-size:.8rem">${g.aprobadoPor || "—"}</span></div>`;
+        <button class="btn-aprobar"  data-id="${g.id}" data-uid="${g.uid}" data-alias="${g.alias || g.uid}" data-monto="${g.monto || 0}">✅ Aprobar</button>
+        <button class="btn-rechazar" data-id="${g.id}" data-uid="${g.uid}" data-alias="${g.alias || g.uid}" data-monto="${g.monto || 0}">❌ Rechazar</button>
+      </div>`;
+    } else {
+      const gestor = g.aprobadoPor || g.rechazadoPor || "—";
+      acciones = `<div>${fotoLink}<span style="color:var(--muted);font-size:.8rem">${gestor}</span></div>`;
+    }
+    // Status badge + motivo rechazo si aplica
+    const motivoHtml = g.status === "RECHAZADO" && g.motivoRechazo
+      ? `<div style="font-size:.74rem;color:#991B1B;margin-top:.2rem">Motivo: ${g.motivoRechazo}</div>` : "";
     return `
 <tr>
   <td>${g.alias || g.uid}</td>
@@ -167,34 +178,52 @@ function _render(docs) {
   <td class="monto-cell">${monto}</td>
   <td style="max-width:200px;word-break:break-word">${g.descripcion || "—"}</td>
   <td style="white-space:nowrap;font-size:.8rem">${fecha}</td>
-  <td><span class="badge ${st.css}">${st.label}</span></td>
+  <td><span class="badge ${st.css}">${st.label}</span>${motivoHtml}</td>
   <td>${acciones}</td>
 </tr>`;
   }).join("");
 
   // Bind botones
   tbody.querySelectorAll(".btn-aprobar").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const id  = btn.dataset.id;
-      const com = tbody.querySelector(`.comentario-input[data-id="${id}"]`)?.value.trim() || null;
-      _setStatus(id, "APROBADO", com);
+    btn.addEventListener("click", async () => {
+      const { id, uid, alias, monto } = btn.dataset;
+      const confirmar = window.modal
+        ? await window.modal({ title: "Aprobar gasto", body: `¿Aprobar el gasto de <b>${alias}</b> por <b>$${Number(monto).toLocaleString("es-MX", { minimumFractionDigits:2 })}</b>?`, ok: "Aprobar", cancel: "Cancelar" })
+        : confirm(`¿Aprobar el gasto de ${alias} por $${Number(monto).toLocaleString("es-MX", { minimumFractionDigits:2 })}?`);
+      if (!confirmar) return;
+      await _setStatus({ id, empleadoUid: uid, empleadoAlias: alias, status: "APROBADO" });
     });
   });
   tbody.querySelectorAll(".btn-rechazar").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const id  = btn.dataset.id;
-      const com = tbody.querySelector(`.comentario-input[data-id="${id}"]`)?.value.trim() || null;
-      if (!com) { alert("Escribe un comentario para rechazar el gasto."); return; }
-      _setStatus(id, "RECHAZADO", com);
+    btn.addEventListener("click", async () => {
+      const { id, uid, alias, monto } = btn.dataset;
+      const motivo = window.promptModal
+        ? await window.promptModal({ title: "Rechazar gasto", body: `Motivo de rechazo para el gasto de <b>${alias}</b> por <b>$${Number(monto).toLocaleString("es-MX", { minimumFractionDigits:2 })}</b>:`, placeholder: "Escribe el motivo…", ok: "Rechazar" })
+        : prompt(`Motivo de rechazo para el gasto de ${alias}:`);
+      if (!motivo || !motivo.trim()) return; // cancelado o vacío
+      await _setStatus({ id, empleadoUid: uid, empleadoAlias: alias, status: "RECHAZADO", motivoRechazo: motivo.trim() });
     });
   });
 }
 
-async function _setStatus(id, status, comentario) {
-  await updateDoc(doc(db, "gastos_empleado", id), {
+async function _setStatus({ id, empleadoUid, empleadoAlias, status, motivoRechazo }) {
+  const campos = {
     status,
-    comentario: comentario || null,
-    aprobadoPor: Sesion.uid,
-    timestamp: serverTimestamp(),
+    ...(status === "APROBADO"
+      ? { aprobadoPor: Sesion.uid, _tsAprobacion: serverTimestamp() }
+      : { rechazadoPor: Sesion.uid, _tsRechazo: serverTimestamp(), motivoRechazo: motivoRechazo || null }),
+  };
+  await updateDoc(doc(db, "gastos_empleado", id), campos);
+
+  const tipo    = status === "APROBADO" ? "GASTO_APROBADO" : "GASTO_RECHAZADO";
+  const msjBase = status === "APROBADO"
+    ? `Tu gasto fue aprobado por ${Sesion.alias}`
+    : `Tu gasto fue rechazado por ${Sesion.alias}${motivoRechazo ? ". Motivo: " + motivoRechazo : ""}`;
+  await crearNotificacion({
+    tipo,
+    mensaje:       msjBase,
+    destinatarios: empleadoUid ? [empleadoUid] : ["TODOS"],
   });
+
+  window.toast?.(status === "APROBADO" ? "Gasto aprobado ✅" : "Gasto rechazado ❌", status === "APROBADO" ? "success" : "error");
 }

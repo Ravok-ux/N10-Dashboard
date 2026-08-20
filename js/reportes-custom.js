@@ -2,6 +2,7 @@
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
 import { enriquecerRemisiones } from "./intereses-engine.js";
+import { exportarExcel } from "./excel-utils.js";
 import {
   collection, query, where, orderBy, getDocs,
   limit as fsLimit, Timestamp
@@ -171,6 +172,7 @@ function _html() {
     <div style="margin-top:1rem;display:flex;gap:.5rem;flex-wrap:wrap">
       <button id="rc-btn-generar" style="background:#2563EB;color:#fff;border:none;border-radius:7px;padding:.55rem 1.4rem;font-weight:700;cursor:pointer">Generar reporte</button>
       <button id="rc-btn-csv" style="background:#16A34A;color:#fff;border:none;border-radius:7px;padding:.55rem 1.2rem;font-weight:700;cursor:pointer;display:none">⬇ Exportar CSV</button>
+      <button id="rc-btn-xlsx" style="background:#1D6F42;color:#fff;border:none;border-radius:7px;padding:.55rem 1.2rem;font-weight:700;cursor:pointer;display:none">⬇ Excel</button>
     </div>
   </div>
 
@@ -233,6 +235,9 @@ function _bindEvents() {
 
   // CSV
   _container.querySelector("#rc-btn-csv").addEventListener("click", _exportarCSV);
+
+  // Excel
+  _container.querySelector("#rc-btn-xlsx").addEventListener("click", _exportarXLSX);
 
   _actualizarCampos();
   _actualizarFiltros();
@@ -387,6 +392,7 @@ function _renderTabla(fuente, docs) {
   const instruc  = _container.querySelector("#rc-instrucciones");
   const resumen  = _container.querySelector("#rc-resumen");
   const btnCsv   = _container.querySelector("#rc-btn-csv");
+  const btnXlsx  = _container.querySelector("#rc-btn-xlsx");
 
   instruc.style.display = "none";
 
@@ -394,6 +400,7 @@ function _renderTabla(fuente, docs) {
     tabla.style.display = "none";
     empty.style.display = "block";
     btnCsv.style.display = "none";
+    btnXlsx.style.display = "none";
     resumen.textContent = "Sin resultados";
     return;
   }
@@ -402,6 +409,7 @@ function _renderTabla(fuente, docs) {
   const campos = _camposSeleccionados();
   resumen.textContent = `${docs.length} registros encontrados`;
   btnCsv.style.display = "inline-block";
+  btnXlsx.style.display = "inline-block";
 
   // Encabezados
   thead.innerHTML = `<tr>${campos.map(c => `<th>${fuente.campos[c]?.label || c}</th>`).join("")}</tr>`;
@@ -442,4 +450,26 @@ function _exportarCSV() {
   a.download = `reporte_${_fuenteActual}_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ─── XLSX ─────────────────────────────────────────────────────────────────────
+
+function _exportarXLSX() {
+  const fuente = FUENTES[_fuenteActual];
+  const campos = _camposSeleccionados();
+
+  const cols = campos.map(c => ({
+    key:    c,
+    header: fuente.campos[c]?.label || c,
+    fmt:    fuente.campos[c]?.tipo === "moneda" ? "moneda"
+          : fuente.campos[c]?.tipo === "fecha"  ? "fecha"
+          : undefined,
+    width:  fuente.campos[c]?.tipo === "moneda" ? 16
+          : fuente.campos[c]?.tipo === "fecha"  ? 14
+          : 20,
+  }));
+
+  const hoy      = new Date().toISOString().slice(0, 10);
+  const filename = `reporte-${_fuenteActual}-${hoy}`;
+  exportarExcel(_resultados, cols, filename, fuente.label);
 }
