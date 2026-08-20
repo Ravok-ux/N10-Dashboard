@@ -40,6 +40,9 @@ const TIPOS = {
   CLIENTE_BLOQUEADO:      { icon: "🔒", color: "#DC2626", label: "Cliente bloqueado"        },
   CLIENTE_DESBLOQUEADO:   { icon: "🔓", color: "#16A34A", label: "Cliente desbloqueado"     },
   SEMAFORO_ROJO:          { icon: "🔴", color: "#DC2626", label: "Semáforo rojo"            },
+  SEMAFORO_CRITICO:       { icon: "🔴", color: "#C0504D", label: "Semáforo crítico"          },
+  SEMAFORO_GRAVE:         { icon: "🟠", color: "#F79646", label: "Semáforo grave"            },
+  VENCIMIENTO_INTERESES:  { icon: "📈", color: "#C0504D", label: "Interés vencido"           },
   // RH
   NOMINA_PAGADA:          { icon: "💼", color: "#16A34A", label: "Pago de nómina"           },
   VACACION_APROBADA:      { icon: "🏖️",  color: "#16A34A", label: "Vacaciones aprobadas"    },

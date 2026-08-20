@@ -188,6 +188,7 @@ function _renderPendientes() {
         </div>
         <div class="aut-total">${_fmtMXN(p.total)}</div>
       </div>
+      ${p.motivoBloqueo ? `<div style="margin-top:2px"><span style="color:#DC2626;font-size:11px">🔒 ${esc(p.motivoBloqueo)}</span></div>` : ""}
       ${p.notas ? `<div class="aut-meta">📝 ${esc(p.notas)}</div>` : ""}
       <div id="aut-items-${esc(p.id)}" class="aut-items">
         <div class="aut-items-title">Productos</div>

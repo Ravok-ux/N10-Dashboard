@@ -5,7 +5,7 @@
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
 import {
-  collection, query, orderBy, limit, where, onSnapshot, doc, updateDoc, getDoc, Timestamp
+  collection, query, orderBy, limit, where, onSnapshot, doc, updateDoc, getDoc, Timestamp, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { registrarVentaN10, revertirVentaN10 } from "./comisiones-n10-engine.js";
 
@@ -273,6 +273,14 @@ async function _avanzarStatus(pedidoId, nuevoStatus) {
             cancel:  null,
             danger:  true,
           });
+          // Enviar pedido a cola de autorización
+          await updateDoc(doc(db, "pedidos", pedidoId), {
+            status:       "PENDIENTE_AUTORIZACION",
+            motivoBloqueo: "SEMAFORO_" + c.semaforoColor,
+            bloqueadoPor:  Sesion.uid,
+            _tsBloqueo:    serverTimestamp()
+          });
+          window.toast?.("Pedido enviado a autorización por semáforo " + c.semaforoColor, "warn");
           return;
         }
         if (statusBloqueante && esGerente) {
