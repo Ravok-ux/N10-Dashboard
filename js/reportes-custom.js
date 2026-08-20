@@ -1,6 +1,7 @@
 // reportes-custom.js — Reportes configurables por el usuario
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
+import { enriquecerRemisiones } from "./intereses-engine.js";
 import {
   collection, query, where, orderBy, getDocs,
   limit as fsLimit, Timestamp
@@ -85,6 +86,26 @@ const FUENTES = {
       status:        { label: "Status",        tipo: "texto"  },
     },
     filtros: ["status", "alias"],
+  },
+  remisiones_credito: {
+    label: "Aging de cartera",
+    icon: "📋",
+    collection: "remisiones_credito",
+    campos: {
+      folio:           { label: "Folio",            tipo: "texto"   },
+      clienteNombre:   { label: "Cliente",          tipo: "texto"   },
+      montoOriginal:   { label: "Capital original", tipo: "moneda"  },
+      totalAbonado:    { label: "Abonado",          tipo: "moneda"  },
+      interesGenerado: { label: "Interés generado", tipo: "moneda"  },
+      totalDeuda:      { label: "Total a pagar",    tipo: "moneda"  },
+      deudaRestante:   { label: "Deuda restante",   tipo: "moneda"  },
+      status:          { label: "Status",           tipo: "texto"   },
+      diasAtraso:      { label: "Días atraso",      tipo: "numero"  },
+      ingenieroAlias:  { label: "Ingeniero",        tipo: "texto"   },
+      fechaVencimiento:{ label: "Vencimiento",      tipo: "fecha"   },
+    },
+    filtros: ["status", "ingenieroAlias", "clienteNombre"],
+    computed: true, // campos calculados requieren enriquecimiento en cliente
   },
 };
 
@@ -241,16 +262,28 @@ async function _generar() {
     const filtroCampo = _container.querySelector("#rc-filtro-campo").value;
     const filtroValor = _container.querySelector("#rc-filtro-valor").value.trim();
 
-    let q = query(
-      collection(db, fuente.collection),
-      where("_ts", ">=", ini),
-      where("_ts", "<=", fin),
-      orderBy("_ts", "desc"),
-      fsLimit(500)
-    );
-
-    const snap = await getDocs(q);
-    let docs   = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+    let docs;
+    if (fuente.computed) {
+      // Aging de cartera: sin filtro de fecha, enriquecer con motor de intereses
+      const snap = await getDocs(query(
+        collection(db, fuente.collection),
+        where("status", "!=", "PAGADO"),
+        orderBy("status"),
+        orderBy("fechaVencimiento"),
+        fsLimit(500)
+      ));
+      const raw = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+      docs = enriquecerRemisiones(raw);
+    } else {
+      const snap = await getDocs(query(
+        collection(db, fuente.collection),
+        where("_ts", ">=", ini),
+        where("_ts", "<=", fin),
+        orderBy("_ts", "desc"),
+        fsLimit(500)
+      ));
+      docs = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+    }
 
     // Filtro adicional en cliente (para campos no indexados)
     if (filtroCampo && filtroValor) {

@@ -5,8 +5,9 @@
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
 import {
-  collection, query, orderBy, limit, where, onSnapshot, doc, updateDoc, Timestamp
+  collection, query, orderBy, limit, where, onSnapshot, doc, updateDoc, getDoc, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { registrarVentaN10, revertirVentaN10 } from "./comisiones-n10-engine.js";
 
 let _unsub    = null;
 let _filtroStatus  = "TODOS";
@@ -250,6 +251,47 @@ function _renderTabla() {
 // ── Avanzar status ────────────────────────────────────────────
 async function _avanzarStatus(pedidoId, nuevoStatus) {
   const labels = { CONFIRMADO:"confirmar", EN_RUTA:"marcar en ruta", FACTURADO:"marcar como facturado" };
+
+  // Bloqueo de crédito al confirmar
+  if (nuevoStatus === "CONFIRMADO") {
+    const ped = _pedidos.find(p => p.id === pedidoId);
+    const clienteId = ped?.clienteId;
+    if (clienteId) {
+      const cSnap = await getDoc(doc(db, "clientes", clienteId));
+      if (cSnap.exists()) {
+        const c = cSnap.data();
+        const esGerente = Sesion.esSuperAdmin?.() || ["GERENTE","SUPER_ADMIN"].includes(Sesion.rol);
+        const statusBloqueante = ["CRÍTICO","GRAVE"].includes(c.semaforoColor) || c.bloqueado;
+        if (statusBloqueante && !esGerente) {
+          const fmt = n => "$" + (n||0).toLocaleString("es-MX",{minimumFractionDigits:2});
+          await window.modal?.({
+            title:   "⛔ Crédito bloqueado",
+            message: `${c.nombre || "Este cliente"} tiene semáforo ${c.semaforoColor ?? "bloqueado"}.\n` +
+                     `Deuda: ${fmt(c.totalAPagarTotal ?? c.saldoPendiente)} (capital ${fmt(c.saldoCapitalTotal ?? c.saldoPendiente)} + interés ${fmt(c.interesTotal ?? 0)}).\n` +
+                     `Solo GERENTE puede confirmar pedidos a clientes en mora crítica.`,
+            confirm: "Entendido",
+            cancel:  null,
+            danger:  true,
+          });
+          return;
+        }
+        if (statusBloqueante && esGerente) {
+          const fmt = n => "$" + (n||0).toLocaleString("es-MX",{minimumFractionDigits:2});
+          const autorizar = await window.modal?.({
+            title:   "⚠️ Cliente con mora crítica",
+            message: `${c.nombre || "Este cliente"} tiene semáforo ${c.semaforoColor ?? "bloqueado"}.\n` +
+                     `Deuda total: ${fmt(c.totalAPagarTotal ?? c.saldoPendiente)}.\n` +
+                     `Como GERENTE puedes autorizar excepcionalmente.`,
+            confirm: "Autorizar excepción",
+            cancel:  "Cancelar",
+            danger:  true,
+          });
+          if (!autorizar) return;
+        }
+      }
+    }
+  }
+
   const ok = await window.modal?.({
     title:   "Cambiar status",
     message: `¿${labels[nuevoStatus] || nuevoStatus} el pedido?`,
@@ -284,19 +326,66 @@ async function _marcarEntregado(pedidoId) {
   });
   if (receptor === null) return;
   if (!receptor.trim()) { window.toast?.("Ingresa el nombre del receptor", "warning"); return; }
+  const entregadoEn = Date.now();
   try {
     await updateDoc(doc(db, "pedidos", pedidoId), {
       status:       "ENTREGADO",
-      entregadoEn:  Date.now(),
+      entregadoEn,
       entregadoPor: Sesion.alias || Sesion.uid,
       recibioCon:   receptor.trim()
     });
     window.toast?.("Entrega confirmada", "success");
     document.querySelector(`tr.tr-detalle[data-for="${pedidoId}"]`)?.remove();
+    // Registrar comisión N10 en background — no bloquea el UI
+    const ped = _pedidos.find(p => p.id === pedidoId);
+    if (ped) _comisionN10Entrega({ ...ped, entregadoEn }).catch(e => console.warn("[N10 comision]", e));
   } catch(e) {
     console.error("[Pedidos] entregado:", e);
     window.toast?.("Error: " + e.message, "error");
   }
+}
+
+/**
+ * Calcula litros N10 del pedido y los registra en comisiones_n10.
+ * Busca metadata de producto en la colección "inventario" si el item no la trae.
+ */
+async function _comisionN10Entrega(ped) {
+  const items = ped.items || ped.productos || [];
+  if (!items.length) return;
+
+  let litrosN10 = 0;
+  for (const it of items) {
+    // Metadata ya embebida en el item (pedidos nuevos)
+    if (it.familia === "N10" && it.litros_por_unidad > 0) {
+      litrosN10 += (it.cantidad ?? 1) * it.litros_por_unidad;
+      continue;
+    }
+    // Fallback: lookup en inventario por productoId
+    const pid = it.productoId || it.id;
+    if (pid) {
+      const snap = await getDoc(doc(db, "inventario", pid));
+      if (snap.exists()) {
+        const prod = snap.data();
+        if (prod.familia === "N10" && prod.litros_por_unidad > 0) {
+          litrosN10 += (it.cantidad ?? 1) * prod.litros_por_unidad;
+        }
+      }
+    }
+  }
+
+  if (litrosN10 <= 0) return;
+
+  const uid   = ped.ingenieroUid || ped.uid || ped.vendedorUid;
+  const alias = ped.ingenieroAlias || ped.vendedor || ped.ingeniero || "–";
+  if (!uid) { console.warn("[N10] Sin UID de ingeniero en pedido", ped.id); return; }
+
+  const res = await registrarVentaN10({
+    uid, alias, litros: litrosN10,
+    ventaId: ped.id,
+    cliente: ped.clienteNombre || ped.cliente || "–",
+    fecha:   new Date(ped.entregadoEn || Date.now()),
+  });
+  console.info(`[N10] +${litrosN10}L → Tramo ${res.tramo} | Comisión: $${res.comisionNueva}`);
 }
 
 // ── Cancelar pedido ───────────────────────────────────────────
@@ -305,6 +394,7 @@ async function _cancelarPedido(pedidoId) {
   if (razon === null) return; // usuario canceló el diálogo
   if (!razon.trim()) { window.toast?.("Ingresa un motivo", "warning"); return; }
 
+  const ped = _pedidos.find(p => p.id === pedidoId);
   try {
     await updateDoc(doc(db, "pedidos", pedidoId), {
       status:             "CANCELADO",
@@ -314,10 +404,38 @@ async function _cancelarPedido(pedidoId) {
     });
     window.toast?.("Pedido cancelado", "success");
     document.querySelector(`tr.tr-detalle[data-for="${pedidoId}"]`)?.remove();
+    // Revertir comisión N10 si el pedido ya estaba entregado
+    if (ped?.status === "ENTREGADO") _comisionN10Revertir(ped).catch(e => console.warn("[N10 revert]", e));
   } catch(e) {
     console.error("[Pedidos] cancelar:", e);
     window.toast?.("Error: " + e.message, "error");
   }
+}
+
+async function _comisionN10Revertir(ped) {
+  const items = ped.items || ped.productos || [];
+  let litrosN10 = 0;
+  for (const it of items) {
+    if (it.familia === "N10" && it.litros_por_unidad > 0) {
+      litrosN10 += (it.cantidad ?? 1) * it.litros_por_unidad;
+      continue;
+    }
+    const pid = it.productoId || it.id;
+    if (pid) {
+      const snap = await getDoc(doc(db, "inventario", pid));
+      if (snap.exists()) {
+        const prod = snap.data();
+        if (prod.familia === "N10" && prod.litros_por_unidad > 0) {
+          litrosN10 += (it.cantidad ?? 1) * prod.litros_por_unidad;
+        }
+      }
+    }
+  }
+  if (litrosN10 <= 0) return;
+  const uid = ped.ingenieroUid || ped.uid || ped.vendedorUid;
+  if (!uid) return;
+  await revertirVentaN10({ uid, litros: litrosN10, ventaId: ped.id, fecha: new Date(ped.entregadoEn || Date.now()) });
+  console.info(`[N10] Revertidos ${litrosN10}L de pedido cancelado ${ped.id}`);
 }
 
 // ── Editar cantidades de pedido ───────────────────────────────

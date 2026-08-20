@@ -1891,3 +1891,99 @@ exports.actualizarCartera = onSchedule(
     logger.info(`[actualizarCartera] ${Object.keys(porCliente).length} clientes actualizados`);
   }
 );
+
+// ═══════════════════════════════════════════════════════════════
+// SPRINT-B. NOTIFICACIONES DE VENCIMIENTO DE INTERESES
+//           Cron 09:30 Mazatlán — detecta notas con exactamente
+//           15, 29 o 43 días de mora y genera notif + FCM
+// ═══════════════════════════════════════════════════════════════
+exports.notificarVencimientosIntereses = onSchedule(
+  { schedule: "30 15 * * *", timeZone: "America/Mazatlan", region: "us-central1" },
+  async () => {
+    const HITOS = [15, 29, 43]; // días exactos que disparan alerta
+    const ahora = Date.now();
+    const hoy   = new Date(ahora);
+    hoy.setHours(0, 0, 0, 0);
+    const manana = new Date(hoy.getTime() + 86_400_000);
+
+    const snap = await db.collection("remisiones_credito")
+      .where("status", "not-in", ["PAGADO"])
+      .get();
+
+    if (snap.empty) return;
+
+    const batch = db.batch();
+    let creadas = 0;
+
+    for (const d of snap.docs) {
+      const r  = d.data();
+      const fv = r.fechaVencimiento?.toMillis?.() || Number(r.fechaVencimiento) || 0;
+      if (!fv) continue;
+
+      const diasMora = Math.floor((ahora - fv) / 86_400_000);
+      if (!HITOS.includes(diasMora)) continue;
+
+      // Evitar duplicar en el mismo día
+      const dupQ = await db.collection("notificaciones_web")
+        .where("tipo", "==", "VENCIMIENTO_INTERESES")
+        .where("refId", "==", d.id)
+        .where("_ts", ">=", hoy.getTime())
+        .where("_ts", "<",  manana.getTime())
+        .limit(1).get();
+      if (!dupQ.empty) continue;
+
+      const montoOrig  = r.montoOriginal || 0;
+      const tasaDiaria = r.tasaDiaria ?? (0.01 / 7);
+      const diasTotal  = Math.floor((ahora - (r.fechaCreacion?.toMillis?.() || Number(r.fechaCreacion))) / 86_400_000);
+      const interes    = diasTotal > (r.diasGracia ?? 14)
+        ? Math.round(diasTotal * tasaDiaria * montoOrig * 100) / 100 : 0;
+
+      const saldo   = montoOrig - (r.totalAbonado || 0);
+      const fmtMXN  = n => n.toLocaleString("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
+      const cliente = r.clienteNombre || "–";
+      const folio   = r.folio || d.id;
+
+      const EMOJIS = { 15: "⚠️", 29: "🟠", 43: "🔴" };
+      const mensaje = `${EMOJIS[diasMora] || "🔴"} ${cliente} · ${folio} · ${diasMora} días de mora · Capital ${fmtMXN(saldo)} + Interés ${fmtMXN(interes)} = ${fmtMXN(saldo + interes)}`;
+
+      // Destinatarios: ingeniero de la nota + GERENTE
+      const destinatarios = [];
+      if (r.ingenieroId)   destinatarios.push(r.ingenieroId);
+      if (r.ingenieroUid)  destinatarios.push(r.ingenieroUid);
+      try {
+        const gSnap = await db.collection("usuarios")
+          .where("rol", "in", ["GERENTE","SUPER_ADMIN"])
+          .where("activo", "==", true)
+          .get();
+        gSnap.docs.forEach(u => { if (!destinatarios.includes(u.id)) destinatarios.push(u.id); });
+      } catch (_) {}
+
+      const notifRef = db.collection("notificaciones_web").doc();
+      batch.set(notifRef, {
+        tipo:           "VENCIMIENTO_INTERESES",
+        subtipo:        `DIA_${diasMora}`,
+        mensaje,
+        refId:          d.id,
+        folio,
+        clienteNombre:  cliente,
+        diasMora,
+        saldo,
+        interes,
+        destinatarios:  destinatarios.length > 0 ? destinatarios : ["TODOS"],
+        accion:         { vista: "remisiones" },
+        leida:          false,
+        timestamp:      FieldValue.serverTimestamp(),
+        _ts:            ahora,
+        creadaPor:      "SISTEMA",
+      });
+      creadas++;
+    }
+
+    if (creadas > 0) {
+      await batch.commit();
+      logger.info(`[notificarVencimientosIntereses] ${creadas} alertas de hito creadas`);
+    } else {
+      logger.info("[notificarVencimientosIntereses] Sin hitos hoy");
+    }
+  }
+);

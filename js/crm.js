@@ -70,6 +70,10 @@ export const CrmModule = {
           <div class="kpi-val" id="crm-kpi-${e.id}">–</div>
           <div class="kpi-label">${e.label}</div>
         </div>`).join("")}
+        <div class="kpi-card" style="border-left-color:#7C3AED">
+          <div class="kpi-val" id="crm-kpi-pipeline" style="font-size:13px">–</div>
+          <div class="kpi-label">Pipeline ponderado</div>
+        </div>
       </div>
 
       <div id="crm-view"></div>
@@ -121,6 +125,18 @@ export const CrmModule = {
                 ${ETAPAS.filter(e => !["GANADO","PERDIDO"].includes(e.id))
                   .map(e => `<option value="${e.id}">${e.label}</option>`).join("")}
               </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Valor estimado (MXN)</label>
+              <input class="form-input" type="number" id="crm-valor" min="0" step="1000" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Probabilidad %</label>
+              <input class="form-input" type="number" id="crm-prob" min="0" max="100" step="5" placeholder="50">
+            </div>
+            <div class="form-group" style="grid-column:1/-1">
+              <label class="form-label">Producto de interés</label>
+              <input class="form-input" type="text" id="crm-producto" placeholder="Descripción del producto o servicio">
             </div>
             <div class="form-group" style="grid-column:1/-1">
               <label class="form-label">Notas iniciales</label>
@@ -240,11 +256,19 @@ function _iniciarListeners() {
   }, err => console.error("[CRM]", err)));
 }
 
+const fmtM = n => "$" + Math.round(n).toLocaleString("es-MX");
+
 function _actualizarKPIs(rows) {
   ETAPAS.slice(0,4).forEach(e => {
     const el = document.getElementById(`crm-kpi-${e.id}`);
     if (el) el.textContent = rows.filter(r => r.etapa === e.id).length;
   });
+  // Pipeline ponderado = Σ (valorEstimado * probabilidad / 100) para no PERDIDOS
+  const pipeline = rows
+    .filter(r => r.etapa !== "PERDIDO")
+    .reduce((s, r) => s + ((r.valorEstimado || 0) * ((r.probabilidad ?? 50) / 100)), 0);
+  const elP = document.getElementById("crm-kpi-pipeline");
+  if (elP) elP.textContent = fmtM(pipeline);
 }
 
 // ── Filtrar ───────────────────────────────────────────────────
@@ -423,13 +447,16 @@ async function _cambiarEtapa(id, etapa) {
 
 // ── Guardar prospecto ─────────────────────────────────────────
 async function _guardarProspecto() {
-  const nombre    = document.getElementById("crm-nombre")?.value.trim();
-  const telefono  = document.getElementById("crm-telefono")?.value.trim();
-  const giro      = document.getElementById("crm-giro")?.value.trim();
-  const direccion = document.getElementById("crm-direccion")?.value.trim();
-  const notas     = document.getElementById("crm-notas")?.value.trim();
-  const etapa     = document.getElementById("crm-etapa")?.value || "NUEVO";
-  const ingId     = document.getElementById("crm-ing-asig")?.value;
+  const nombre         = document.getElementById("crm-nombre")?.value.trim();
+  const telefono       = document.getElementById("crm-telefono")?.value.trim();
+  const giro           = document.getElementById("crm-giro")?.value.trim();
+  const direccion      = document.getElementById("crm-direccion")?.value.trim();
+  const notas          = document.getElementById("crm-notas")?.value.trim();
+  const etapa          = document.getElementById("crm-etapa")?.value || "NUEVO";
+  const ingId          = document.getElementById("crm-ing-asig")?.value;
+  const valorEstimado  = parseFloat(document.getElementById("crm-valor")?.value || "0") || 0;
+  const probabilidad   = parseInt(document.getElementById("crm-prob")?.value   || "50") || 50;
+  const productoInteres = document.getElementById("crm-producto")?.value.trim() || "";
 
   if (!nombre) { window.toast?.("El nombre es obligatorio","error"); return; }
   const ing = _ingenieros.find(u => u.uid === ingId);
@@ -438,6 +465,7 @@ async function _guardarProspecto() {
   try {
     await addDoc(collection(db,"prospectos"), {
       nombre, telefono, giro, direccion, notas, etapa,
+      valorEstimado, probabilidad, productoInteres,
       ingenieroId: ingId || null, ingenieroAlias: ing?.alias || null,
       creadoPor: Sesion.alias, _ts: Date.now()
     });

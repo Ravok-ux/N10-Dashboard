@@ -171,6 +171,7 @@ export const DashboardModule = {
 
     const unsub1 = _escucharKPIs();
     const unsub2 = _escucharCobranzaKPI();
+    const unsub2b = _escucharInteresKPI();
     const unsub3 = _escucharCotizacionesKPI();
     const unsub4 = _escucharStockKPI();
     const unsub5 = _escucharDevolucionesKPI();
@@ -179,7 +180,7 @@ export const DashboardModule = {
     const unsub8 = _escucharFeedDash();
     const unsub9 = _escucharCharts();
 
-    _unsubs = [unsub1, unsub2, unsub3, unsub4, unsub5, unsub6, unsub7, unsub8, unsub9];
+    _unsubs = [unsub1, unsub2, unsub2b, unsub3, unsub4, unsub5, unsub6, unsub7, unsub8, unsub9];
     return () => this.destroy();
   },
 
@@ -336,18 +337,40 @@ function _escucharCotizacionesKPI() {
   }, _logErr("kpi-cotizaciones"));
 }
 
-// ── KPI: Cobranza vencida ─────────────────────────────────────
+// ── KPI: Cobranza vencida (con intereses) ────────────────────
 function _escucharCobranzaKPI() {
   const q = query(
     collection(db, "clientes"),
-    where("semaforoColor", "in", ["NARANJA", "ROJO"])
+    where("semaforoColor", "in", ["CRÍTICO","GRAVE","MODERADO","LEVE"])
   );
   return onSnapshot(q, snap => {
-    let saldoVencido = 0;
-    snap.forEach(d => { saldoVencido += (d.data().saldoPendiente || 0); });
-    _renderKPI2(1, "💸", "Cobranza vencida", _fmt(saldoVencido),
-      `${snap.size} clientes`, snap.size > 0 ? "dn" : "nt", "#DC2626");
+    let totalAPagar = 0, interes = 0;
+    snap.forEach(d => {
+      const c = d.data();
+      totalAPagar += (c.totalAPagarTotal ?? c.saldoPendiente ?? 0);
+      interes     += (c.interesTotal ?? 0);
+    });
+    const sub = interes > 0
+      ? `${snap.size} clientes · +${_fmt(interes)} interés`
+      : `${snap.size} clientes`;
+    _renderKPI2(1, "💸", "Cartera vencida", _fmt(totalAPagar),
+      sub, snap.size > 0 ? "dn" : "nt", "#DC2626");
   }, _logErr("kpi-cobranza"));
+}
+
+// ── KPI: Interés en riesgo ────────────────────────────────────
+function _escucharInteresKPI() {
+  const q = query(
+    collection(db, "clientes"),
+    where("semaforoColor", "in", ["CRÍTICO","GRAVE"])
+  );
+  return onSnapshot(q, snap => {
+    let interesRiesgo = 0;
+    snap.forEach(d => { interesRiesgo += (d.data().interesTotal ?? 0); });
+    _renderKPI(1, "📈", "Interés en riesgo", _fmt(interesRiesgo),
+      snap.size > 0 ? `${snap.size} cuentas críticas` : "Sin mora crítica",
+      snap.size > 0 ? "dn" : "nt", "#DC2626");
+  }, _logErr("kpi-interes-riesgo"));
 }
 
 // ── KPI: Stock crítico ────────────────────────────────────────
