@@ -1,4 +1,4 @@
-﻿// ══════════════════════════════════════════════════════════════
+/ ══════════════════════════════════════════════════════════════
 // app.js — Router principal, inicialización del shell
 // ══════════════════════════════════════════════════════════════
 
@@ -629,7 +629,7 @@ function _initGlobalSearch() {
         .filter(u => _match(u.alias || "", qL) > 0 || _match(u.nombre || "", qL) > 0 || _match(u.email || "", qL) > 0)
         .slice(0, 5)
         .map(u => ({ icon: "👤", label: u.alias || u.nombre || u.email || u.id, sub: u.rol || "", view: "ingenieros", id: u.id }));
-      if (ingItems.length) sections.push({ header: "👤 Ingenieros", color: "#82b366", items: ingItems });
+        if (ingItems.length) sections.push({ header: "👤 Ingenieros", color: "#82b366", items: ingItems });
     } catch(e2) {}
 
     // 3. Clientes (fetch top 150, filter client-side)
