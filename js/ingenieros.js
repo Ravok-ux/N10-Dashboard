@@ -192,6 +192,32 @@ function _html() {
         </div>
       </div>
 
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;
+        padding:10px 14px;border:1px solid var(--c-border,#E5E7EB);border-radius:8px;
+        background:var(--c-surface,#fff)">
+        <label style="font-size:12px;font-weight:600;color:var(--c-text,#111);flex:1;margin:0">
+          Cuenta activa
+          <span style="display:block;font-weight:400;color:#6B7280;font-size:11px">
+            Desactivar impide el acceso a la plataforma y a la APK
+          </span>
+        </label>
+        <label style="position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0">
+          <input type="checkbox" id="ing-f-activo" checked
+            style="opacity:0;width:0;height:0;position:absolute">
+          <span onclick="(function(){var cb=document.getElementById('ing-f-activo');cb.checked=!cb.checked;
+            this.style.background=cb.checked?'#16a34a':'#D1D5DB';
+            document.getElementById('ing-toggle-knob').style.transform=cb.checked?'translateX(18px)':'translateX(0)'
+            }).call(this)"
+            id="ing-toggle-activo"
+            style="position:absolute;inset:0;border-radius:11px;background:#16a34a;cursor:pointer;
+              transition:background .2s">
+            <span style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;
+              background:#fff;transition:transform .2s;
+              transform:translateX(18px)" id="ing-toggle-knob"></span>
+          </span>
+        </label>
+      </div>
+
       <div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;padding:10px 12px;
         font-size:11px;color:#713F12;margin-bottom:18px;line-height:1.5">
         ⚠️ Después de guardar, crea la cuenta de acceso en <strong>Firebase Console → Authentication</strong>
@@ -264,6 +290,13 @@ function _bindUI() {
       if (diaEl) diaEl.value = String(u.diaLiquidacion ?? 1);
       const rolEl = document.getElementById("ing-f-rol");
       if (rolEl && u.rol) rolEl.value = u.rol;
+      const activoCb = document.getElementById("ing-f-activo");
+      const toggleBg = document.getElementById("ing-toggle-activo");
+      const activoVal = u.activo !== false;
+      if (activoCb) activoCb.checked = activoVal;
+      if (toggleBg) toggleBg.style.background = activoVal ? "#16a34a" : "#D1D5DB";
+      const knob = document.getElementById("ing-toggle-knob");
+      if (knob) knob.style.transform = activoVal ? "translateX(18px)" : "translateX(0)";
       // Alias no editable en modo edición
       document.getElementById("ing-f-alias").readOnly = true;
       document.getElementById("ing-modal").style.display = "flex";
@@ -279,6 +312,7 @@ function _bindUI() {
       const rol         = document.getElementById("ing-f-rol").value;
       const diaLiq      = parseInt(document.getElementById("ing-f-dia-liq")?.value ?? "1");
       const salarioBase = parseFloat(document.getElementById("ing-f-salario")?.value) || 0;
+      const activo      = document.getElementById("ing-f-activo")?.checked !== false;
 
       const errEl = document.getElementById("ing-modal-error");
       const mostrarError = msg => { errEl.textContent = msg; errEl.style.display = "block"; };
@@ -317,7 +351,7 @@ function _bindUI() {
           diaLiquidacion: diaLiq,
           salarioBase,
           rol,
-          activo: true,
+          activo,
           creadoPor: window.Sesion?.alias ?? "web",
           creadoEn:  serverTimestamp()
         });

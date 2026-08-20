@@ -9,7 +9,8 @@ import {
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  doc, getDoc, setDoc, serverTimestamp
+  doc, getDoc, setDoc, serverTimestamp,
+  collection, query, where, getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ── Estado de sesión ───────────────────────────────────────────
@@ -157,8 +158,23 @@ async function _cargarPerfil(user) {
   const snap = await getDoc(ref);
 
   if (!snap.exists()) {
-    // Primer login: crear perfil con rol base.
-    // El rol SUPER_ADMIN debe asignarse desde el panel de administración.
+    // Buscar perfil pre-registrado por email (creado desde el panel de Ingenieros)
+    const preSnap = await getDocs(
+      query(collection(db, "usuarios"), where("email", "==", user.email))
+    );
+    if (!preSnap.empty) {
+      const preData = preSnap.docs[0].data();
+      if (!preData.activo) {
+        await signOut(auth);
+        _showLoginError("Tu cuenta está desactivada. Contacta al administrador.");
+        return;
+      }
+      // Migrar doc alias→uid para futuros logins
+      await setDoc(ref, { ...preData, uid: user.uid, migradoEn: serverTimestamp() });
+      _aplicarSesion(user.uid, user.email, preData);
+      return;
+    }
+    // Sin pre-registro: crear perfil base
     const perfil = {
       email:    user.email,
       alias:    user.email.split("@")[0],
