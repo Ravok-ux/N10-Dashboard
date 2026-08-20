@@ -226,9 +226,11 @@ function _cardHtml(m) {
         </div>
       </div>
       <div class="met-sub-row">
-        <div class="met-sub">Meta: <span>${_fmtMXN(m.metaMonto || 0)}</span></div>
-        <div class="met-sub">Visitas meta: <span>${m.metaVisitas || "–"}</span></div>
-        <div class="met-sub">Pedidos meta: <span>${m.metaPedidos || "–"}</span></div>
+        <div class="met-sub">💰 <span>${_fmtMXN(m.metaMonto || 0)}</span></div>
+        ${m.metaLitros     ? `<div class="met-sub">💧 <span>${m.metaLitros} L</span></div>` : ""}
+        ${m.metaVisitas    ? `<div class="met-sub">📍 <span>${m.metaVisitas} vis.</span></div>` : ""}
+        ${m.metaProspectos ? `<div class="met-sub">🧲 <span>${m.metaProspectos} prosp.</span></div>` : ""}
+        ${m.semana         ? `<div class="met-sub" style="color:#7C3AED">S${m.semana}</div>` : ""}
       </div>
       <div class="met-sub-row" id="prog-extras-${esc(m.id)}"></div>
       <div class="met-actions">
@@ -288,11 +290,53 @@ async function _cargarProgreso(m) {
       (pct >= 100 ? " cumplida" : pct >= 70 ? "" : " alerta");
     labelEl.textContent = `${_fmtMXN(totalVendido)} / ${_fmtMXN(meta)} (${pct.toFixed(0)}%)`;
     if (extrasEl) extrasEl.innerHTML = `
-      <div class="met-sub">Visitas: <span>${numVisitas}${m.metaVisitas ? " / " + m.metaVisitas : ""}</span></div>
-      <div class="met-sub">Pedidos: <span>${numPedidos}${m.metaPedidos ? " / " + m.metaPedidos : ""}</span></div>
+      <div class="met-sub">📍 Visitas: <span>${numVisitas}${m.metaVisitas ? " / " + m.metaVisitas : ""}</span></div>
+      <div class="met-sub">🛒 Pedidos: <span>${numPedidos}</span></div>
     `;
   } catch (_) { /* sin datos = sin barra */ }
 }
+
+// ── Helpers del formulario ─────────────────────────────────────────────────────
+window._mfTipoCambio = () => {
+  const tipo = document.getElementById("mfTipo")?.value;
+  const wrap = document.getElementById("mfSemanaWrap");
+  if (wrap) wrap.style.display = tipo === "SEMANAL" ? "" : "none";
+};
+
+window._mfSemanaAutoFecha = async () => {
+  const semNum  = parseInt(document.getElementById("mfSemana")?.value);
+  const alias   = document.getElementById("mfAlias")?.value;
+  if (!semNum || !alias) return;
+
+  // Obtener diaLiquidacion del usuario
+  let diaLiq = 1; // default lunes
+  try {
+    const { getDoc, doc: fd } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { db: fdb } = await import("./firebase-config.js");
+    const snap = await getDoc(fd(fdb, "usuarios", alias));
+    if (snap.exists()) diaLiq = snap.data().diaLiquidacion ?? 1;
+  } catch (_) {}
+
+  // Calcular la fecha de inicio de S(n) del mes actual basada en diaLiquidacion
+  const hoy   = new Date();
+  const year  = hoy.getFullYear();
+  const month = hoy.getMonth();
+
+  // Encontrar el primer día del mes que coincide con diaLiq
+  const primerDia = new Date(year, month, 1);
+  let offset = (diaLiq - primerDia.getDay() + 7) % 7;
+  // Si el 1ro es el diaLiq, esa es S1; si no, el primer diaLiq después del 1ro es S1
+  const inicioS1 = offset === 0 ? new Date(year, month, 1) : new Date(year, month, 1 + offset);
+
+  const fi = new Date(inicioS1.getTime() + (semNum - 1) * 7 * 86400000);
+  const ff = new Date(fi.getTime() + 6 * 86400000);
+
+  const toInput = d => d.toISOString().slice(0, 10);
+  const fiEl = document.getElementById("mfFi");
+  const ffEl = document.getElementById("mfFf");
+  if (fiEl) fiEl.value = toInput(fi);
+  if (ffEl) ffEl.value = toInput(ff);
+};
 
 window._mEditar   = id => _abrirForm(id);
 window._mEliminar = async id => {
@@ -328,9 +372,19 @@ function _abrirForm(id) {
     <div class="mf-row">
       <div class="mf-field">
         <label>Tipo de período</label>
-        <select id="mfTipo">
-          <option value="MENSUAL" ${m?.tipo !== "SEMANAL" ? "selected" : ""}>Mensual</option>
-          <option value="SEMANAL" ${m?.tipo === "SEMANAL" ? "selected" : ""}>Semanal</option>
+        <select id="mfTipo" onchange="_mfTipoCambio()">
+          <option value="SEMANAL" ${m?.tipo !== "MENSUAL" ? "selected" : ""}>Semanal</option>
+          <option value="MENSUAL" ${m?.tipo === "MENSUAL" ? "selected" : ""}>Mensual</option>
+        </select>
+      </div>
+      <div class="mf-field" id="mfSemanaWrap">
+        <label>Semana del mes</label>
+        <select id="mfSemana" onchange="_mfSemanaAutoFecha()">
+          <option value="">Personalizada</option>
+          <option value="1">S1 — 1ª semana</option>
+          <option value="2">S2 — 2ª semana</option>
+          <option value="3">S3 — 3ª semana</option>
+          <option value="4">S4 — 4ª semana</option>
         </select>
       </div>
       <div class="mf-field">
@@ -351,18 +405,27 @@ function _abrirForm(id) {
         <input id="mfFf" type="date" value="${_dateToInput(_tsToDate(m?.fechaFin) || defaultFf)}" />
       </div>
     </div>
-    <div class="mf-field">
-      <label>Meta de venta (MXN)</label>
-      <input id="mfMonto" type="number" min="0" step="100" value="${m?.metaMonto ?? ""}" placeholder="0.00" />
+    <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px">
+      Metas por dimensión
     </div>
     <div class="mf-row">
       <div class="mf-field">
-        <label>Meta de visitas</label>
+        <label>💰 Venta (MXN)</label>
+        <input id="mfMonto" type="number" min="0" step="100" value="${m?.metaMonto ?? ""}" placeholder="0.00" />
+      </div>
+      <div class="mf-field">
+        <label>💧 Litros N10</label>
+        <input id="mfLitros" type="number" min="0" step="1" value="${m?.metaLitros ?? ""}" placeholder="0" />
+      </div>
+    </div>
+    <div class="mf-row">
+      <div class="mf-field">
+        <label>📍 Visitas a clientes</label>
         <input id="mfVisitas" type="number" min="0" value="${m?.metaVisitas ?? ""}" placeholder="0" />
       </div>
       <div class="mf-field">
-        <label>Meta de pedidos</label>
-        <input id="mfPedidos" type="number" min="0" value="${m?.metaPedidos ?? ""}" placeholder="0" />
+        <label>🧲 Prospectos nuevos</label>
+        <input id="mfProspectos" type="number" min="0" value="${m?.metaProspectos ?? ""}" placeholder="0" />
       </div>
     </div>
     <div class="mf-actions">
@@ -389,20 +452,24 @@ async function _guardarForm(id) {
   const activa = document.getElementById("mfActiva").value === "1";
   const fi     = document.getElementById("mfFi").value;
   const ff     = document.getElementById("mfFf").value;
-  const monto  = parseFloat(document.getElementById("mfMonto").value) || 0;
-  const vis    = parseInt(document.getElementById("mfVisitas").value) || 0;
-  const ped    = parseInt(document.getElementById("mfPedidos").value) || 0;
+  const monto     = parseFloat(document.getElementById("mfMonto").value) || 0;
+  const litros    = parseFloat(document.getElementById("mfLitros")?.value) || 0;
+  const vis       = parseInt(document.getElementById("mfVisitas").value) || 0;
+  const prosp     = parseInt(document.getElementById("mfProspectos")?.value) || 0;
+  const semana    = parseInt(document.getElementById("mfSemana")?.value) || 0;
 
   if (!alias) { alert("Selecciona un ingeniero."); return; }
   if (!fi || !ff) { alert("Las fechas son obligatorias."); return; }
 
   const datos = {
     alias, tipo, activa,
-    fechaInicio: new Date(fi + "T00:00:00").getTime(),
-    fechaFin:    new Date(ff + "T23:59:59").getTime(),
-    metaMonto:   monto,
-    metaVisitas: vis,
-    metaPedidos: ped,
+    fechaInicio:    new Date(fi + "T00:00:00").getTime(),
+    fechaFin:       new Date(ff + "T23:59:59").getTime(),
+    metaMonto:      monto,
+    metaLitros:     litros,
+    metaVisitas:    vis,
+    metaProspectos: prosp,
+    ...(semana ? { semana } : {}),
     actualizadoPor: Sesion.alias,
     updatedAt: serverTimestamp()
   };

@@ -81,9 +81,7 @@ function _html() {
           onclick="IngenierosUI.setFiltro('${f}')">
           ${{TODOS:"Todos",EN_JORNADA:"En jornada",FUERA:"Fuera"}[f]}
         </button>`).join("")}
-      <button class="xl-btn xl-btn-export" onclick="Ing_xlExport()" style="margin-left:auto">
-        ⬇ Exportar Excel
-      </button>
+      <button onclick="Ing_xlExport()" style="margin-left:auto;padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">⬇️ Excel</button>
       <button onclick="IngenierosUI.abrirAlta()"
         style="padding:6px 14px;border-radius:6px;border:none;background:#1B5E20;
           color:#fff;font-size:12px;font-weight:700;cursor:pointer">
@@ -167,6 +165,33 @@ function _html() {
         </div>
       </div>
 
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">
+            Día de liquidación <span style="color:#9CA3AF;font-weight:400">(inicio de semana)</span>
+          </label>
+          <select id="ing-f-dia-liq"
+            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
+              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+            <option value="1">Lunes</option>
+            <option value="2">Martes</option>
+            <option value="3">Miércoles</option>
+            <option value="4">Jueves</option>
+            <option value="5">Viernes</option>
+            <option value="6">Sábado</option>
+            <option value="0">Domingo</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">
+            Salario base semanal ($)
+          </label>
+          <input id="ing-f-salario" type="number" min="0" step="100" placeholder="0.00"
+            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
+              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+        </div>
+      </div>
+
       <div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;padding:10px 12px;
         font-size:11px;color:#713F12;margin-bottom:18px;line-height:1.5">
         ⚠️ Después de guardar, crea la cuenta de acceso en <strong>Firebase Console → Authentication</strong>
@@ -203,8 +228,10 @@ function _bindUI() {
     },
 
     abrirAlta() {
-      ["ing-f-alias","ing-f-nombre","ing-f-email","ing-f-tel","ing-f-zona","ing-f-vehiculo"]
+      ["ing-f-alias","ing-f-nombre","ing-f-email","ing-f-tel","ing-f-zona","ing-f-vehiculo","ing-f-salario"]
         .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+      const diaEl = document.getElementById("ing-f-dia-liq");
+      if (diaEl) diaEl.value = "1";
       const rol = document.getElementById("ing-f-rol");
       if (rol) rol.value = "INGENIERO";
       const err = document.getElementById("ing-modal-error");
@@ -217,14 +244,41 @@ function _bindUI() {
       document.getElementById("ing-modal").style.display = "none";
     },
 
+    async editarPerfil(alias) {
+      // Cargar datos actuales
+      const { getDoc, doc: fsDoc, setDoc: fsSet, serverTimestamp: sTs } =
+        await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      const { db: fdb } = await import("./firebase-config.js");
+      const snap = await getDoc(fsDoc(fdb, "usuarios", alias));
+      const u = snap.exists() ? snap.data() : {};
+
+      // Rellenar modal con datos existentes
+      document.getElementById("ing-f-alias").value     = alias;
+      document.getElementById("ing-f-nombre").value    = u.nombre || "";
+      document.getElementById("ing-f-email").value     = u.email  || "";
+      document.getElementById("ing-f-tel").value       = u.telefono || "";
+      document.getElementById("ing-f-zona").value      = u.zona    || "";
+      document.getElementById("ing-f-vehiculo").value  = u.vehiculo || "";
+      document.getElementById("ing-f-salario").value   = u.salarioBase || "";
+      const diaEl = document.getElementById("ing-f-dia-liq");
+      if (diaEl) diaEl.value = String(u.diaLiquidacion ?? 1);
+      const rolEl = document.getElementById("ing-f-rol");
+      if (rolEl && u.rol) rolEl.value = u.rol;
+      // Alias no editable en modo edición
+      document.getElementById("ing-f-alias").readOnly = true;
+      document.getElementById("ing-modal").style.display = "flex";
+    },
+
     async guardarAlta() {
       const alias   = document.getElementById("ing-f-alias").value.trim().toLowerCase().replace(/\s+/g,"");
       const nombre  = document.getElementById("ing-f-nombre").value.trim();
       const email   = document.getElementById("ing-f-email").value.trim().toLowerCase();
       const tel     = document.getElementById("ing-f-tel").value.trim();
       const zona    = document.getElementById("ing-f-zona").value.trim();
-      const vehiculo= document.getElementById("ing-f-vehiculo").value.trim();
-      const rol     = document.getElementById("ing-f-rol").value;
+      const vehiculo    = document.getElementById("ing-f-vehiculo").value.trim();
+      const rol         = document.getElementById("ing-f-rol").value;
+      const diaLiq      = parseInt(document.getElementById("ing-f-dia-liq")?.value ?? "1");
+      const salarioBase = parseFloat(document.getElementById("ing-f-salario")?.value) || 0;
 
       const errEl = document.getElementById("ing-modal-error");
       const mostrarError = msg => { errEl.textContent = msg; errEl.style.display = "block"; };
@@ -248,7 +302,8 @@ function _bindUI() {
 
         const ref = doc(fdb, "usuarios", alias);
         const existe = await getDoc(ref);
-        if (existe.exists()) {
+        const esEdicion = document.getElementById("ing-f-alias").readOnly;
+        if (!esEdicion && existe.exists()) {
           mostrarError(`Ya existe un usuario con alias "${alias}". Usa uno diferente.`);
           if (btn) { btn.disabled = false; btn.textContent = "Guardar"; }
           return;
@@ -256,16 +311,21 @@ function _bindUI() {
 
         await setDoc(ref, {
           alias, nombre, email,
-          ...(tel      ? { telefono: tel }      : {}),
-          ...(zona     ? { zona }               : {}),
-          ...(vehiculo ? { vehiculo }            : {}),
+          ...(tel        ? { telefono: tel }           : {}),
+          ...(zona       ? { zona }                    : {}),
+          ...(vehiculo   ? { vehiculo }                : {}),
+          diaLiquidacion: diaLiq,
+          salarioBase,
           rol,
           activo: true,
           creadoPor: window.Sesion?.alias ?? "web",
           creadoEn:  serverTimestamp()
         });
 
-        window.toast?.(`Ingeniero "${alias}" registrado correctamente.`, "success");
+        // Restaurar alias editable para la próxima apertura
+        document.getElementById("ing-f-alias").readOnly = false;
+        const esEd = document.getElementById("ing-f-alias").readOnly;
+        window.toast?.(`Ingeniero "${alias}" ${esEd ? "actualizado" : "registrado"} correctamente.`, "success");
         this.cerrarAlta();
       } catch(e) {
         mostrarError("Error al guardar: " + e.message);
@@ -366,6 +426,24 @@ function _render() {
             style="display:block;font-size:11px;color:#1565C0;text-decoration:none;font-weight:600">
             📍 Ver en Google Maps</a>`
         : `<span style="font-size:11px;color:#9CA3AF">Sin ubicación registrada</span>`}
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--c-border,#E5E7EB);
+        display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        ${u.diaLiquidacion !== undefined
+          ? `<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;padding:2px 7px;border-radius:6px;font-weight:600">
+              📅 Liq. ${["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"][u.diaLiquidacion ?? 1]}
+             </span>`
+          : ""}
+        ${u.salarioBase > 0
+          ? `<span style="font-size:10px;background:#F0FDF4;color:#15803D;padding:2px 7px;border-radius:6px;font-weight:600">
+              💵 $${u.salarioBase.toLocaleString("es-MX")}/sem
+             </span>`
+          : ""}
+        <button onclick="IngenierosUI.editarPerfil('${u.alias}')"
+          style="margin-left:auto;font-size:10px;padding:3px 9px;border:1px solid var(--c-border,#D1D5DB);
+            border-radius:5px;background:transparent;cursor:pointer;color:var(--c-text,#111)">
+          ✏️ Editar
+        </button>
+      </div>
     </div>`;
   }).join("");
 }
