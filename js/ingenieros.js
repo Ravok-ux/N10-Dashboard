@@ -195,27 +195,21 @@ function _html() {
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;
         padding:10px 14px;border:1px solid var(--c-border,#E5E7EB);border-radius:8px;
         background:var(--c-surface,#fff)">
-        <label style="font-size:12px;font-weight:600;color:var(--c-text,#111);flex:1;margin:0">
+        <div style="font-size:12px;font-weight:600;color:var(--c-text,#111);flex:1">
           Cuenta activa
           <span style="display:block;font-weight:400;color:#6B7280;font-size:11px">
             Desactivar impide el acceso a la plataforma y a la APK
           </span>
-        </label>
-        <label style="position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0">
-          <input type="checkbox" id="ing-f-activo" checked
-            style="opacity:0;width:0;height:0;position:absolute">
-          <span onclick="(function(){var cb=document.getElementById('ing-f-activo');cb.checked=!cb.checked;
-            this.style.background=cb.checked?'#16a34a':'#D1D5DB';
-            document.getElementById('ing-toggle-knob').style.transform=cb.checked?'translateX(18px)':'translateX(0)'
-            }).call(this)"
-            id="ing-toggle-activo"
-            style="position:absolute;inset:0;border-radius:11px;background:#16a34a;cursor:pointer;
-              transition:background .2s">
-            <span style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;
-              background:#fff;transition:transform .2s;
-              transform:translateX(18px)" id="ing-toggle-knob"></span>
-          </span>
-        </label>
+        </div>
+        <input type="checkbox" id="ing-f-activo" checked style="display:none">
+        <div id="ing-toggle-activo"
+          onclick="(function(t){var cb=document.getElementById('ing-f-activo');cb.checked=!cb.checked;t.style.background=cb.checked?'#16a34a':'#D1D5DB';document.getElementById('ing-toggle-knob').style.left=cb.checked?'22px':'3px';})(this)"
+          style="position:relative;width:44px;height:24px;border-radius:12px;background:#16a34a;cursor:pointer;
+            transition:background .2s;flex-shrink:0">
+          <div id="ing-toggle-knob"
+            style="position:absolute;top:3px;left:22px;width:18px;height:18px;border-radius:50%;
+              background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)"></div>
+        </div>
       </div>
 
       <div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;padding:10px 12px;
@@ -296,7 +290,7 @@ function _bindUI() {
       if (activoCb) activoCb.checked = activoVal;
       if (toggleBg) toggleBg.style.background = activoVal ? "#16a34a" : "#D1D5DB";
       const knob = document.getElementById("ing-toggle-knob");
-      if (knob) knob.style.transform = activoVal ? "translateX(18px)" : "translateX(0)";
+      if (knob) knob.style.left = activoVal ? "22px" : "3px";
       // Alias no editable en modo edición
       document.getElementById("ing-f-alias").readOnly = true;
       document.getElementById("ing-modal").style.display = "flex";
