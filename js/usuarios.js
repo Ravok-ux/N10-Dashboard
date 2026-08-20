@@ -5,7 +5,7 @@
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
 import {
-  collection, doc, onSnapshot, updateDoc, setDoc,
+  collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc,
   serverTimestamp, query, orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -178,6 +178,27 @@ const PRESET = {
     PUEDE_CONFIG_COMISIONES:  false,
     PUEDE_CARTERA_GLOBAL:     true,
     PUEDE_MODULO_JURIDICO:    false
+  },
+  MESA_CONTROL: {
+    PUEDE_EDITAR_PRECIO:      false,
+    PUEDE_CANCELAR_PEDIDO:    true,
+    PUEDE_VER_CARTERA_GLOBAL: true,
+    PUEDE_IMPORTAR_CATALOGO:  false,
+    PUEDE_EXPORTAR_BACKUP:    true,
+    PUEDE_REGISTRAR_REMISION: true,
+    PUEDE_REGISTRAR_ABONO:    true,
+    PUEDE_CREAR_CLIENTES:     true,
+    PUEDE_ACCESO_STOCK:       true,
+    PUEDE_CREAR_PEDIDOS:      true,
+    PUEDE_VER_PEDIDOS:        true,
+    PUEDE_RUTA_OPTIMA:        false,
+    PUEDE_ALMACEN_ENTRADAS:   false,
+    PUEDE_ALMACEN_INVENTARIO: false,
+    PUEDE_ORDENES_COMPRA:     false,
+    PUEDE_VER_COMISIONES:     false,
+    PUEDE_CONFIG_COMISIONES:  false,
+    PUEDE_CARTERA_GLOBAL:     false,
+    PUEDE_MODULO_JURIDICO:    false
   }
 };
 
@@ -312,6 +333,7 @@ function _html() {
           <option value="ADMINISTRADOR">ADMINISTRADOR — operaciones completas</option>
           <option value="ALMACENISTA">ALMACENISTA — almacén y stock</option>
           <option value="JURIDICO">JURIDICO — cobranza legal</option>
+          <option value="MESA_CONTROL">MESA_CONTROL — gestión de pedidos y cartera</option>
           ${Sesion.esSuperAdmin() ? '<option value="SUPER_ADMIN">SUPER_ADMIN</option>' : ""}
         </select>
       </div>
@@ -331,6 +353,58 @@ function _html() {
     </div>
   </div>
 
+  <!-- Modal: editar usuario -->
+  <div id="modal-editar-usuario" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-title">Editar usuario</div>
+      <div class="form-group">
+        <label class="form-label">Alias / Nombre</label>
+        <input id="eu-alias" type="text" class="form-input" placeholder="Ramírez E.">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Correo electrónico</label>
+        <input id="eu-email" type="email" class="form-input" placeholder="usuario@ejemplo.mx">
+      </div>
+      <div style="font-size:10.5px;color:#9CA3AF;padding:8px 10px;background:var(--c-surface);
+        border-radius:6px;border:1px solid var(--c-border);margin-top:4px">
+        ℹ️ Cambiar el correo aquí solo actualiza el perfil de Firestore.
+        El acceso de Firebase Auth permanece con el correo original.
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="UsuariosUI.cerrarModal()">Cancelar</button>
+        <button class="btn-primary" style="width:auto;padding:8px 20px"
+          onclick="UsuariosUI.guardarEditar()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: eliminar permanentemente (solo SUPER_ADMIN) -->
+  <div id="modal-eliminar-usuario" class="modal-overlay hidden">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-title" style="color:#DC2626">⚠️ Eliminar usuario</div>
+      <div id="del-info" style="font-size:12px;color:var(--c-text);margin-bottom:14px;line-height:1.6"></div>
+      <div style="background:#FEE2E2;border:1px solid #FECACA;border-radius:8px;padding:10px 14px;
+        font-size:11px;color:#7F1D1D;margin-bottom:16px;line-height:1.6">
+        Esta acción es <strong>permanente e irreversible</strong>. El documento se borrará de Firestore.<br>
+        Para revocar el acceso de Firebase Auth deberás eliminarlo también desde la consola de Firebase.
+      </div>
+      <div style="font-size:11.5px;color:var(--c-text);margin-bottom:6px">
+        Escribe <strong id="del-confirm-hint" style="color:#DC2626"></strong> para confirmar:
+      </div>
+      <input id="del-confirm-input" type="text" class="form-input"
+        placeholder="escribe el alias aquí" style="border-color:#DC2626;margin-bottom:16px"
+        oninput="UsuariosUI._validarConfirmDelete()">
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="UsuariosUI.cerrarModal()">Cancelar</button>
+        <button id="del-confirm-btn" class="btn-primary"
+          style="background:#DC2626;border-color:#DC2626;opacity:.4;cursor:not-allowed;width:auto;padding:8px 20px"
+          onclick="UsuariosUI._confirmarEliminar()" disabled>
+          Eliminar permanentemente
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: cambiar rol -->
   <div id="modal-cambiar-rol" class="modal-overlay hidden">
     <div class="modal">
@@ -346,6 +420,7 @@ function _html() {
           <option value="ADMINISTRADOR">ADMINISTRADOR</option>
           <option value="ALMACENISTA">ALMACENISTA</option>
           <option value="JURIDICO">JURIDICO</option>
+          <option value="MESA_CONTROL">MESA_CONTROL</option>
           ${Sesion.esSuperAdmin() ? '<option value="SUPER_ADMIN">SUPER_ADMIN</option>' : ""}
         </select>
       </div>
@@ -467,13 +542,24 @@ function _escucharUsuarios() {
               ${esSA
                 ? `<span style="font-size:9px;color:#9CA3AF;font-style:italic">Implícito</span>`
                 : `<button class="action-btn edit"
+                     onclick="UsuariosUI.abrirEditar('${uid}','${u.alias?.replace(/'/g,"\\'")}','${(u.email||"").replace(/'/g,"\\'")}')">
+                     Editar
+                   </button>
+                   <button class="action-btn edit"
                      onclick="UsuariosUI.abrirCambioRol('${uid}','${u.rol}','${u.alias}')">
                      Rol
                    </button>
                    <button class="action-btn del"
                      onclick="UsuariosUI.toggleActivo('${uid}',${!activo})">
                      ${activo ? "Dar baja" : "Reactivar"}
-                   </button>`}
+                   </button>
+                   ${Sesion.esSuperAdmin()
+                     ? `<button class="action-btn del"
+                          style="background:#7f1d1d;border-color:#991b1b;color:#fca5a5"
+                          onclick="UsuariosUI.eliminarPermanente('${uid}','${(u.alias||u.email||"").replace(/'/g,"\\'")}')">
+                          🗑 Eliminar
+                        </button>`
+                     : ""}`}
             </div>
           </td>
         </tr>`;
@@ -554,6 +640,44 @@ function _bindAcciones() {
       }
     },
 
+    abrirEditar(uid, alias, email) {
+      _uidEditando = uid;
+      document.getElementById("eu-alias").value = alias;
+      document.getElementById("eu-email").value = email;
+      const overlayEl = document.getElementById("modal-editar-usuario");
+      overlayEl.classList.remove("hidden");
+      const cerrar = () => this.cerrarModal();
+      overlayEl.addEventListener("click", e => { if (e.target === overlayEl) cerrar(); }, { once: true });
+      const onKey = e => { if (e.key === "Escape") { cerrar(); document.removeEventListener("keydown", onKey); } };
+      document.addEventListener("keydown", onKey);
+    },
+
+    async guardarEditar() {
+      if (!_uidEditando) return;
+      const alias = document.getElementById("eu-alias").value.trim();
+      const email = document.getElementById("eu-email").value.trim().toLowerCase();
+      if (!alias || !email) { window.toast?.("Completa todos los campos", "error"); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { window.toast?.("Correo inválido", "error"); return; }
+      if (alias.length > 60) { window.toast?.("El alias no puede superar 60 caracteres", "error"); return; }
+      if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ0-9 _\-\.]+$/.test(alias)) {
+        window.toast?.("El alias contiene caracteres no permitidos", "error"); return;
+      }
+      try {
+        await updateDoc(doc(db, "usuarios", _uidEditando), {
+          alias, email,
+          modificadoPor: Sesion.uid,
+          modificadoEn: serverTimestamp()
+        });
+        window.toast?.("Usuario actualizado", "success");
+        this.cerrarModal();
+      } catch (e) {
+        const msg = /permission|PERMISSION/.test(e.message || "")
+          ? "Sin permisos para realizar esta acción."
+          : "Error al guardar. Verifica tu conexión e intenta de nuevo.";
+        window.toast?.(msg, "error");
+      }
+    },
+
     abrirCambioRol(uid, rolActual, alias) {
       _uidEditando = uid;
       document.getElementById("cr-usuario-info").textContent =
@@ -618,6 +742,57 @@ function _bindAcciones() {
           ? "Sin permisos para realizar esta acción."
           : "Ocurrió un error. Intenta de nuevo.";
         window.toast?.(msg, "error");
+      }
+    },
+
+    eliminarPermanente(uid, alias) {
+      if (!Sesion.esSuperAdmin()) {
+        window.toast?.("Solo SUPER_ADMIN puede eliminar usuarios permanentemente.", "error");
+        return;
+      }
+      _uidEditando = uid;
+      document.getElementById("del-info").innerHTML =
+        `Vas a eliminar permanentemente al usuario <strong>${alias}</strong> (ID: <code style="font-size:10px">${uid}</code>).`;
+      document.getElementById("del-confirm-hint").textContent = alias;
+      document.getElementById("del-confirm-input").value = "";
+      const btn = document.getElementById("del-confirm-btn");
+      btn.disabled = true;
+      btn.style.opacity = ".4";
+      btn.style.cursor = "not-allowed";
+      const overlay = document.getElementById("modal-eliminar-usuario");
+      overlay.classList.remove("hidden");
+      const cerrar = () => this.cerrarModal();
+      overlay.addEventListener("click", e => { if (e.target === overlay) cerrar(); }, { once: true });
+      const onKey = e => { if (e.key === "Escape") { cerrar(); document.removeEventListener("keydown", onKey); } };
+      document.addEventListener("keydown", onKey);
+    },
+
+    _validarConfirmDelete() {
+      const input = document.getElementById("del-confirm-input").value.trim();
+      const hint  = document.getElementById("del-confirm-hint").textContent;
+      const btn   = document.getElementById("del-confirm-btn");
+      const ok    = input === hint;
+      btn.disabled = !ok;
+      btn.style.opacity = ok ? "1" : ".4";
+      btn.style.cursor  = ok ? "pointer" : "not-allowed";
+    },
+
+    async _confirmarEliminar() {
+      if (!_uidEditando || !Sesion.esSuperAdmin()) return;
+      const btn = document.getElementById("del-confirm-btn");
+      btn.disabled = true;
+      btn.textContent = "Eliminando…";
+      try {
+        await deleteDoc(doc(db, "usuarios", _uidEditando));
+        window.toast?.("Usuario eliminado permanentemente.", "success");
+        this.cerrarModal();
+      } catch (e) {
+        const msg = /permission|PERMISSION/.test(e.message || "")
+          ? "Sin permisos para eliminar."
+          : "Error al eliminar. Intenta de nuevo.";
+        window.toast?.(msg, "error");
+        btn.disabled = false;
+        btn.textContent = "Eliminar permanentemente";
       }
     },
 
