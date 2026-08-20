@@ -42,6 +42,7 @@ import { ObservabilidadModule }   from "./observabilidad.js";
 import { MiRhModule }             from "./mi-rh.js";
 import { ManualesModule }          from "./manuales.js";
 import { ConfigInteresesModule }   from "./config-intereses.js";
+import { mount as rcMount, destroy as rcDestroy } from "./reportes-custom.js";
 import { iniciarNotificaciones, detenerNotificaciones } from "./notificaciones.js";
 import { iniciarFCM } from "./fcm.js";
 
@@ -181,6 +182,7 @@ const MODULES = {
   config:           ConfigModule,
   config_intereses: ConfigInteresesModule,
   comentarios:      ComentariosModule,
+  reportes_custom:  { mount: rcMount, destroy: rcDestroy },
 };
 
 let vistaActual = null;
@@ -411,7 +413,7 @@ function _navigate(viewId) {
     clientes:"Clientes", auditoria:"Auditoría", devoluciones:"Devoluciones",
     rh:"Recursos Humanos", mi_rh:"Mi RH", chat:"Chat interno",
     juridico:"Jurídico", observabilidad:"Observabilidad", manuales:"Manuales y Políticas",
-    cotizaciones:"Cotizaciones" };
+    cotizaciones:"Cotizaciones", reportes_custom:"Reportes Configurables" };
   const subs = { dashboard:"Resumen del día", mapa:"Ingenieros en campo",
     feed:"Actividades globales", usuarios:"Gestión de privilegios",
     reportes:"Generación de reportes", comisiones:"Nómina e incentivos por ingeniero",
@@ -429,7 +431,8 @@ function _navigate(viewId) {
     juridico:"Acuerdos de congelamiento y cobranza legal",
     observabilidad:"Salud del sistema y métricas operativas",
     manuales:"Diagramas de flujo y políticas operativas",
-    cotizaciones:"Cotizaciones activas y vencidas" };
+    cotizaciones:"Cotizaciones activas y vencidas",
+    reportes_custom:"Reportes con campos configurables por fuente de datos" };
   document.getElementById("tb-bc").innerHTML =
     `${bc[viewId] ?? viewId} <span>/ ${subs[viewId] ?? ""}</span>`;
   document.getElementById("subhdr-title").textContent = bc[viewId] ?? viewId;
@@ -626,6 +629,7 @@ function _aplicarVisibilidadSidebar() {
     config:           pv("GERENTE","ADMINISTRADOR"),
     config_intereses: SA,  // solo SUPER_ADMIN
     reportes:         pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
+    reportes_custom:  pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
   };
 
   // Aplicar visibilidad a cada sb-item
@@ -649,7 +653,7 @@ function _aplicarVisibilidadSidebar() {
   // Operaciones: usuarios → logistica (aprox las primeras 14 entradas del sbi-admin)
   const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","devoluciones","chat","rh","crm","logistica"];
   const ctrlViews = ["precios","geocercas","metas","autorizaciones","auditoria"];
-  const cfgViews  = ["formularios","promociones","precios_segmento","productos","config","config_intereses","reportes"];
+  const cfgViews  = ["formularios","promociones","precios_segmento","productos","config","config_intereses","reportes","reportes_custom"];
 
   const anyVis = views => views.some(v => vis[v]);
   const showEl = (id, show) => { const e = $sup(id); if (e) e.style.display = show ? "" : "none"; };

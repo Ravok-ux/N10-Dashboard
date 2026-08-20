@@ -267,12 +267,12 @@ async function _generar() {
       // Aging de cartera: sin filtro de fecha, enriquecer con motor de intereses
       const snap = await getDocs(query(
         collection(db, fuente.collection),
-        where("status", "!=", "PAGADO"),
-        orderBy("status"),
         orderBy("fechaVencimiento"),
         fsLimit(500)
       ));
-      const raw = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+      const raw = snap.docs
+        .map(d => ({ _id: d.id, ...d.data() }))
+        .filter(r => r.status !== "PAGADO");
       docs = enriquecerRemisiones(raw);
     } else {
       const snap = await getDocs(query(
