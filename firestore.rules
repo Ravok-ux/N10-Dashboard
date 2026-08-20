@@ -548,14 +548,36 @@ service cloud.firestore {
 
     // ── /mensajes_internos ────────────────────────────────────────────────────
     match /mensajes_internos/{msgId} {
-      // Leer: cualquier usuario autenticado activo
       allow read: if cuentaActiva();
-      // Crear: cualquier usuario activo, solo sus propios campos
       allow create: if cuentaActiva() && esRolConocido()
                     && request.resource.data.uid == request.auth.uid;
-      // Sin edición ni borrado de mensajes (integridad del historial)
-      allow update: if false;
+      // Reacciones: cualquier usuario activo puede agregar/quitar reacciones
+      // Pin: solo admins pueden fijar/desfijar mensajes
+      allow update: if cuentaActiva() && (
+        // Reacciones: solo se modifican campos reacciones.*
+        (esRolConocido() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reacciones'])) ||
+        // Pin/unpin: solo admins
+        (esAdminOSuperior() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['pinned','pinnedBy','pinnedAt']))
+      );
       allow delete: if esSuperAdmin();
+    }
+
+    // ── /canales_chat ─────────────────────────────────────────────────────────
+    match /canales_chat/{canalId} {
+      allow read: if cuentaActiva() && esRolConocido();
+      allow create, update: if cuentaActiva() && esAdminOSuperior()
+                            && request.resource.data.nombre is string
+                            && request.resource.data.nombre.size() > 0;
+      allow delete: if cuentaActiva() && esAdminOSuperior();
+    }
+
+    // ── /typing_indicators ────────────────────────────────────────────────────
+    match /typing_indicators/{canalId} {
+      allow read: if cuentaActiva() && esRolConocido();
+      allow write: if cuentaActiva() && esRolConocido();
     }
 
     // ── /configuracion/alertas_cobranza ───────────────────────────────────────
@@ -850,6 +872,35 @@ service cloud.firestore {
                    && request.resource.data.titulo.size() > 0
                    && request.resource.data.categoria in ['flujo','politica','proceso','formato','otro']
                    && request.resource.data.tipo in ['texto','mermaid'];
+    }
+
+    // ── /comisiones_n10 ───────────────────────────────────────────────────────
+    match /comisiones_n10/{docId} {
+      // Lectura: admins y el propio ingeniero (su uid está en el docId)
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior()
+                      || request.auth.uid == resource.data.uid
+                      || tieneFlag('PUEDE_VER_COMISIONES'));
+      // Escritura: solo via motor de comisiones (admins o el propio ingeniero con flag)
+      allow write: if cuentaActiva()
+                   && (esAdminOSuperior() || tieneFlag('PUEDE_VER_COMISIONES'));
+    }
+
+    // ── /config_catalogo ──────────────────────────────────────────────────────
+    match /config_catalogo/{docId} {
+      // Cualquier usuario activo puede leer el catálogo de marcas/categorías
+      allow read: if cuentaActiva() && esRolConocido();
+      // Solo GERENTE/ADMIN pueden modificar el catálogo
+      allow write: if cuentaActiva()
+                   && miRol() in ['SUPER_ADMIN', 'GERENTE', 'ADMINISTRADOR'];
+    }
+
+    // ── /config_intereses ────────────────────────────────────────────────────
+    // Lectura: cualquier rol conocido (los módulos la consultan para obtener la tasa)
+    // Escritura: solo SUPER_ADMIN (tasa global e historial de cambios)
+    match /config_intereses/{docId} {
+      allow read: if cuentaActiva() && esRolConocido();
+      allow write: if cuentaActiva() && esSuperAdmin();
     }
 
     // ── Bloqueo por defecto ───────────────────────────────────────────────────

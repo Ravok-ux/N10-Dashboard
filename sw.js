@@ -1,7 +1,7 @@
 // Service Worker — N-10 ERP
 // Estrategia: Cache-first para assets estáticos, Network-first para datos dinámicos
 
-const CACHE_NAME = 'n10-erp-v34';
+const CACHE_NAME = 'n10-erp-v42';
 
 const STATIC_ASSETS = [
   '/',
@@ -20,6 +20,8 @@ const STATIC_ASSETS = [
   '/js/reportes.js',
   '/js/comisiones.js',
   '/js/remisiones.js',
+  '/js/intereses-engine.js',
+  '/js/config-intereses.js',
   '/js/feed.js',
   '/js/mapa.js',
   '/js/geocercas.js',

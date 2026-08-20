@@ -41,6 +41,7 @@ import { JuridicoModule }         from "./juridico.js";
 import { ObservabilidadModule }   from "./observabilidad.js";
 import { MiRhModule }             from "./mi-rh.js";
 import { ManualesModule }          from "./manuales.js";
+import { ConfigInteresesModule }   from "./config-intereses.js";
 import { iniciarNotificaciones, detenerNotificaciones } from "./notificaciones.js";
 import { iniciarFCM } from "./fcm.js";
 
@@ -177,8 +178,9 @@ const MODULES = {
   precios_segmento: SegmentoPrecioModule,
   clientes:         ClientesModule,
   manuales:         ManualesModule,
-  config:       ConfigModule,
-  comentarios:  ComentariosModule,
+  config:           ConfigModule,
+  config_intereses: ConfigInteresesModule,
+  comentarios:      ComentariosModule,
 };
 
 let vistaActual = null;
@@ -254,11 +256,21 @@ function _initShell() {
   // Iniciar FCM push notifications (después de que el SW esté listo)
   setTimeout(() => iniciarFCM(), 3000);
 
-  // Sidebar nav — event delegation con guard de descarte
+  // Sidebar nav — event delegation con guard de descarte + ripple
   document.getElementById("sidebar").addEventListener("click", e => {
     const item = e.target.closest("[data-view]");
     if (!item) return;
     e.preventDefault();
+    // Ripple
+    const rect = item.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    const x = e.clientX - rect.left - size / 2;
+    const y = e.clientY - rect.top  - size / 2;
+    const ripple = document.createElement("span");
+    ripple.className = "sb-ripple";
+    ripple.style.cssText = `width:${size}px;height:${size}px;left:${x}px;top:${y}px`;
+    item.appendChild(ripple);
+    ripple.addEventListener("animationend", () => ripple.remove());
     _navigateGuarded(item.dataset.view);
   });
 
@@ -391,10 +403,15 @@ function _navigate(viewId) {
     cobranza:"Cobranza", usuarios:"Usuarios y flags", reportes:"Reportes",
     comisiones:"Comisiones", compras:"Órdenes de compra", kardex:"Kardex",
     cartera:"Cartera vencida", visitas:"Visitas", precios:"Precios y costos", config:"Config. tickets",
+    config_intereses:"Tasas de interés",
     geocercas:"Geocercas", metas:"Metas de venta", autorizaciones:"Autorizaciones",
     formularios:"Formularios", promociones:"Recompensas y lealtad", precios_segmento:"Precios por segmento",
     productos:"Control de productos", comentarios:"Comentarios de clientes",
-    inventario:"Inventario", crm:"CRM — Prospectos", logistica:"Logística de visitas" };
+    inventario:"Inventario", crm:"CRM — Prospectos", logistica:"Logística de visitas",
+    clientes:"Clientes", auditoria:"Auditoría", devoluciones:"Devoluciones",
+    rh:"Recursos Humanos", mi_rh:"Mi RH", chat:"Chat interno",
+    juridico:"Jurídico", observabilidad:"Observabilidad", manuales:"Manuales y Políticas",
+    cotizaciones:"Cotizaciones" };
   const subs = { dashboard:"Resumen del día", mapa:"Ingenieros en campo",
     feed:"Actividades globales", usuarios:"Gestión de privilegios",
     reportes:"Generación de reportes", comisiones:"Nómina e incentivos por ingeniero",
@@ -405,7 +422,14 @@ function _navigate(viewId) {
     productos:"Gestión del catálogo", comentarios:"Notas y seguimiento de clientes",
     inventario:"Stock en tiempo real por producto",
     crm:"Pipeline de prospectos y conversión a clientes",
-    logistica:"Visitas programadas por frecuencia de cliente" };
+    logistica:"Visitas programadas por frecuencia de cliente",
+    clientes:"Directorio y saldos por cliente", auditoria:"Registro de cambios críticos",
+    devoluciones:"Gestión de devoluciones y créditos", rh:"Gestión de personal",
+    mi_rh:"Mi expediente y nómina", chat:"Mensajería interna del equipo",
+    juridico:"Acuerdos de congelamiento y cobranza legal",
+    observabilidad:"Salud del sistema y métricas operativas",
+    manuales:"Diagramas de flujo y políticas operativas",
+    cotizaciones:"Cotizaciones activas y vencidas" };
   document.getElementById("tb-bc").innerHTML =
     `${bc[viewId] ?? viewId} <span>/ ${subs[viewId] ?? ""}</span>`;
   document.getElementById("subhdr-title").textContent = bc[viewId] ?? viewId;
@@ -600,6 +624,7 @@ function _aplicarVisibilidadSidebar() {
     precios_segmento: pv("GERENTE","ADMINISTRADOR"),
     productos:        pvF("PUEDE_IMPORTAR_CATALOGO","GERENTE","ALMACENISTA","ADMINISTRADOR"),
     config:           pv("GERENTE","ADMINISTRADOR"),
+    config_intereses: SA,  // solo SUPER_ADMIN
     reportes:         pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
   };
 
@@ -624,7 +649,7 @@ function _aplicarVisibilidadSidebar() {
   // Operaciones: usuarios → logistica (aprox las primeras 14 entradas del sbi-admin)
   const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","devoluciones","chat","rh","crm","logistica"];
   const ctrlViews = ["precios","geocercas","metas","autorizaciones","auditoria"];
-  const cfgViews  = ["formularios","promociones","precios_segmento","productos","config","reportes"];
+  const cfgViews  = ["formularios","promociones","precios_segmento","productos","config","config_intereses","reportes"];
 
   const anyVis = views => views.some(v => vis[v]);
   const showEl = (id, show) => { const e = $sup(id); if (e) e.style.display = show ? "" : "none"; };

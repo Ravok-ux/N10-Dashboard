@@ -1709,3 +1709,185 @@ function _tituloFCM(tipo) {
   };
   return MAP[tipo] || "🔔 N-10 ERP";
 }
+
+// ═══════════════════════════════════════════════════════════════
+// INTERESES — Motor de cálculo (replica de intereses-engine.js)
+// ═══════════════════════════════════════════════════════════════
+
+const MS_DIA              = 86_400_000;
+const TASA_SEMANAL_DEF    = 0.01;
+const DIAS_GRACIA_DEF     = 14;
+const STATUS_UMBRALES     = [
+  { max: -61, status: "CRÍTICO"    },
+  { max: -43, status: "GRAVE"      },
+  { max: -29, status: "MODERADO"   },
+  { max: -15, status: "LEVE"       },
+  { max:  14, status: "POR_VENCER" },
+];
+
+function _calcularRemision(r, hoy = new Date()) {
+  const creacion    = r.fechaCreacion instanceof FSTimestamp
+    ? r.fechaCreacion.toDate() : new Date(r.fechaCreacion);
+  const vencimiento = r.fechaVencimiento instanceof FSTimestamp
+    ? r.fechaVencimiento.toDate() : new Date(r.fechaVencimiento);
+  const diasGracia  = r.diasGracia  ?? DIAS_GRACIA_DEF;
+  const tasaDiaria  = r.tasaDiaria  ?? (TASA_SEMANAL_DEF / 7);
+
+  const diasTranscurridos = Math.floor((hoy - creacion)    / MS_DIA);
+  const diasAtraso        = Math.floor((vencimiento - hoy) / MS_DIA);
+  const totalAbonado      = r.totalAbonado ?? 0;
+  const saldoCapital      = Math.max(0, r.montoOriginal - totalAbonado);
+
+  const interesActivo = r.status !== "PAGADO"
+    && diasTranscurridos > diasGracia && saldoCapital > 0;
+
+  const interesGenerado = interesActivo
+    ? Math.round(diasTranscurridos * tasaDiaria * r.montoOriginal * 100) / 100 : 0;
+  const totalDeuda    = r.montoOriginal + interesGenerado;
+  const deudaRestante = Math.max(0, totalDeuda - totalAbonado);
+  const interesPorDia = interesActivo
+    ? Math.round(tasaDiaria * r.montoOriginal * 100) / 100 : 0;
+
+  let status = "FUTURA";
+  if (r.status === "PAGADO") {
+    status = "PAGADO";
+  } else {
+    for (const u of STATUS_UMBRALES) {
+      if (diasAtraso <= u.max) { status = u.status; break; }
+    }
+  }
+
+  return { diasTranscurridos, diasAtraso, saldoCapital, interesActivo,
+           interesGenerado, interesPorDia, totalDeuda, deudaRestante, status };
+}
+
+// ── Semáforo de cliente ──────────────────────────────────────
+function _semaforoCliente(diasMaxAtraso) {
+  if (diasMaxAtraso <= 0)  return "VERDE";
+  if (diasMaxAtraso <= 14) return "POR_VENCER";
+  if (diasMaxAtraso <= 28) return "LEVE";
+  if (diasMaxAtraso <= 42) return "MODERADO";
+  if (diasMaxAtraso <= 60) return "GRAVE";
+  return "CRÍTICO";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// F1. onRemisionCreada — Congela tasaDiaria al crear una nota
+//     Trigger: remisiones_credito/{id} onCreate
+//     Propósito: El APK crea la nota sin tasaDiaria; esta función
+//     la lee de config_intereses/default y la estampa en el doc.
+// ═══════════════════════════════════════════════════════════════
+exports.onRemisionCreada = onDocumentCreated(
+  { document: "remisiones_credito/{remisionId}", region: "us-central1" },
+  async (event) => {
+    const data = event.data.data();
+    const id   = event.params.remisionId;
+
+    // Si ya tiene tasaDiaria (fue creada desde web con tasa pre-cargada), no tocar
+    if (data.tasaDiaria != null) {
+      logger.info(`[onRemisionCreada] ${id} ya tiene tasaDiaria=${data.tasaDiaria} — sin cambios`);
+      return;
+    }
+
+    // Leer configuración global
+    let tasaSemanal = TASA_SEMANAL_DEF;
+    let diasGracia  = DIAS_GRACIA_DEF;
+    try {
+      const cfgSnap = await db.doc("config_intereses/default").get();
+      if (cfgSnap.exists) {
+        tasaSemanal = cfgSnap.data().tasaSemanal ?? TASA_SEMANAL_DEF;
+        diasGracia  = cfgSnap.data().diasGracia  ?? DIAS_GRACIA_DEF;
+      }
+    } catch(e) {
+      logger.warn(`[onRemisionCreada] No se pudo leer config_intereses: ${e.message} — usando defaults`);
+    }
+
+    const tasaDiaria = tasaSemanal / 7;
+
+    await db.doc(`remisiones_credito/${id}`).update({
+      tasaDiaria,
+      diasGracia,
+      tasaCongeladaEn: FieldValue.serverTimestamp(),
+    });
+
+    logger.info(`[onRemisionCreada] ${id} — tasaDiaria=${tasaDiaria.toFixed(8)} diasGracia=${diasGracia} congelados`);
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════
+// F2. actualizarCartera — Recalcula todos los campos derivados
+//     Schedule: todos los días a las 02:00 AM México (UTC-6 = 08:00 UTC)
+//     Propósito:
+//       - El APK lee directamente los campos calculados del doc
+//         (interesGenerado, deudaRestante, status, diasAtraso, etc.)
+//       - También actualiza saldos agregados en /clientes/{clienteId}
+// ═══════════════════════════════════════════════════════════════
+exports.actualizarCartera = onSchedule(
+  { schedule: "0 8 * * *", timeZone: "America/Mexico_City", region: "us-central1" },
+  async () => {
+    const hoy = new Date();
+    logger.info(`[actualizarCartera] Iniciando recalculo — ${hoy.toISOString()}`);
+
+    // Leer todas las notas activas (no PAGADO/FUTURA)
+    const snap = await db.collection("remisiones_credito")
+      .where("status", "!=", "PAGADO")
+      .get();
+
+    if (snap.empty) {
+      logger.info("[actualizarCartera] Sin notas activas — nada que recalcular");
+      return;
+    }
+
+    const batch      = db.batch();
+    const porCliente = {}; // clienteId → { capital, interes, total, diasMaxAtraso }
+    let   actualizadas = 0;
+
+    for (const docSnap of snap.docs) {
+      const r    = docSnap.data();
+      const calc = _calcularRemision(r, hoy);
+
+      batch.update(docSnap.ref, {
+        // Campos calculados para que el APK los lea sin lógica extra
+        _interesGenerado:    calc.interesGenerado,
+        _deudaRestante:      calc.deudaRestante,
+        _saldoCapital:       calc.saldoCapital,
+        _interesPorDia:      calc.interesPorDia,
+        _diasTranscurridos:  calc.diasTranscurridos,
+        _diasAtraso:         calc.diasAtraso,
+        _totalDeuda:         calc.totalDeuda,
+        status:              calc.status,
+        _ultimoCalculo:      FieldValue.serverTimestamp(),
+      });
+      actualizadas++;
+
+      // Acumular por cliente
+      if (r.clienteId && calc.status !== "PAGADO") {
+        const c = porCliente[r.clienteId] ?? { capital: 0, interes: 0, total: 0, diasMaxAtraso: 0 };
+        c.capital         += calc.saldoCapital;
+        c.interes         += calc.interesGenerado;
+        c.total           += calc.deudaRestante;
+        c.diasMaxAtraso    = Math.max(c.diasMaxAtraso, Math.abs(Math.min(0, calc.diasAtraso)));
+        porCliente[r.clienteId] = c;
+      }
+    }
+
+    await batch.commit();
+    logger.info(`[actualizarCartera] ${actualizadas} notas recalculadas`);
+
+    // Actualizar saldos agregados en /clientes
+    const batchC = db.batch();
+    for (const [clienteId, agg] of Object.entries(porCliente)) {
+      const ref = db.doc(`clientes/${clienteId}`);
+      batchC.update(ref, {
+        saldoCapitalTotal:  agg.capital,
+        interesTotal:       agg.interes,
+        totalAPagarTotal:   agg.total,
+        diasMaxAtraso:      agg.diasMaxAtraso,
+        semaforoColor:      _semaforoCliente(agg.diasMaxAtraso),
+        _carteraActualizada: FieldValue.serverTimestamp(),
+      });
+    }
+    await batchC.commit();
+    logger.info(`[actualizarCartera] ${Object.keys(porCliente).length} clientes actualizados`);
+  }
+);

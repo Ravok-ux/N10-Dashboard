@@ -25,11 +25,12 @@ let _fColor       = "TODOS";  // TODOS | VERDE | AMARILLO | NARANJA | ROJO
 let _fBusqueda    = "";
 let _tabActiva    = "aging";   // aging | config
 
+// Colores del semáforo según Excel MACRO_CARTERA_N10_v22
 const COLORES = {
-  VERDE:    { bg:"#DCFCE7", text:"#166534", label:"Al corriente" },
-  AMARILLO: { bg:"#FEF9C3", text:"#854D0E", label:"Leve (16–30 d)" },
-  NARANJA:  { bg:"#FFEDD5", text:"#9A3412", label:"Moderado (31–60 d)" },
-  ROJO:     { bg:"#FEE2E2", text:"#991B1B", label:"Grave (+60 d)" },
+  VERDE:    { bg:"#92D050", text:"#2A4A00", label:"Al corriente" },
+  AMARILLO: { bg:"#FFFF99", text:"#5A4A00", label:"Leve (16–30 d)" },
+  NARANJA:  { bg:"#F79646", text:"#FFFFFF", label:"Moderado (31–60 d)" },
+  ROJO:     { bg:"#C0504D", text:"#FFFFFF", label:"Grave (+60 d)" },
 };
 
 const _puedeDesbloquear = () => {
@@ -74,7 +75,7 @@ function _escuchar() {
     snap => {
       _clientes = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(c => c.saldoPendiente > 0 || c.diasMaxVencidos > 0 || c.semaforoColor);
+        .filter(c => (c.saldoPendiente > 0 || c.totalAPagarTotal > 0 || c.diasMaxVencidos > 0 || c.semaforoColor));
       _aplicarFiltros();
     },
     err => console.error("[cartera] escucha error:", err)
@@ -107,7 +108,7 @@ function _html() {
     <!-- Panel Aging -->
     <div id="cart-panel-aging">
       <!-- KPIs -->
-      <div id="cart-kpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:16px">
+      <div id="cart-kpis" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px">
         <div class="skeleton" style="height:72px;border-radius:8px"></div>
         <div class="skeleton" style="height:72px;border-radius:8px"></div>
         <div class="skeleton" style="height:72px;border-radius:8px"></div>
@@ -136,7 +137,9 @@ function _html() {
             <tr style="background:var(--bg2);text-align:left">
               <th style="padding:8px 10px">Cliente</th>
               <th style="padding:8px 10px">Ingeniero</th>
-              <th style="padding:8px 10px;text-align:right">Saldo</th>
+              <th style="padding:8px 10px;text-align:right">Capital</th>
+              <th style="padding:8px 10px;text-align:right">Interés gen.</th>
+              <th style="padding:8px 10px;text-align:right;color:#F59E0B;font-weight:800">Total a pagar</th>
               <th style="padding:8px 10px;text-align:center">Días vencido</th>
               <th style="padding:8px 10px;text-align:center">Semáforo</th>
               <th style="padding:8px 10px;text-align:center">Estado</th>
@@ -232,15 +235,18 @@ function _renderTabla() {
   const tbody = document.getElementById("cart-tbody");
   if (!tbody) return;
   if (_filtrados.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text2)">Sin clientes con saldo pendiente</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text2)">Sin clientes con saldo pendiente</td></tr>`;
     return;
   }
   tbody.innerHTML = _filtrados.map(c => {
-    const col  = COLORES[c.semaforoColor] || COLORES.VERDE;
-    const dias = c.diasMaxVencidos || 0;
-    const bloq = c.bloqueado;
-    const desbl= c.desbloqueoHasta > Date.now();
+    const col    = COLORES[c.semaforoColor] || COLORES.VERDE;
+    const dias   = c.diasMaxVencidos || 0;
+    const bloq   = c.bloqueado;
+    const desbl  = c.desbloqueoHasta > Date.now();
     const puedeDesbl = _puedeDesbloquear();
+    const capital  = c.saldoCapitalTotal ?? c.saldoPendiente ?? 0;
+    const interes  = c.interesTotal ?? 0;
+    const totalAP  = c.totalAPagarTotal ?? (capital + interes);
 
     const estadoChip = bloq
       ? (desbl
@@ -258,7 +264,11 @@ function _renderTabla() {
     return `<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:9px 10px;font-weight:600">${esc(c.nombre || c.id)}</td>
       <td style="padding:9px 10px;color:var(--text2)">${esc(c.vendedor || "—")}</td>
-      <td style="padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums">${fmt.format(c.saldoPendiente || 0)}</td>
+      <td style="padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text2)">${fmt.format(capital)}</td>
+      <td style="padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums;color:${interes>0?"#F59E0B":"var(--text2)"}">
+        ${interes > 0 ? fmt.format(interes) : "—"}</td>
+      <td style="padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:#F97316">
+        ${fmt.format(totalAP)}</td>
       <td style="padding:9px 10px;text-align:center;font-weight:700;color:${col.text}">${dias > 0 ? dias : "—"}</td>
       <td style="padding:9px 10px;text-align:center">
         <span style="padding:2px 10px;background:${col.bg};color:${col.text};border-radius:12px;font-size:11px;font-weight:600">${col.label}</span>
@@ -273,24 +283,28 @@ function _renderTabla() {
 function _renderKpis() {
   const el = document.getElementById("cart-kpis");
   if (!el) return;
-  const total   = _clientes.length;
-  const saldoT  = _clientes.reduce((s,c) => s + (c.saldoPendiente||0), 0);
-  const rojos   = _clientes.filter(c => c.semaforoColor === "ROJO").length;
-  const bloq    = _clientes.filter(c => c.bloqueado).length;
-  const desbloq = _clientes.filter(c => c.desbloqueoHasta > Date.now()).length;
+  const total     = _clientes.length;
+  const capitalT  = _clientes.reduce((s,c) => s + (c.saldoCapitalTotal ?? c.saldoPendiente ?? 0), 0);
+  const interesT  = _clientes.reduce((s,c) => s + (c.interesTotal ?? 0), 0);
+  const totalAPT  = _clientes.reduce((s,c) => s + (c.totalAPagarTotal ?? (c.saldoCapitalTotal ?? c.saldoPendiente ?? 0) + (c.interesTotal ?? 0)), 0);
+  const rojos     = _clientes.filter(c => c.semaforoColor === "ROJO").length;
+  const bloq      = _clientes.filter(c => c.bloqueado).length;
+  const desbloq   = _clientes.filter(c => c.desbloqueoHasta > Date.now()).length;
 
-  const kpi = (id, val, label, color="#10B981") =>
+  const kpi = (val, label, color="#10B981") =>
     `<div style="background:var(--bg2);border-radius:8px;padding:14px 16px">
-      <div style="font-size:20px;font-weight:700;color:${color}">${val}</div>
+      <div style="font-size:18px;font-weight:700;color:${color};font-variant-numeric:tabular-nums">${val}</div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px">${label}</div>
     </div>`;
 
   el.innerHTML =
-    kpi("", total, "Clientes con saldo") +
-    kpi("", fmt.format(saldoT), "Cartera total", "#3B82F6") +
-    kpi("", rojos, "En semáforo rojo", "#EF4444") +
-    kpi("", bloq,  "Bloqueados", "#F59E0B") +
-    kpi("", desbloq, "Desbloqueados temp.", "#8B5CF6");
+    kpi(total, "Clientes en cartera") +
+    kpi(fmt.format(capitalT), "Capital pendiente", "#3B82F6") +
+    kpi(fmt.format(interesT), "Interés generado", "#F59E0B") +
+    kpi(fmt.format(totalAPT), "Total a pagar", "#F97316") +
+    kpi(rojos, "En semáforo rojo", "#EF4444") +
+    kpi(bloq,  "Bloqueados", "#F59E0B") +
+    kpi(desbloq, "Desbloqueados temp.", "#8B5CF6");
 }
 
 // ── Bind UI ───────────────────────────────────────────────────
@@ -426,19 +440,23 @@ function _bindConfigUI(container) {
 // ── Exportar ──────────────────────────────────────────────────
 function _exportar() {
   const rows = _filtrados.map(c => ({
-    cliente:     c.nombre || c.id,
-    ingeniero:   c.vendedor || "—",
-    saldo:       c.saldoPendiente || 0,
+    cliente:      c.nombre || c.id,
+    ingeniero:    c.vendedor || "—",
+    capital:      c.saldoCapitalTotal ?? c.saldoPendiente ?? 0,
+    interes:      c.interesTotal ?? 0,
+    totalAPagar:  c.totalAPagarTotal ?? (c.saldoCapitalTotal ?? c.saldoPendiente ?? 0) + (c.interesTotal ?? 0),
     diasVencidos: c.diasMaxVencidos || 0,
-    semaforo:    c.semaforoColor || "VERDE",
-    bloqueado:   c.bloqueado ? "Sí" : "No",
+    semaforo:     c.semaforoColor || "VERDE",
+    bloqueado:    c.bloqueado ? "Sí" : "No",
   }));
   exportarExcel(rows, [
-    { key:"cliente",     header:"Cliente",          width:30 },
-    { key:"ingeniero",   header:"Ingeniero",         width:20 },
-    { key:"saldo",       header:"Saldo ($)",         width:16, tipo:"numero" },
-    { key:"diasVencidos",header:"Días vencidos",     width:14, tipo:"numero" },
-    { key:"semaforo",    header:"Semáforo",          width:12 },
-    { key:"bloqueado",   header:"Bloqueado",         width:10 },
+    { key:"cliente",     header:"Cliente",           width:30 },
+    { key:"ingeniero",   header:"Ingeniero",          width:20 },
+    { key:"capital",     header:"Capital ($)",        width:16, tipo:"numero" },
+    { key:"interes",     header:"Interés gen. ($)",   width:16, tipo:"numero" },
+    { key:"totalAPagar", header:"Total a pagar ($)",  width:18, tipo:"numero" },
+    { key:"diasVencidos",header:"Días vencidos",      width:14, tipo:"numero" },
+    { key:"semaforo",    header:"Semáforo",           width:12 },
+    { key:"bloqueado",   header:"Bloqueado",          width:10 },
   ], "Cartera_" + new Date().toISOString().slice(0,10));
 }
