@@ -1,4 +1,4 @@
-// ══════════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════════
 // app.js — Router principal, inicialización del shell
 // ══════════════════════════════════════════════════════════════
 
@@ -527,19 +527,63 @@ function _initGlobalSearch() {
   const input = document.getElementById("global-search");
   if (!input) return;
 
-  // Dropdown container
+  // Catalogo de modulos: view -> { label, icon, keywords }
+  const MODULOS = [
+    { view:"dashboard",        icon:"📊", label:"Dashboard",               kw:"dashboard resumen dia ventas kpis" },
+    { view:"pedidos",          icon:"📋", label:"Pedidos",                  kw:"pedidos ordenes folio borrador confirmado" },
+    { view:"clientes",         icon:"🏢", label:"Clientes",                 kw:"clientes empresas semaforo credito" },
+    { view:"ingenieros",       icon:"👤", label:"Ingenieros",               kw:"ingenieros vendedores campo representantes" },
+    { view:"remisiones",       icon:"📄", label:"Remisiones",               kw:"remisiones credito notas facturas" },
+    { view:"cobranza",         icon:"💰", label:"Cobranza",                 kw:"cobranza cobros abonos pagos" },
+    { view:"cartera",          icon:"📉", label:"Cartera vencida",          kw:"cartera vencida intereses mora semaforo" },
+    { view:"crm",              icon:"🎯", label:"CRM Prospectos",           kw:"crm prospectos pipeline oportunidades" },
+    { view:"cotizaciones",     icon:"📑", label:"Cotizaciones",             kw:"cotizaciones presupuestos propuestas" },
+    { view:"comisiones",       icon:"💵", label:"Comisiones",               kw:"comisiones nomina incentivos bono" },
+    { view:"compras",          icon:"🛒", label:"Ordenes de compra",        kw:"compras ordenes proveedores" },
+    { view:"inventario",       icon:"📦", label:"Inventario",               kw:"inventario stock existencias bodega" },
+    { view:"kardex",           icon:"🗂️", label:"Kardex",                   kw:"kardex movimientos entradas salidas" },
+    { view:"productos",        icon:"🏷️", label:"Control de productos",     kw:"productos catalogo precios costos" },
+    { view:"precios",          icon:"💲", label:"Precios y costos",         kw:"precios costos lista" },
+    { view:"precios_segmento", icon:"🔖", label:"Precios por segmento",     kw:"precios segmento descuento" },
+    { view:"promociones",      icon:"🎁", label:"Recompensas y lealtad",    kw:"promociones recompensas lealtad puntos" },
+    { view:"devoluciones",     icon:"↩️", label:"Devoluciones",             kw:"devoluciones retornos cambios" },
+    { view:"logistica",        icon:"🚚", label:"Logistica de visitas",     kw:"logistica rutas visitas" },
+    { view:"visitas",          icon:"📍", label:"Visitas",                  kw:"visitas programacion agenda" },
+    { view:"mapa",             icon:"🗺️", label:"Mapa en vivo",             kw:"mapa gps campo ubicacion" },
+    { view:"geocercas",        icon:"📐", label:"Geocercas",                kw:"geocercas zonas areas autorizadas" },
+    { view:"metas",            icon:"🏆", label:"Metas de venta",           kw:"metas objetivos cuota" },
+    { view:"autorizaciones",   icon:"🔐", label:"Autorizaciones",           kw:"autorizaciones aprobaciones bloqueos" },
+    { view:"usuarios",         icon:"⚙️", label:"Usuarios y flags",         kw:"usuarios roles permisos flags" },
+    { view:"reportes",         icon:"📈", label:"Reportes",                 kw:"reportes graficas estadisticas" },
+    { view:"reportes_custom",  icon:"🛠️", label:"Reportes Configurables",   kw:"reportes custom configurables aging" },
+    { view:"auditoria",        icon:"🔍", label:"Auditoria",                kw:"auditoria log historial cambios" },
+    { view:"comentarios",      icon:"💬", label:"Comentarios de clientes",  kw:"comentarios feedback clientes" },
+    { view:"rh",               icon:"👥", label:"Recursos Humanos",         kw:"rh recursos humanos empleados" },
+    { view:"mi_rh",            icon:"🪪", label:"Mi RH",                   kw:"mi rh mi perfil empleado" },
+    { view:"juridico",         icon:"⚖️", label:"Juridico",                 kw:"juridico legal contratos" },
+    { view:"observabilidad",   icon:"📡", label:"Observabilidad",           kw:"observabilidad logs errores monitoreo" },
+    { view:"formularios",      icon:"📝", label:"Formularios",              kw:"formularios encuestas capturas" },
+    { view:"config",           icon:"🎫", label:"Config tickets",           kw:"config configuracion tickets" },
+    { view:"config_intereses", icon:"📊", label:"Tasas de interes",         kw:"tasas interes configuracion intereses" },
+    { view:"manuales",         icon:"📚", label:"Manuales y Politicas",     kw:"manuales politicas documentos" },
+    { view:"chat",             icon:"💬", label:"Chat interno",             kw:"chat mensajes comunicacion" },
+    { view:"feed",             icon:"⚡", label:"Feed en vivo",             kw:"feed actividad tiempo real" },
+  ];
+
   const dropdown = document.createElement("div");
   dropdown.id = "gs-dropdown";
-  dropdown.style.cssText = `
-    position:absolute; top:calc(100% + 4px); left:0; right:0;
-    background:var(--surface,#fff); border:1px solid var(--border,#ddd);
-    border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.15);
-    max-height:360px; overflow-y:auto; z-index:9999; display:none;
-  `;
+  dropdown.style.cssText = [
+    "position:absolute","top:calc(100% + 4px)","left:0","right:0","min-width:340px",
+    "background:var(--surface,#1e2330)","border:1px solid var(--border,#333)",
+    "border-radius:10px","box-shadow:0 8px 24px rgba(0,0,0,.35)",
+    "max-height:420px","overflow-y:auto","z-index:9999","display:none","font-family:inherit"
+  ].join(";");
   input.parentElement.style.position = "relative";
   input.parentElement.appendChild(dropdown);
 
   let _timer = null;
+  let _cacheUsuarios = null;
+  let _cacheClientes = null;
 
   input.addEventListener("input", () => {
     clearTimeout(_timer);
@@ -556,65 +600,93 @@ function _initGlobalSearch() {
     if (!input.parentElement.contains(e.target)) dropdown.style.display = "none";
   });
 
+  function _match(str, q) {
+    const h = (str || "").toLowerCase();
+    return h.startsWith(q) ? 2 : h.includes(q) ? 1 : 0;
+  }
+
   async function _runSearch(q) {
-    dropdown.innerHTML = `<div style="padding:12px;color:var(--text-muted,#888);font-size:13px">Buscando…</div>`;
+    dropdown.innerHTML = "<div style='padding:12px 14px;color:#888;font-size:13px'>🔍 Buscando…</div>";
     dropdown.style.display = "block";
 
-    const qUp = q.toUpperCase();
-    const results = [];
+    const qL = q.toLowerCase();
+    const sections = [];
 
+    // 1. Modulos (client-side instantaneo)
+    const modItems = MODULOS
+      .filter(m => _match(m.label, qL) > 0 || _match(m.kw, qL) > 0)
+      .slice(0, 6)
+      .map(m => ({ icon: m.icon, label: m.label, sub: "", view: m.view, id: "" }));
+    if (modItems.length) sections.push({ header: "🏠 Módulos", color: "#6c8ebf", items: modItems });
+
+    // 2. Ingenieros/Usuarios
     try {
-      // Pedidos — buscar por folio (string range)
-      const pedSnap = await getDocs(
-        query(collection(db, "pedidos"),
-          orderBy("folio"), startAt(qUp), endAt(qUp + ""),
-          fsLimit(5))
-      );
-      pedSnap.forEach(d => {
-        const p = d.data();
-        results.push({ tipo:"Pedido", label:`#${p.folio} — ${p.clienteNombre || ""}`, sub: p.status || "", view:"pedidos", id: d.id });
-      });
-    } catch(_) {}
+      if (!_cacheUsuarios) {
+        const snap = await getDocs(query(collection(db, "usuarios"), fsLimit(200)));
+        _cacheUsuarios = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+      const ingItems = _cacheUsuarios
+        .filter(u => _match(u.alias || "", qL) > 0 || _match(u.nombre || "", qL) > 0 || _match(u.email || "", qL) > 0)
+        .slice(0, 5)
+        .map(u => ({ icon: "👤", label: u.alias || u.nombre || u.email || u.id, sub: u.rol || "", view: "ingenieros", id: u.id }));
+      if (ingItems.length) sections.push({ header: "👤 Ingenieros", color: "#82b366", items: ingItems });
+    } catch(e2) {}
 
+    // 3. Clientes (fetch top 150, filter client-side)
     try {
-      // Clientes — buscar por nombre
-      const cliSnap = await getDocs(
-        query(collection(db, "clientes"),
-          orderBy("nombre"), startAt(q), endAt(q + ""),
-          fsLimit(5))
-      );
-      cliSnap.forEach(d => {
-        const c = d.data();
-        results.push({ tipo:"Cliente", label: c.nombre || d.id, sub: c.ciudad || "", view:"clientes", id: d.id });
-      });
-    } catch(_) {}
+      if (!_cacheClientes) {
+        const snap = await getDocs(query(collection(db, "clientes"), orderBy("nombre"), fsLimit(150)));
+        _cacheClientes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+      const cliItems = _cacheClientes
+        .filter(c => _match(c.nombre || "", qL) > 0 || _match(c.ciudad || "", qL) > 0)
+        .slice(0, 5)
+        .map(c => ({ icon: "🏢", label: c.nombre || c.id, sub: c.ciudad || c.semaforoColor || "", view: "clientes", id: c.id }));
+      if (cliItems.length) sections.push({ header: "🏢 Clientes", color: "#d6b656", items: cliItems });
+    } catch(e3) {}
 
-    if (results.length === 0) {
-      dropdown.innerHTML = `<div style="padding:12px;color:var(--text-muted,#888);font-size:13px">Sin resultados para "${esc(q)}"</div>`;
+    // 4. Pedidos (folio + clienteNombre + ingenieroAlias)
+    try {
+      const pedSnap = await getDocs(query(collection(db, "pedidos"), orderBy("folio"), fsLimit(200)));
+      const pedItems = pedSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(p => _match(String(p.folio || ""), qL) > 0 || _match(p.clienteNombre || "", qL) > 0 || _match(p.ingenieroAlias || "", qL) > 0)
+        .slice(0, 5)
+        .map(p => ({ icon: "📋", label: "#" + p.folio + " — " + (p.clienteNombre || ""), sub: p.status || "", view: "pedidos", id: p.id }));
+      if (pedItems.length) sections.push({ header: "📋 Pedidos", color: "#9673a6", items: pedItems });
+    } catch(e4) {}
+
+    // Render
+    if (sections.length === 0) {
+      dropdown.innerHTML = "<div style='padding:14px;color:#888;font-size:13px;text-align:center'>Sin resultados para <strong>&quot;" + esc(q) + "&quot;</strong></div>";
       return;
     }
 
-    const html = results.map(r => `
-      <div class="gs-item" data-view="${esc(r.view)}" data-id="${esc(r.id)}"
-        style="padding:10px 14px;cursor:pointer;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--border,#eee);">
-        <span style="font-size:11px;background:var(--accent,#1a6fb5);color:#fff;border-radius:4px;padding:2px 6px;white-space:nowrap">${esc(r.tipo)}</span>
-        <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.label)}</span>
-        <span style="font-size:11px;color:var(--text-muted,#888)">${esc(r.sub)}</span>
-      </div>`).join("");
+    let html = "";
+    for (const sec of sections) {
+      html += "<div style='padding:6px 14px 4px;font-size:11px;font-weight:600;color:" + sec.color + ";letter-spacing:.5px;border-bottom:1px solid var(--border,#333)'>" + sec.header + "</div>";
+      for (const r of sec.items) {
+        html += "<div class='gs-item' data-view='" + esc(r.view) + "' data-id='" + esc(r.id) + "' style='padding:9px 14px;cursor:pointer;display:flex;gap:10px;align-items:center;border-bottom:1px solid rgba(255,255,255,.05)'>" +
+          "<span style='font-size:15px;width:20px;text-align:center;flex-shrink:0'>" + r.icon + "</span>" +
+          "<span style='font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>" + esc(r.label) + "</span>" +
+          "<span style='font-size:11px;color:#888;flex-shrink:0'>" + esc(r.sub) + "</span>" +
+          "</div>";
+      }
+    }
     dropdown.innerHTML = html;
 
     dropdown.querySelectorAll(".gs-item").forEach(el => {
-      el.addEventListener("mouseenter", () => el.style.background = "var(--hover-bg,#f5f7fa)");
+      el.addEventListener("mouseenter", () => el.style.background = "rgba(255,255,255,.06)");
       el.addEventListener("mouseleave", () => el.style.background = "");
       el.addEventListener("click", () => {
         dropdown.style.display = "none";
         input.value = "";
+        _cacheClientes = null;
         _navigateGuarded(el.dataset.view);
       });
     });
   }
 }
-
 // ── Sidebar collapsible sections ──────────────────────────────
 function _initSidebarCollapse() {
   const KEY = "n10_sb_";
