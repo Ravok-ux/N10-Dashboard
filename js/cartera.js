@@ -21,16 +21,19 @@ let _clientes     = [];
 let _filtrados    = [];
 let _config       = { semaforo:{ verde:15, amarillo:30, naranja:60 }, bloqueoAutoActivo:true,
                        frecuencias:[], horasDesbloqueo:[4,8,24] };
-let _fColor       = "TODOS";  // TODOS | VERDE | AMARILLO | NARANJA | ROJO
+let _fColor       = "TODOS";  // TODOS | CRÍTICO | GRAVE | MODERADO | LEVE | POR_VENCER
 let _fBusqueda    = "";
 let _tabActiva    = "aging";   // aging | config
 
-// Colores del semáforo según Excel MACRO_CARTERA_N10_v22
+// Colores del semáforo según motor de intereses (intereses-engine.js)
 const COLORES = {
-  VERDE:    { bg:"#92D050", text:"#2A4A00", label:"Al corriente" },
-  AMARILLO: { bg:"#FFFF99", text:"#5A4A00", label:"Leve (16–30 d)" },
-  NARANJA:  { bg:"#F79646", text:"#FFFFFF", label:"Moderado (31–60 d)" },
-  ROJO:     { bg:"#C0504D", text:"#FFFFFF", label:"Grave (+60 d)" },
+  CRÍTICO:   { bg:"#C0504D", text:"#FFFFFF", label:"Crítico (+61 d)" },
+  GRAVE:     { bg:"#F79646", text:"#FFFFFF", label:"Grave (44–61 d)" },
+  MODERADO:  { bg:"#8DB4E2", text:"#1A3A5C", label:"Moderado (30–43 d)" },
+  LEVE:      { bg:"#FFFF99", text:"#5A4A00", label:"Leve (16–29 d)" },
+  POR_VENCER:{ bg:"#92D050", text:"#2A4A00", label:"Por vencer (≤15 d)" },
+  PAGADO:    { bg:"#DCFCE7", text:"#166534", label:"Pagado" },
+  FUTURA:    { bg:"#E5E7EB", text:"#6B7280", label:"Futura" },
 };
 
 const _puedeDesbloquear = () => {
@@ -122,10 +125,11 @@ function _html() {
           style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px">
         <select id="cart-color-filter" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px">
           <option value="TODOS">Todos los semáforos</option>
-          <option value="VERDE">🟢 Al corriente</option>
-          <option value="AMARILLO">🟡 Leve</option>
-          <option value="NARANJA">🟠 Moderado</option>
-          <option value="ROJO">🔴 Grave</option>
+          <option value="CRÍTICO">🔴 Crítico (+61 d)</option>
+          <option value="GRAVE">🟠 Grave (44–61 d)</option>
+          <option value="MODERADO">🔵 Moderado (30–43 d)</option>
+          <option value="LEVE">🟡 Leve (16–29 d)</option>
+          <option value="POR_VENCER">🟢 Por vencer (≤15 d)</option>
         </select>
         <button onclick="CarteraUI.exportar()" style="padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">⬇️ Excel</button>
       </div>
@@ -239,7 +243,7 @@ function _renderTabla() {
     return;
   }
   tbody.innerHTML = _filtrados.map(c => {
-    const col    = COLORES[c.semaforoColor] || COLORES.VERDE;
+    const col    = COLORES[c.semaforoColor] || COLORES.POR_VENCER;
     const dias   = c.diasMaxVencidos || 0;
     const bloq   = c.bloqueado;
     const desbl  = c.desbloqueoHasta > Date.now();
@@ -287,7 +291,7 @@ function _renderKpis() {
   const capitalT  = _clientes.reduce((s,c) => s + (c.saldoCapitalTotal ?? c.saldoPendiente ?? 0), 0);
   const interesT  = _clientes.reduce((s,c) => s + (c.interesTotal ?? 0), 0);
   const totalAPT  = _clientes.reduce((s,c) => s + (c.totalAPagarTotal ?? (c.saldoCapitalTotal ?? c.saldoPendiente ?? 0) + (c.interesTotal ?? 0)), 0);
-  const rojos     = _clientes.filter(c => c.semaforoColor === "ROJO").length;
+  const rojos     = _clientes.filter(c => c.semaforoColor === "CRÍTICO" || c.semaforoColor === "GRAVE").length;
   const bloq      = _clientes.filter(c => c.bloqueado).length;
   const desbloq   = _clientes.filter(c => c.desbloqueoHasta > Date.now()).length;
 
@@ -302,7 +306,7 @@ function _renderKpis() {
     kpi(fmt.format(capitalT), "Capital pendiente", "#3B82F6") +
     kpi(fmt.format(interesT), "Interés generado", "#F59E0B") +
     kpi(fmt.format(totalAPT), "Total a pagar", "#F97316") +
-    kpi(rojos, "En semáforo rojo", "#EF4444") +
+    kpi(rojos, "Crítico / Grave", "#EF4444") +
     kpi(bloq,  "Bloqueados", "#F59E0B") +
     kpi(desbloq, "Desbloqueados temp.", "#8B5CF6");
 }

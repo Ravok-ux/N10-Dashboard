@@ -105,7 +105,8 @@ const FUENTES = {
       fechaVencimiento:{ label: "Vencimiento",      tipo: "fecha"   },
     },
     filtros: ["status", "ingenieroAlias", "clienteNombre"],
-    computed: true, // campos calculados requieren enriquecimiento en cliente
+    computed: true,   // campos calculados requieren enriquecimiento en cliente
+    sinPeriodo: true, // permite seleccionar "todos" sin filtro de fechas
   },
 };
 
@@ -141,10 +142,12 @@ function _html() {
       <label class="rc-label">Período</label>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
         <select id="rc-periodo" style="${estiloSelect}">
+          ${FUENTES[_fuenteActual]?.sinPeriodo ? '<option value="todos" selected>📋 Todas las notas activas</option>' : ''}
           <option value="hoy">Hoy</option>
           <option value="semana">Esta semana</option>
-          <option value="mes" selected>Este mes</option>
+          <option value="mes"${FUENTES[_fuenteActual]?.sinPeriodo ? '' : ' selected'}>Este mes</option>
           <option value="mes_ant">Mes anterior</option>
+          <option value="anio">Este año</option>
           <option value="custom">Personalizado</option>
         </select>
         <input id="rc-fecha-ini" type="date" style="${estiloSelect};display:none" />
@@ -214,6 +217,7 @@ function _bindEvents() {
       _container.querySelectorAll(".rc-tab").forEach(b => b.classList.toggle("rc-tab-active", b === btn));
       _actualizarCampos();
       _actualizarFiltros();
+      _actualizarPeriodo();
     });
   });
 
@@ -232,6 +236,7 @@ function _bindEvents() {
 
   _actualizarCampos();
   _actualizarFiltros();
+  _actualizarPeriodo();
 }
 
 function _actualizarCampos() {
@@ -241,6 +246,24 @@ function _actualizarCampos() {
     <label class="rc-campo-check">
       <input type="checkbox" data-campo="${k}" checked /> ${c.label}
     </label>`).join("");
+}
+
+function _actualizarPeriodo() {
+  const fuente = FUENTES[_fuenteActual];
+  const sel    = _container.querySelector("#rc-periodo");
+  const tieneTodos = fuente?.sinPeriodo;
+  // Agregar/quitar opción "todos"
+  let opt = sel.querySelector('option[value="todos"]');
+  if (tieneTodos && !opt) {
+    opt = document.createElement("option");
+    opt.value = "todos";
+    opt.textContent = "📋 Todas las notas activas";
+    sel.insertBefore(opt, sel.firstChild);
+    sel.value = "todos";
+  } else if (!tieneTodos && opt) {
+    opt.remove();
+    if (sel.value === "todos") sel.value = "mes";
+  }
 }
 
 function _actualizarFiltros() {
@@ -264,12 +287,27 @@ async function _generar() {
 
     let docs;
     if (fuente.computed) {
-      // Aging de cartera: sin filtro de fecha, enriquecer con motor de intereses
-      const snap = await getDocs(query(
-        collection(db, fuente.collection),
-        orderBy("fechaVencimiento"),
-        fsLimit(500)
-      ));
+      // Aging de cartera: enriquecer con motor de intereses
+      const periodo = _container.querySelector("#rc-periodo").value;
+      let q;
+      if (periodo === "todos") {
+        // Sin filtro de fechas: todas las notas no pagadas
+        q = query(
+          collection(db, fuente.collection),
+          orderBy("fechaVencimiento"),
+          fsLimit(500)
+        );
+      } else {
+        // Filtrar por rango de fechaVencimiento
+        q = query(
+          collection(db, fuente.collection),
+          where("fechaVencimiento", ">=", Timestamp.fromMillis(ini)),
+          where("fechaVencimiento", "<=", Timestamp.fromMillis(fin)),
+          orderBy("fechaVencimiento"),
+          fsLimit(500)
+        );
+      }
+      const snap = await getDocs(q);
       const raw = snap.docs
         .map(d => ({ _id: d.id, ...d.data() }))
         .filter(r => r.status !== "PAGADO");
@@ -320,6 +358,10 @@ function _rango() {
     case "mes_ant":
       ini = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1).getTime();
       fin = new Date(ahora.getFullYear(), ahora.getMonth(), 1).getTime();
+      break;
+    case "anio":
+      ini = new Date(ahora.getFullYear(), 0, 1).getTime();
+      fin = new Date(ahora.getFullYear() + 1, 0, 1).getTime();
       break;
     case "custom":
       ini = new Date(_container.querySelector("#rc-fecha-ini").value).getTime() || 0;

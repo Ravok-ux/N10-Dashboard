@@ -317,10 +317,15 @@ function _renderTabla(rows) {
         <td><span class="badge" style="background:${e.bg};color:${e.color}">${e.label}</span></td>
         <td style="font-size:11px;color:var(--text-muted);max-width:200px">${esc((r.notas||"").slice(0,80))}</td>
         <td style="font-size:11px;color:var(--text-muted)">${fmtFecha(r._ts)}</td>
-        <td>
+        <td style="white-space:nowrap">
           <select class="sel-sm crm-cambiar-etapa" data-id="${r.id}" style="font-size:11px">
             ${ETAPAS.map(e2 => `<option value="${e2.id}" ${e2.id===r.etapa?"selected":""}>${e2.label}</option>`).join("")}
           </select>
+          ${(r.etapa === "GANADO" || r.etapa === "NEGOCIACIÓN") ? `
+          <button class="btn-outline crm-crear-pedido"
+            data-id="${r.id}"
+            style="font-size:10px;padding:2px 6px;margin-left:4px;vertical-align:middle"
+            title="Crear pedido borrador">📋 Pedido</button>` : ""}
         </td>
       </tr>`;
     }).join("")}</tbody>
@@ -334,6 +339,13 @@ function _renderTabla(rows) {
   });
   v.querySelectorAll(".crm-cambiar-etapa").forEach(sel => {
     sel.addEventListener("change", () => _cambiarEtapa(sel.dataset.id, sel.value));
+  });
+  v.querySelectorAll(".crm-crear-pedido").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const prospecto = _todosProspectos.find(p => p.id === btn.dataset.id);
+      if (prospecto) _crearPedidoDesdeProspecto(prospecto);
+    });
   });
 }
 
@@ -473,6 +485,33 @@ async function _guardarProspecto() {
     document.getElementById("crm-modal")?.classList.add("hidden");
   } catch(e) { window.toast?.(e.message,"error"); }
   finally { btn.disabled = false; btn.textContent = "Guardar"; }
+}
+
+// ── Crear pedido desde prospecto ─────────────────────────────
+async function _crearPedidoDesdeProspecto(prospecto) {
+  const ok = await window.modal({
+    title: "Crear pedido borrador",
+    message: `¿Crear pedido borrador para ${prospecto.nombre}?`,
+    confirmLabel: "Crear pedido",
+  });
+  if (!ok) return;
+
+  try {
+    const ref = await addDoc(collection(db, "pedidos"), {
+      clienteId:       prospecto.clienteId    || "",
+      clienteNombre:   prospecto.nombre       || "",
+      ingenieroAlias:  Sesion.alias           || "",
+      status:          "BORRADOR",
+      total:           0,
+      _ts:             serverTimestamp(),
+      fechaPedido:     serverTimestamp(),
+      origenCRM:       prospecto.id,
+      productoInteres: prospecto.productoInteres || "",
+    });
+    window.toast?.(`Pedido borrador creado (ID: ${ref.id.slice(0,8)}…)`, "success");
+  } catch (e) {
+    window.toast?.(e.message, "error");
+  }
 }
 
 // ── Convertir a cliente ───────────────────────────────────────

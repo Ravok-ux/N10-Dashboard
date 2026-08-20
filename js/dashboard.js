@@ -294,14 +294,16 @@ function _escucharKPIs() {
   const hoyInicio = _inicioDia();
   const pedidosQ  = query(
     collection(db, "pedidos"),
-    where("timestamp", ">=", Timestamp.fromDate(hoyInicio))
+    where("fechaPedido", ">=", Timestamp.fromDate(hoyInicio))
   );
 
   return onSnapshot(pedidosQ, snap => {
     let vendido = 0, cobrado = 0, activos = 0;
     snap.forEach(d => {
       const p = d.data();
-      if (p.total) vendido += p.total;
+      if (["CONFIRMADO","EN_RUTA","ENTREGADO","FACTURADO"].includes(p.status)) {
+        vendido += (p.total || 0);
+      }
       if (["CONFIRMADO","EN_RUTA","ENTREGADO"].includes(p.status)) activos++;
     });
 
@@ -441,8 +443,8 @@ function _escucharRanking() {
     // Ranking de ingenieros desde log_actividades de hoy
     const pedidosHoyQ = query(
       collection(db, "pedidos"),
-      where("timestamp", ">=", Timestamp.fromDate(hoyInicio)),
-      orderBy("timestamp", "desc")
+      where("fechaPedido", ">=", Timestamp.fromDate(hoyInicio)),
+      orderBy("fechaPedido", "desc")
     );
 
     // Usamos una snapshot simple para el ranking
@@ -525,7 +527,7 @@ function _escucharCharts() {
   hace7.setHours(0, 0, 0, 0);
   const q = query(
     collection(db, "pedidos"),
-    where("timestamp", ">=", Timestamp.fromDate(hace7)),
+    where("fechaPedido", ">=", Timestamp.fromDate(hace7)),
     limit(1000)
   );
   return onSnapshot(q, snap => {
@@ -544,7 +546,7 @@ function _escucharCharts() {
 
     snap.forEach(d => {
       const p  = d.data();
-      const ts = p.timestamp?.toDate?.() ?? new Date(p.timestamp || 0);
+      const ts = p.fechaPedido?.toDate?.() ?? new Date(p.fechaPedido || 0);
       const k  = ts.toISOString().slice(0, 10);
       if (k in diasVenta) diasVenta[k] += (p.total || 0);
 
