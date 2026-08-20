@@ -1,5 +1,5 @@
-﻿// Service Worker â€” N-10 ERP
-// Estrategia: Cache-first para assets estÃ¡ticos, Network-first para datos dinÃ¡micos
+// Service Worker — N-10 ERP
+// Estrategia: Cache-first para assets estáticos, Network-first para datos dinámicos
 
 const CACHE_NAME = 'n10-erp-v48';
 
@@ -64,7 +64,7 @@ const STATIC_ASSETS = [
   '/manifest.json'
 ];
 
-// Instalar â€” pre-cachear assets estÃ¡ticos
+// Instalar — pre-cachear assets estáticos
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache =>
@@ -75,7 +75,7 @@ self.addEventListener('install', event => {
   );
 });
 
-// Activar â€” limpiar caches viejos
+// Activar — limpiar caches viejos
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -84,11 +84,11 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch â€” Cache-first para assets, Network-first para Firebase/APIs
+// Fetch — Cache-first para assets, Network-first para Firebase/APIs
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Firebase, googleapis, gstatic â†’ siempre red (datos en tiempo real)
+  // Firebase, googleapis, gstatic → siempre red (datos en tiempo real)
   if (url.hostname.includes('firebase') ||
       url.hostname.includes('googleapis') ||
       url.hostname.includes('gstatic') ||
@@ -96,7 +96,7 @@ self.addEventListener('fetch', event => {
     return; // fetch nativo sin interceptar
   }
 
-  // Assets locales â†’ cache-first con fallback a red
+  // Assets locales → cache-first con fallback a red
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
@@ -108,11 +108,10 @@ self.addEventListener('fetch', event => {
         return response;
       });
     }).catch(() => {
-      // Offline y no hay cache â†’ devolver index.html para SPA
+      // Offline y no hay cache → devolver index.html para SPA
       if (event.request.mode === 'navigate') {
         return caches.match('/index.html');
       }
     })
   );
 });
-
