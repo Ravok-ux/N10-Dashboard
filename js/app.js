@@ -45,6 +45,11 @@ import { ConfigInteresesModule }   from "./config-intereses.js";
 import { mount as rcMount, destroy as rcDestroy } from "./reportes-custom.js";
 import { iniciarNotificaciones, detenerNotificaciones } from "./notificaciones.js";
 import { iniciarFCM } from "./fcm.js";
+import { db } from "./firebase-config.js";
+import {
+  collection, query, where, orderBy, limit as fsLimit, getDocs,
+  startAt, endAt
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ── Sanitización XSS ──────────────────────────────────────────
 // Usa esta función en TODOS los lugares donde datos de Firestore
@@ -289,6 +294,9 @@ function _initShell() {
   // Secciones colapsables del sidebar
   _initSidebarCollapse();
 
+  // ── Búsqueda global ─────────────────────────────────────────
+  _initGlobalSearch();
+
   // ── User popover ────────────────────────────────────────────
   const sbUser   = document.querySelector(".sb-user");
   const sbPop    = document.getElementById("sb-popover");
@@ -512,6 +520,99 @@ function SimpleListModule(id, title, subtitle) {
         </div>`;
     }
   };
+}
+
+// ── Búsqueda global ───────────────────────────────────────────
+function _initGlobalSearch() {
+  const input = document.getElementById("global-search");
+  if (!input) return;
+
+  // Dropdown container
+  const dropdown = document.createElement("div");
+  dropdown.id = "gs-dropdown";
+  dropdown.style.cssText = `
+    position:absolute; top:calc(100% + 4px); left:0; right:0;
+    background:var(--surface,#fff); border:1px solid var(--border,#ddd);
+    border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.15);
+    max-height:360px; overflow-y:auto; z-index:9999; display:none;
+  `;
+  input.parentElement.style.position = "relative";
+  input.parentElement.appendChild(dropdown);
+
+  let _timer = null;
+
+  input.addEventListener("input", () => {
+    clearTimeout(_timer);
+    const q = input.value.trim();
+    if (q.length < 2) { dropdown.style.display = "none"; return; }
+    _timer = setTimeout(() => _runSearch(q), 300);
+  });
+
+  input.addEventListener("keydown", e => {
+    if (e.key === "Escape") { dropdown.style.display = "none"; input.value = ""; }
+  });
+
+  document.addEventListener("click", e => {
+    if (!input.parentElement.contains(e.target)) dropdown.style.display = "none";
+  });
+
+  async function _runSearch(q) {
+    dropdown.innerHTML = `<div style="padding:12px;color:var(--text-muted,#888);font-size:13px">Buscando…</div>`;
+    dropdown.style.display = "block";
+
+    const qUp = q.toUpperCase();
+    const results = [];
+
+    try {
+      // Pedidos — buscar por folio (string range)
+      const pedSnap = await getDocs(
+        query(collection(db, "pedidos"),
+          orderBy("folio"), startAt(qUp), endAt(qUp + ""),
+          fsLimit(5))
+      );
+      pedSnap.forEach(d => {
+        const p = d.data();
+        results.push({ tipo:"Pedido", label:`#${p.folio} — ${p.clienteNombre || ""}`, sub: p.status || "", view:"pedidos", id: d.id });
+      });
+    } catch(_) {}
+
+    try {
+      // Clientes — buscar por nombre
+      const cliSnap = await getDocs(
+        query(collection(db, "clientes"),
+          orderBy("nombre"), startAt(q), endAt(q + ""),
+          fsLimit(5))
+      );
+      cliSnap.forEach(d => {
+        const c = d.data();
+        results.push({ tipo:"Cliente", label: c.nombre || d.id, sub: c.ciudad || "", view:"clientes", id: d.id });
+      });
+    } catch(_) {}
+
+    if (results.length === 0) {
+      dropdown.innerHTML = `<div style="padding:12px;color:var(--text-muted,#888);font-size:13px">Sin resultados para "${esc(q)}"</div>`;
+      return;
+    }
+
+    const html = results.map(r => `
+      <div class="gs-item" data-view="${esc(r.view)}" data-id="${esc(r.id)}"
+        style="padding:10px 14px;cursor:pointer;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--border,#eee);">
+        <span style="font-size:11px;background:var(--accent,#1a6fb5);color:#fff;border-radius:4px;padding:2px 6px;white-space:nowrap">${esc(r.tipo)}</span>
+        <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.label)}</span>
+        <span style="font-size:11px;color:var(--text-muted,#888)">${esc(r.sub)}</span>
+      </div>`).join("");
+    dropdown.innerHTML = html;
+
+    dropdown.querySelectorAll(".gs-item").forEach(el => {
+      el.addEventListener("mouseenter", () => el.style.background = "var(--hover-bg,#f5f7fa)");
+      el.addEventListener("mouseleave", () => el.style.background = "");
+      el.addEventListener("click", () => {
+        dropdown.style.display = "none";
+        input.value = "";
+        _navigateGuarded(el.dataset.view);
+      });
+    });
+  }
 }
 
 // ── Sidebar collapsible sections ──────────────────────────────
