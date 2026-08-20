@@ -217,6 +217,23 @@ function _html() {
         </div>
       </div>
 
+      <div class="form-group" style="margin-top:8px">
+        <label class="form-label">Inicio del período de liquidación</label>
+        <select id="com-dia-liq" class="form-input" onchange="ComisionesUI._previewPeriodo()">
+          <option value="1">Lunes → Domingo</option>
+          <option value="2">Martes → Lunes</option>
+          <option value="3">Miércoles → Martes</option>
+          <option value="4">Jueves → Miércoles</option>
+          <option value="5">Viernes → Jueves</option>
+          <option value="6">Sábado → Viernes</option>
+          <option value="0">Domingo → Sábado</option>
+        </select>
+        <div id="com-periodo-preview"
+          style="font-size:10px;color:#60A5FA;margin-top:5px;padding:4px 8px;
+            background:rgba(37,99,235,.1);border-radius:4px;display:none">
+        </div>
+      </div>
+
       <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;
         letter-spacing:.06em;margin:14px 0 8px">Tramos de comisión (por volumen de ventas)</div>
 
@@ -324,6 +341,9 @@ function _escucharConfigs() {
               ${fmtMXN(c.salarioBase)}/sem · ${c.diasLaborales||6}d
             </div>
           </div>
+          <div style="font-size:11px;color:#60A5FA;margin-bottom:6px">
+            📅 Período: ${DIAS_SEM[c.diaLiquidacion ?? 1]} → ${DIAS_SEM[((c.diaLiquidacion ?? 1) + 6) % 7]}
+          </div>
           <div style="font-size:11px;color:#9CA3AF;margin-bottom:8px">${tramos}</div>
           <button onclick="ComisionesUI.editarConfig('${d.id}')"
             style="font-size:11px;background:var(--c-surface2);border:1px solid var(--c-border);
@@ -423,6 +443,8 @@ function _bindAcciones() {
       document.getElementById("com-salario").value = c.salarioBase || 0;
       const diasEl = document.getElementById("com-dias-lab");
       if (diasEl) diasEl.value = String(c.diasLaborales || 6);
+      const diaEl = document.getElementById("com-dia-liq");
+      if (diaEl) { diaEl.value = String(c.diaLiquidacion ?? 1); ComisionesUI._previewPeriodo(); }
       _renderTramos();
       document.getElementById("modal-alias").classList.add("hidden");
       document.getElementById("modal-comision").classList.remove("hidden");
@@ -446,6 +468,7 @@ function _bindAcciones() {
       const alias       = document.getElementById("com-alias").value.trim();
       const salario     = parseFloat(document.getElementById("com-salario").value) || 0;
       const diasLab     = parseInt(document.getElementById("com-dias-lab")?.value) || 6;
+      const diaLiq      = parseInt(document.getElementById("com-dia-liq")?.value ?? "1");
       if (!alias) { window.toast?.("Alias requerido", "error"); return; }
 
       // Leer tramos del DOM
@@ -458,14 +481,20 @@ function _bindAcciones() {
       _tramos.sort((a, b) => a.meta - b.meta);
 
       try {
+        const { updateDoc, doc: ud } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
         await setDoc(doc(db, "comision_config", alias), {
           aliasIngeniero: alias,
           salarioBase: salario,
           diasLaborales: diasLab,
+          diaLiquidacion: diaLiq,
           tramosJson: JSON.stringify(_tramos),
           actualizadoPor: Sesion.uid,
           actualizadoEn: serverTimestamp()
         });
+        // Sincronizar diaLiquidacion y salarioBase al perfil del usuario
+        try {
+          await updateDoc(ud(db, "usuarios", alias), { diaLiquidacion: diaLiq, salarioBase: salario });
+        } catch(_) { /* usuario puede no existir todavía */ }
         window.toast?.(`Configuración guardada para ${alias}`, "success");
         this.cerrarModal();
       } catch (e) {
@@ -492,6 +521,21 @@ function _bindAcciones() {
       const btn = document.getElementById("com-btn-nueva");
       if (btn) btn.style.display = tab === "config" ? "" : "none";
       _activarTab(tab);
+    },
+
+    _previewPeriodo() {
+      const dia = parseInt(document.getElementById("com-dia-liq")?.value ?? "1");
+      const el  = document.getElementById("com-periodo-preview");
+      if (!el) return;
+      // Calcular fechas de la semana actual que inicia en ese día
+      const hoy = new Date();
+      const dow = hoy.getDay(); // 0=Dom
+      const diff = ((dia - dow) + 7) % 7;
+      const ini = new Date(hoy); ini.setDate(hoy.getDate() - ((7 - diff) % 7 || 7));
+      const fin = new Date(ini); fin.setDate(ini.getDate() + 6);
+      const fmt = d => d.toLocaleDateString("es-MX", { weekday:"short", day:"numeric", month:"short" });
+      el.textContent = `📅 Período actual: ${fmt(ini)} → ${fmt(fin)}`;
+      el.style.display = "block";
     },
 
     nuevaCobranza() {

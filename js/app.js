@@ -297,6 +297,9 @@ function _initShell() {
   // ── Búsqueda global ─────────────────────────────────────────
   _initGlobalSearch();
 
+  // ── Botón limpiar en todos los campos de búsqueda ───────────
+  _initSearchClearButtons();
+
   // ── User popover ────────────────────────────────────────────
   const sbUser   = document.querySelector(".sb-user");
   const sbPop    = document.getElementById("sb-popover");
@@ -687,6 +690,91 @@ function _initGlobalSearch() {
     });
   }
 }
+// ── Botón ✕ limpiar en campos de búsqueda ─────────────────────
+function _initSearchClearButtons() {
+  // Selector que coincide con todos los campos de búsqueda del ERP
+  const SEL = [
+    'input[type="search"]',
+    'input[placeholder*="uscar"]',
+    'input[placeholder*="iltra"]',
+    '#global-search',
+    '.input-search',
+    '.sel-sm[type="text"]',
+  ].join(",");
+
+  // Inyecta el estilo del botón una sola vez
+  if (!document.getElementById("_clr-style")) {
+    const st = document.createElement("style");
+    st.id = "_clr-style";
+    st.textContent = `
+      .srch-wrap { position:relative; display:inline-flex; align-items:center; }
+      .srch-wrap > input { padding-right:24px !important; box-sizing:border-box; }
+      .srch-clr {
+        position:absolute; right:5px; top:50%; transform:translateY(-50%);
+        background:none; border:none; cursor:pointer; padding:0; line-height:1;
+        color:#9CA3AF; font-size:14px; display:none; z-index:2;
+        transition:color .15s;
+      }
+      .srch-clr:hover { color:#EF4444; }
+    `;
+    document.head.appendChild(st);
+  }
+
+  function _decorate(input) {
+    if (input._clearDecorated) return;
+    input._clearDecorated = true;
+
+    // Si el padre ya es srch-wrap, no envolver de nuevo
+    const parent = input.parentElement;
+    if (!parent) return;
+    if (!parent.classList.contains("srch-wrap")) {
+      const wrap = document.createElement("span");
+      wrap.className = "srch-wrap";
+      // Copiar el width/flex del input al wrap para no romper el layout
+      const cs = getComputedStyle(input);
+      if (cs.flex && cs.flex !== "0 1 auto") wrap.style.flex = cs.flex;
+      if (input.style.width) wrap.style.width = input.style.width;
+      parent.insertBefore(wrap, input);
+      wrap.appendChild(input);
+    }
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "srch-clr";
+    btn.title = "Limpiar búsqueda";
+    btn.textContent = "✕";
+    input.parentElement.appendChild(btn);
+
+    const toggle = () => { btn.style.display = input.value ? "block" : "none"; };
+    input.addEventListener("input",  toggle);
+    input.addEventListener("change", toggle);
+    toggle();
+
+    btn.addEventListener("click", () => {
+      input.value = "";
+      toggle();
+      input.dispatchEvent(new Event("input",  { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      input.focus();
+    });
+  }
+
+  // Decorar inputs ya presentes
+  document.querySelectorAll(SEL).forEach(_decorate);
+
+  // Observer para inputs añadidos dinámicamente (al navegar entre módulos)
+  const obs = new MutationObserver(mutations => {
+    mutations.forEach(m => {
+      m.addedNodes.forEach(node => {
+        if (node.nodeType !== 1) return;
+        if (node.matches?.(SEL)) _decorate(node);
+        node.querySelectorAll?.(SEL).forEach(_decorate);
+      });
+    });
+  });
+  obs.observe(document.body, { childList: true, subtree: true });
+}
+
 // ── Sidebar collapsible sections ──────────────────────────────
 function _initSidebarCollapse() {
   const KEY = "n10_sb_";
