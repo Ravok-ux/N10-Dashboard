@@ -1335,7 +1335,7 @@ async function _guardarFormCliente(clienteId) {
   }
 
 // ── Ubicaciones de cliente ────────────────────────────────────
-const GMAPS_KEY = "AIzaSyCZS7tBcukVcQ5EPQdHGbEZky7LwHG0AS0";
+const GMAPS_KEY = "AIzaSyCl9_ouMqIVy1RBwRqBzLU0cjGJUsLIUGE";
 let _gmapsLoaded = false;
 let _gmapsLoading = false;
 

@@ -199,9 +199,7 @@ function _construirUI(container) {
     <div id="mc-panel-body">
       <div class="mc-section-title">👷 Ingenieros</div>
       <div id="mc-ing-chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">
-        <div class="mc-chip mc-chip-ing activo" data-ing="TODOS" style="border-color:#E5E7EB;color:#E5E7EB">
-          Todos
-        </div>
+        <div class="mc-chip mc-chip-ing mc-chip-todos activo" data-ing="TODOS">Todos</div>
         ${ingenieros.map(a => {
           const c = colorDeIngeniero(a);
           return `<div class="mc-chip mc-chip-ing" data-ing="${a}"
@@ -407,10 +405,10 @@ function _renderMarcadores() {
       ? `$${Number(c.saldo).toLocaleString("es-MX",{minimumFractionDigits:2})}`
       : "Sin adeudo";
     marker.bindTooltip(`
-      <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:2px">${c.nombre||"—"}</div>
-      <div style="font-size:10px;color:#555">${c.ingeniero||"—"}</div>
-      <div style="font-size:10px;color:${(c.saldo??0)>0?"#DC2626":"#16A34A"}">${saldoFmt}</div>
-      <div style="font-size:10px;color:#888">${diasTexto(c.diasVisita)}</div>
+      <div style="font-size:12px;font-weight:700;color:#F9FAFB;margin-bottom:2px">${c.nombre||"—"}</div>
+      <div style="font-size:10px;color:#9CA3AF;margin-bottom:1px">${c.ingeniero||"—"}</div>
+      <div style="font-size:10px;font-weight:600;color:${(c.saldo??0)>0?"#FCA5A5":"#86EFAC"}">${saldoFmt}</div>
+      <div style="font-size:10px;color:#6B7280;margin-top:1px">${diasTexto(c.diasVisita)}</div>
     `, { sticky: true, offset: [10,0] });
 
     const entry = { marker, data: c, idx };
@@ -433,26 +431,21 @@ function _popupHtml(c, color, dias, visitadoHoy) {
   const diasStr = dias < 0 ? "Sin visitas" : dias === 0 ? "✅ Visitado hoy" : `${dias} días sin visitar`;
   const diasColor = dias < 0 ? "#9CA3AF" : dias === 0 ? "#16A34A" : dias > 14 ? "#DC2626" : "#D97706";
 
-  return `<div style="min-width:200px;font-family:system-ui,sans-serif">
-    <div style="background:${color};padding:10px 14px 8px;border-radius:10px 10px 0 0">
-      <div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:1px">${_esc(c.nombre||"—")}</div>
-      <div style="font-size:9px;color:rgba(255,255,255,.75);text-transform:uppercase;letter-spacing:.06em">
-        ${_esc(c.estadoLegal||"—")}
-      </div>
+  return `<div style="min-width:220px;font-family:system-ui,sans-serif;background:var(--surface,#1F2937);border-radius:12px;overflow:hidden">
+    <div style="background:${color};padding:12px 16px 10px">
+      <div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:2px">${_esc(c.nombre||"—")}</div>
+      <div style="font-size:9px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.07em">${_esc(c.estadoLegal||"Sin estado")}</div>
     </div>
-    <div style="padding:10px 14px">
-      ${c.ingeniero ? `<div style="font-size:11px;color:#555;margin-bottom:5px">👷 ${_esc(c.ingeniero)}</div>` : ""}
-      ${(c.zona||c.municipio) ? `<div style="font-size:11px;color:#777;margin-bottom:5px">📍 ${_esc([c.zona,c.municipio].filter(Boolean).join(" · "))}</div>` : ""}
-      <div style="font-size:11px;font-weight:700;color:${diasColor};
-        background:${diasColor}15;padding:3px 8px;border-radius:9px;display:inline-block;margin-bottom:6px">
-        ${diasStr}
+    <div style="padding:12px 16px;background:rgba(17,24,39,0.95)">
+      ${c.ingeniero ? `<div style="font-size:11px;color:#9CA3AF;margin-bottom:6px">👷 <span style="color:#E5E7EB">${_esc(c.ingeniero)}</span></div>` : ""}
+      ${(c.zona||c.municipio) ? `<div style="font-size:11px;color:#9CA3AF;margin-bottom:6px">📍 <span style="color:#D1D5DB">${_esc([c.zona,c.municipio].filter(Boolean).join(" · "))}</span></div>` : ""}
+      <div style="font-size:11px;font-weight:700;color:${diasColor};background:${diasColor}22;padding:3px 10px;border-radius:9px;display:inline-block;margin-bottom:8px">${diasStr}</div>
+      ${c.diasVisita ? `<div style="font-size:10px;color:#6B7280;margin-bottom:6px">📅 ${diasTexto(c.diasVisita)}</div>` : ""}
+      <div style="font-size:12px;margin-bottom:4px">
+        <span style="color:#6B7280;font-size:10px">Adeudo </span>
+        <span style="font-weight:800;color:${(c.saldo??0)>0?"#FCA5A5":"#86EFAC"}">${fmt(c.saldo)}</span>
       </div>
-      ${c.diasVisita ? `<div style="font-size:10px;color:#666;margin-bottom:5px">📅 ${diasTexto(c.diasVisita)}</div>` : ""}
-      <div style="font-size:11px;margin-bottom:8px">
-        <span style="color:#6B7280">Adeudo: </span>
-        <span style="font-weight:700;color:${(c.saldo??0)>0?"#DC2626":"#16A34A"}">${fmt(c.saldo)}</span>
-      </div>
-      <div style="font-size:9px;color:#CCC;font-family:monospace">ID: ${_esc(c._fsId||"")}</div>
+      <div style="font-size:9px;color:#374151;font-family:monospace;margin-top:6px">${_esc(c._fsId||"")}</div>
     </div>
   </div>`;
 }
@@ -582,6 +575,8 @@ function _inyectarCSS() {
     }
     .mc-chip.activo { color:#fff !important; }
     .mc-chip-ing.activo    { background:currentColor; }
+    .mc-chip-ing.mc-chip-todos { border-color:rgba(255,255,255,0.35); color:rgba(255,255,255,0.7); }
+    .mc-chip-ing.mc-chip-todos.activo { background:rgba(255,255,255,0.18) !important; border-color:rgba(255,255,255,0.6) !important; color:#fff !important; }
     .mc-chip-estado.activo { background:currentColor; }
     .mc-chip-calor.activo  { background:#BE185D; border-color:#BE185D; color:#fff !important; }
     .mc-chip-heat.activo   { color:#fff !important; background:currentColor; }
@@ -613,21 +608,22 @@ function _inyectarCSS() {
 
     #mc-leyenda {
       position:absolute;bottom:28px;left:12px;z-index:1000;
-      background:rgba(17,24,39,0.88);backdrop-filter:blur(6px);
-      border:1px solid rgba(255,255,255,.1);border-radius:12px;
-      padding:10px 12px;font-family:system-ui,sans-serif;
-      box-shadow:0 4px 16px rgba(0,0,0,.3);max-width:180px;
+      background:rgba(17,24,39,0.92);backdrop-filter:blur(8px);
+      border:1px solid rgba(255,255,255,.12);border-radius:12px;
+      padding:10px 14px;font-family:system-ui,sans-serif;
+      box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:200px;min-width:140px;
     }
-    #mc-contador { margin-left:auto; }
+    #mc-leyenda-items > div { color:#E5E7EB !important; }
+    #mc-contador { margin-left:auto; font-variant-numeric:tabular-nums; }
 
     /* Leaflet popup dark override */
     .leaflet-popup-content-wrapper {
-      background:var(--surface, #fff);border:1px solid rgba(0,0,0,.1);
-      border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.25);padding:0;overflow:hidden;
+      background:transparent !important;border:none !important;
+      border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.5);padding:0 !important;overflow:hidden;
     }
-    .leaflet-popup-content { margin:0; }
+    .leaflet-popup-content { margin:0 !important; width:auto !important; }
     .leaflet-popup-tip-container { display:none; }
-    .leaflet-popup-close-button { color:#9CA3AF !important;top:8px !important;right:8px !important; }
+    .leaflet-popup-close-button { color:rgba(255,255,255,.6) !important;top:10px !important;right:10px !important;font-size:16px !important;z-index:10; }
     .leaflet-tooltip {
       background:rgba(17,24,39,0.95) !important;border:1px solid rgba(255,255,255,.1) !important;
       border-radius:8px !important;box-shadow:0 4px 12px rgba(0,0,0,.3) !important;
