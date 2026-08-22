@@ -1,4 +1,4 @@
-// ══════════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════════
 // cobranza.js — Historial de abonos con motor de intereses
 //
 // Fuente: remisiones_credito (abonos embebidos en cada nota).
@@ -46,9 +46,9 @@ function _html() {
   <div style="display:flex;flex-direction:column;gap:0;padding:0 0 20px">
 
     <!-- Controles -->
-    <div style="background:var(--c-surface);border-radius:10px;border:1px solid var(--c-border);
+    <div style="background:var(--surface);border-radius:10px;border:1px solid var(--border);
       padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span style="font-size:12px;font-weight:700;color:var(--c-text)">Período:</span>
+      <span style="font-size:12px;font-weight:700;color:var(--text-primary)">Período:</span>
       ${["hoy","semana","mes"].map(p => `
         <button class="filter-pill ${p==="semana"?"active":""}" data-cob-p="${p}"
           onclick="CobranzaUI.setPeriodo('${p}')">
@@ -56,8 +56,8 @@ function _html() {
         </button>`).join("")}
       <div style="flex:1"></div>
       <select id="cob-sel-alias" onchange="CobranzaUI.setAlias(this.value)"
-        style="border:1px solid var(--c-border);border-radius:6px;padding:4px 8px;font-size:12px;
-          background:var(--c-surface);color:var(--c-text)">
+        style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;
+          background:var(--surface);color:var(--text-primary)">
         <option value="TODOS">Todos los recuperadores</option>
       </select>
     </div>
@@ -65,35 +65,35 @@ function _html() {
     <!-- KPIs -->
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px">
       ${[
-        ["cob-k-abonos",   "ABONOS",          "💳"],
-        ["cob-k-total",    "TOTAL COBRADO",    "💵"],
-        ["cob-k-capital",  "CAPITAL COBRADO",  "🏦"],
-        ["cob-k-interes",  "INTERÉS COBRADO",  "📈"],
-        ["cob-k-liquidadas","NOTAS LIQUIDADAS","✅"],
-      ].map(([id,l,ico]) => `
-        <div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:10px;
-          padding:14px 16px">
-          <div style="font-size:9.5px;font-weight:700;color:#9CA3AF;text-transform:uppercase;
+        ["cob-k-abonos",   "ABONOS",          "💳", "var(--text-primary)"],
+        ["cob-k-total",    "TOTAL COBRADO",    "💵", "#16A34A"],
+        ["cob-k-capital",  "CAPITAL COBRADO",  "🏦", "#2563EB"],
+        ["cob-k-interes",  "INTERÉS COBRADO",  "📈", "#F59E0B"],
+        ["cob-k-liquidadas","NOTAS LIQUIDADAS","✅", "#7C3AED"],
+      ].map(([id,l,ico,col]) => `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;
+          padding:14px 16px;box-shadow:var(--shadow)">
+          <div style="font-size:9.5px;font-weight:700;color:var(--text-sec);text-transform:uppercase;
             letter-spacing:.06em;margin-bottom:5px">${ico} ${l}</div>
-          <div style="font-size:17px;font-weight:800;color:var(--c-text);font-variant-numeric:tabular-nums"
+          <div style="font-size:17px;font-weight:800;color:${col};font-variant-numeric:tabular-nums"
             id="${id}">–</div>
         </div>`).join("")}
     </div>
 
     <!-- Ranking -->
-    <div style="background:var(--c-surface);border-radius:10px;border:1px solid var(--c-border);
+    <div style="background:var(--surface);border-radius:10px;border:1px solid var(--border);
       padding:16px;margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;
         letter-spacing:.05em;margin-bottom:10px">Ranking de cobranza</div>
       <div id="cob-ranking"></div>
     </div>
 
     <!-- Tabla -->
-    <div style="background:var(--c-surface);border-radius:10px;border:1px solid var(--c-border);overflow:hidden">
+    <div style="background:var(--surface);border-radius:10px;border:1px solid var(--border);overflow:hidden">
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:11.5px">
           <thead>
-            <tr style="border-bottom:1px solid var(--c-border)">
+            <tr style="border-bottom:1px solid var(--border)">
               <th style="${_th()}">FECHA</th>
               <th style="${_th()}">CLIENTE</th>
               <th style="${_th()}">NOTA</th>
@@ -107,7 +107,7 @@ function _html() {
             </tr>
           </thead>
           <tbody id="cob-tbody">
-            <tr><td colspan="10" style="padding:24px;text-align:center;color:#9CA3AF">Cargando…</td></tr>
+            <tr><td colspan="10" style="padding:24px;text-align:center;color:var(--text-muted)">Cargando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -116,7 +116,7 @@ function _html() {
 }
 
 const _th = (align = "left") =>
-  `padding:9px 14px;text-align:${align};font-weight:700;color:#9CA3AF;font-size:10px;
+  `padding:9px 14px;text-align:${align};font-weight:700;color:var(--text-muted);font-size:10px;
    text-transform:uppercase;letter-spacing:.06em;white-space:nowrap`;
 
 // ── Bind UI ───────────────────────────────────────────────────
@@ -261,19 +261,19 @@ function _renderTabla() {
               <span style="font-weight:600">${i+1}. ${esc(alias)}</span>
               <span style="font-weight:700;font-variant-numeric:tabular-nums">${fmt.format(monto)}</span>
             </div>
-            <div style="height:5px;background:var(--c-border);border-radius:3px">
+            <div style="height:5px;background:var(--border);border-radius:3px">
               <div style="height:100%;border-radius:3px;width:${pct}%;background:#16A34A"></div>
             </div>
           </div>`;
         }).join("")
-      : `<div style="color:#9CA3AF;font-size:12px">Sin cobranza en este período.</div>`;
+      : `<div style="color:var(--text-muted);font-size:12px">Sin cobranza en este período.</div>`;
   }
 
   // Tabla
   const tbody = document.getElementById("cob-tbody");
   if (!tbody) return;
   if (!lista.length) {
-    tbody.innerHTML = `<tr><td colspan="10" style="padding:24px;text-align:center;color:#9CA3AF">
+    tbody.innerHTML = `<tr><td colspan="10" style="padding:24px;text-align:center;color:var(--text-muted)">
       Sin abonos en este período.</td></tr>`;
     return;
   }
@@ -288,7 +288,7 @@ function _renderTabla() {
         ? `<button onclick="CobranzaUI.conciliar('${esc(a.remisionId)}', ${a.abonoIdx})"
              style="font-size:10px;padding:3px 9px;background:#14532D;color:#4ADE80;
              border:1px solid #16A34A;border-radius:5px;cursor:pointer;font-weight:600">Conciliar</button>`
-        : `<span style="font-size:10px;color:#9CA3AF">Pendiente</span>`;
+        : `<span style="font-size:10px;color:var(--text-muted)">Pendiente</span>`;
 
     const tipoBadge = a.esLiquidacion
       ? `<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:6px;
@@ -296,11 +296,11 @@ function _renderTabla() {
       : `<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:6px;
           background:#1E3A5F;color:#60A5FA">PARCIAL</span>`;
 
-    return `<tr style="border-bottom:1px solid var(--c-border);${a.conciliado ? "opacity:.65" : ""}">
-      <td style="padding:8px 14px;color:#9CA3AF;white-space:nowrap">${fmtDt(a.fecha)}</td>
+    return `<tr style="border-bottom:1px solid var(--border);${a.conciliado ? "opacity:.65" : ""}">
+      <td style="padding:8px 14px;color:var(--text-muted);white-space:nowrap">${fmtDt(a.fecha)}</td>
       <td style="padding:8px 14px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         ${esc(a.clienteNombre)}</td>
-      <td style="padding:8px 14px;font-family:monospace;font-weight:700;font-size:11px;color:#9CA3AF">
+      <td style="padding:8px 14px;font-family:monospace;font-weight:700;font-size:11px;color:var(--text-muted)">
         ${esc(a.folio)}</td>
       <td style="padding:8px 14px">${esc(a.ingenieroAlias)}</td>
       <td style="padding:8px 14px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:#22C55E">
@@ -312,7 +312,7 @@ function _renderTabla() {
         color:${a.deudaRestante > 0 ? "#EF4444" : "#22C55E"}">
         ${a.deudaRestante > 0 ? fmt.format(a.deudaRestante) : "SALDADO"}</td>
       <td style="padding:8px 14px;text-align:center">${tipoBadge}</td>
-      <td style="padding:8px 14px;text-align:center;font-size:10px;color:#9CA3AF;font-family:monospace">
+      <td style="padding:8px 14px;text-align:center;font-size:10px;color:var(--text-muted);font-family:monospace">
         ${esc(a.recibo)}</td>
       <td style="padding:8px 14px;text-align:center">${concBtn}</td>
     </tr>`;

@@ -29,6 +29,7 @@ const _COLS_PROD = [
 // ── Definición de todas las columnas disponibles ──────────────
 const ALL_COLS = [
   { key: "check",          label: "✓",              locked: true  },
+  { key: "foto",           label: "FOTO"                          },
   { key: "numero",         label: "ID"                            },
   { key: "codigo",         label: "CÓDIGO"                        },
   { key: "clave_sat",      label: "CLAVE SAT"                     },
@@ -65,7 +66,7 @@ window.Prod_xlExport = async function() {
     const snap = await getDocs(col(fdb, "productos"));
     const rows = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     exportarExcel(rows, _COLS_PROD, "Productos", "Productos");
-  } catch(e) { window.toast?.("Error al exportar.", "error"); }
+  } catch(e) { window.toast?.("Error al exportar: " + e.message, "error"); console.error(e); }
 };
 window.Prod_xlPlantilla = function() { descargarPlantilla(_COLS_PROD, "Productos", "Productos"); };
 
@@ -109,7 +110,7 @@ window.Prod_stockImportar = async function() {
     await batch.commit();
     window.toast?.(`Stock actualizado: ${ok} productos${noMatch ? `, ${noMatch} sin coincidencia` : ""}.`,
       ok > 0 ? "success" : "warning");
-  } catch(e) { window.toast?.("Error al importar stock.", "error"); console.error(e); }
+  } catch(e) { window.toast?.("Error al importar stock: " + e.message, "error"); console.error(e); }
 };
 window.Prod_xlImport = async function() {
   if (!puedeImportar()) { window.toast?.("Sin permisos para importar.", "error"); return; }
@@ -127,7 +128,7 @@ window.Prod_xlImport = async function() {
       } catch { err++; }
     }
     window.toast?.(`Importación: ${ok} productos${err ? `, ${err} errores` : ""}.`, ok > 0 ? "success" : "error");
-  } catch(e) { window.toast?.("Error en importación.", "error"); }
+  } catch(e) { window.toast?.("Error en importación: " + e.message, "error"); console.error(e); }
 };
 
 const fmtMXN = v => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(v || 0);
@@ -173,16 +174,16 @@ function _html() {
 
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;
-        border-bottom:1px solid var(--c-border);flex-shrink:0;flex-wrap:wrap">
+        border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
         <div>
-          <div style="font-size:13px;font-weight:800;color:var(--c-text)">Catálogo de Productos</div>
+          <div style="font-size:13px;font-weight:800;color:var(--text-primary)">Catálogo de Productos</div>
           <div style="font-size:10.5px;color:#9CA3AF" id="pc-subtitle">Cargando…</div>
         </div>
         <div style="flex:1"></div>
         <input id="pc-buscar" type="text"
           placeholder="Buscar por Nombre / Descripción / Código / Clave SAT…"
-          style="padding:7px 12px;border-radius:6px;border:1px solid var(--c-border);
-            background:var(--c-surface);color:var(--c-text);font-size:12px;width:280px">
+          style="padding:7px 12px;border-radius:6px;border:1px solid var(--border);
+            background:var(--surface);color:var(--text-primary);font-size:12px;width:280px">
         ${PUEDE_EDITAR() ? `
           <button onclick="ProdCtrlUI.abrirAltaProducto()"
             style="padding:7px 16px;border-radius:6px;border:none;background:#1B5E20;
@@ -190,24 +191,24 @@ function _html() {
             Nuevo Normal
           </button>
           <button onclick="ProdCtrlUI.abrirAltaExpress()"
-            style="padding:7px 16px;border-radius:6px;border:1px solid var(--c-border);
-              background:transparent;color:var(--c-text);font-size:12px;font-weight:700;
+            style="padding:7px 16px;border-radius:6px;border:1px solid var(--border);
+              background:transparent;color:var(--text-primary);font-size:12px;font-weight:700;
               cursor:pointer;white-space:nowrap">
             Nuevo Express
           </button>` : ""}
         <button onclick="ProdCtrlUI.abrirConfigCols()" title="Configurar columnas"
-          style="padding:7px 10px;border-radius:6px;border:1px solid var(--c-border);
-            background:transparent;color:var(--c-text);font-size:13px;cursor:pointer"
+          style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);
+            background:transparent;color:var(--text-primary);font-size:13px;cursor:pointer"
           >⚙ Columnas</button>
       </div>
 
       <!-- KPIs -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;flex-shrink:0;
-        border-bottom:1px solid var(--c-border)">
+        border-bottom:1px solid var(--border)">
         ${[["pc-kpi-total","Total","#9CA3AF"],["pc-kpi-activos","Activos","#4ADE80"],
            ["pc-kpi-inact","Inactivos","#F87171"],["pc-kpi-sinprecio","Sin precio","#FBBF24"]
           ].map(([id,lbl,col]) => `
-          <div style="padding:12px 18px;border-right:1px solid var(--c-border)">
+          <div style="padding:12px 18px;border-right:1px solid var(--border)">
             <div style="font-size:10px;color:#6B7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">${lbl}</div>
             <div id="${id}" style="font-size:18px;font-weight:800;color:${col}">–</div>
           </div>`).join("")}
@@ -215,7 +216,7 @@ function _html() {
 
       <!-- Filtros + toolbar -->
       <div style="display:flex;align-items:center;gap:8px;padding:10px 20px;
-        border-bottom:1px solid var(--c-border);flex-shrink:0;flex-wrap:wrap">
+        border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
         ${["todos","activos","inactivos"].map(f => `
           <button class="filter-pill ${f==="todos"?"active":""}" data-filtro="${f}"
             onclick="ProdCtrlUI.setFiltro('${f}')">
@@ -224,8 +225,8 @@ function _html() {
         <div style="flex:1"></div>
         ${puedeImportar() ? `
           <button onclick="Prod_stockPlantilla()" title="Descargar plantilla de actualización de stock"
-            style="padding:6px 12px;border-radius:6px;border:1px solid var(--c-border);
-              background:transparent;color:var(--c-text);font-size:11.5px;cursor:pointer;white-space:nowrap">
+            style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);
+              background:transparent;color:var(--text-primary);font-size:11.5px;cursor:pointer;white-space:nowrap">
             📦 Plantilla Stock
           </button>
           <button onclick="Prod_stockImportar()" title="Importar stock desde Excel"
@@ -239,7 +240,7 @@ function _html() {
       <!-- Scrollbar espejo superior -->
       <div id="pc-topscroll"
         style="overflow-x:auto;overflow-y:hidden;height:14px;flex-shrink:0;
-          border-bottom:1px solid var(--c-border);background:var(--c-surface2,#1E293B)">
+          border-bottom:1px solid var(--border);background:var(--surface-2)">
         <div id="pc-topscroll-inner" style="height:1px;min-width:1500px"></div>
       </div>
 
@@ -247,7 +248,7 @@ function _html() {
       <div id="pc-tablewrap" style="flex:1;overflow:auto;min-height:0">
         <table style="border-collapse:collapse;font-size:12px;min-width:1500px;width:100%" id="pc-table">
           <thead id="pc-thead">
-            <tr style="background:var(--c-surface2,#1E293B);border-bottom:2px solid var(--c-border);
+            <tr style="background:var(--surface-2);border-bottom:2px solid var(--border);
               position:sticky;top:0;z-index:2">
             </tr>
           </thead>
@@ -264,9 +265,9 @@ function _html() {
     <!-- ── Modal Edición completa ── -->
     <div id="pc-modal-edit" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
       z-index:1000;align-items:center;justify-content:center;padding:16px">
-      <div style="background:var(--c-surface);border-radius:14px;width:560px;max-width:100%;
-        max-height:90vh;overflow-y:auto;border:1px solid var(--c-border);padding:28px">
-        <div style="font-size:15px;font-weight:800;color:var(--c-text);margin-bottom:20px"
+      <div style="background:var(--surface);border-radius:14px;width:560px;max-width:100%;
+        max-height:90vh;overflow-y:auto;border:1px solid var(--border);padding:28px">
+        <div style="font-size:15px;font-weight:800;color:var(--text-primary);margin-bottom:20px"
           id="pc-edit-titulo">Editar producto</div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
@@ -274,28 +275,67 @@ function _html() {
           ${_field("pc-e-codigo",      "Código N10",       "text",   "N10-0001")}
           ${_field("pc-e-clave_sat",   "Clave SAT",        "text",   "Ej. 10101502")}
           ${_field("pc-e-nombre_suc",  "Nombre Sucursal",  "text",   "Nutricion de 10")}
-          ${_field("pc-e-marca",       "Marca",            "text",   "BAYER")}
-          ${_field("pc-e-categoria",   "Categoría",        "text",   "Herbicida")}
-          ${_field("pc-e-subcategoria","Subcategoría",     "text",   "")}
+          ${_comboField("pc-e-marca",       "Marca",         "Selecciona o escribe…")}
+          ${_comboField("pc-e-categoria",   "Categoría",     "Selecciona o escribe…")}
+          ${_comboField("pc-e-subcategoria","Subcategoría",  "Selecciona o escribe…")}
           ${_field("pc-e-precio",      "Precio cliente ($)","number","0.00")}
           ${_field("pc-e-costo",       "Costo ($)",        "number", "0.00")}
           ${_field("pc-e-peso",        "Peso",             "number", "0.0")}
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Familia / tipo</label>
+            <select id="pc-e-familia"
+              onchange="document.getElementById('pc-e-litros-wrap').style.display=this.value==='N10'?'':'none'"
+              style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+                font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box;appearance:auto">
+              <option value="">Estándar</option>
+              <option value="N10">💧 N10 — Litros</option>
+            </select>
+          </div>
+          <div id="pc-e-litros-wrap" style="display:none">
+            ${_field("pc-e-litros_pu", "Litros por unidad", "number", "0.0")}
+          </div>
         </div>
 
         <div style="margin-bottom:12px">
           <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Descripción</label>
           <textarea id="pc-e-descripcion" rows="2"
-            style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
-              font-size:12px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box;
+            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box;
               resize:vertical;font-family:inherit"></textarea>
+        </div>
+
+        <!-- ── Foto del producto ── -->
+        <div style="margin-bottom:14px;border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--surface-2)">
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:8px">Foto del producto</label>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div id="pc-foto-preview" style="width:72px;height:72px;border-radius:8px;border:1px solid var(--border);
+              background:var(--surface);display:flex;align-items:center;justify-content:center;
+              overflow:hidden;flex-shrink:0;font-size:28px">📷</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <input type="file" id="pc-foto-input" accept="image/*" style="display:none"
+                onchange="ProdCtrlUI.previsualizarFoto(this)">
+              <button onclick="document.getElementById('pc-foto-input').click()"
+                style="padding:6px 14px;border:1px solid var(--border);border-radius:6px;
+                  background:transparent;color:var(--text-primary);font-size:11px;cursor:pointer;font-weight:600">
+                📁 Seleccionar imagen
+              </button>
+              <button id="pc-foto-quitar-btn" onclick="ProdCtrlUI.quitarFotoProd()" style="display:none;
+                padding:6px 14px;border:1px solid #FCA5A5;border-radius:6px;
+                background:transparent;color:#DC2626;font-size:11px;cursor:pointer;font-weight:600">
+                🗑 Quitar foto
+              </button>
+              <span style="font-size:10px;color:#6B7280">JPG, PNG o WEBP · máx 5 MB</span>
+            </div>
+          </div>
+          <div id="pc-foto-progreso" style="display:none;margin-top:8px;font-size:11px;color:#6B7280">Subiendo foto…</div>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
           <div>
             <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Impuesto</label>
             <select id="pc-e-impuesto"
-              style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
-                font-size:12px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+              style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+                font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
               <option value="Exento">Exento de Impuesto</option>
               <option value="IVA">Con IVA 16%</option>
               <option value="IEPS">Con IEPS</option>
@@ -314,8 +354,8 @@ function _html() {
 
         <div style="display:flex;gap:10px;justify-content:flex-end">
           <button onclick="ProdCtrlUI.cerrarEdicion()"
-            style="padding:8px 18px;border:1px solid var(--c-border);border-radius:6px;
-              background:transparent;color:var(--c-text);font-size:12px;cursor:pointer">
+            style="padding:8px 18px;border:1px solid var(--border);border-radius:6px;
+              background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer">
             Cancelar
           </button>
           <button onclick="ProdCtrlUI.guardarEdicion()"
@@ -331,27 +371,27 @@ function _html() {
     <!-- ── Modal Nuevo Express ── -->
     <div id="pc-modal-express" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
       z-index:1000;align-items:center;justify-content:center;padding:16px">
-      <div style="background:var(--c-surface);border-radius:14px;width:360px;max-width:100%;
-        border:1px solid var(--c-border);padding:24px">
-        <div style="font-size:14px;font-weight:800;color:var(--c-text);margin-bottom:16px">Nuevo producto (express)</div>
+      <div style="background:var(--surface);border-radius:14px;width:360px;max-width:100%;
+        border:1px solid var(--border);padding:24px">
+        <div style="font-size:14px;font-weight:800;color:var(--text-primary);margin-bottom:16px">Nuevo producto (express)</div>
         <div style="margin-bottom:12px">
           <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Nombre*</label>
           <input id="pe-nombre" type="text" maxlength="120" placeholder="Nombre del producto"
-            style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
-              font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
         </div>
         <div style="margin-bottom:18px">
           <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Precio cliente ($)</label>
           <input id="pe-precio" type="number" min="0" step="0.01" placeholder="0.00"
-            style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
-              font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
         </div>
         <div id="pc-express-error" style="display:none;background:#FEE2E2;border-radius:6px;
           padding:8px 12px;font-size:11.5px;color:#DC2626;margin-bottom:12px"></div>
         <div style="display:flex;gap:10px;justify-content:flex-end">
           <button onclick="document.getElementById('pc-modal-express').style.display='none'"
-            style="padding:8px 18px;border:1px solid var(--c-border);border-radius:6px;
-              background:transparent;color:var(--c-text);font-size:12px;cursor:pointer">Cancelar</button>
+            style="padding:8px 18px;border:1px solid var(--border);border-radius:6px;
+              background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer">Cancelar</button>
           <button onclick="ProdCtrlUI.guardarExpress()"
             style="padding:8px 22px;border:none;border-radius:6px;
               background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
@@ -364,19 +404,19 @@ function _html() {
     <!-- ── Modal configuración de columnas ── -->
     <div id="pc-modal-cols" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
       z-index:1000;align-items:center;justify-content:center;padding:16px">
-      <div style="background:var(--c-surface);border-radius:14px;width:360px;max-width:100%;
-        border:1px solid var(--c-border);padding:24px;max-height:90vh;overflow-y:auto">
-        <div style="font-size:14px;font-weight:800;color:var(--c-text);margin-bottom:4px">Configurar columnas</div>
+      <div style="background:var(--surface);border-radius:14px;width:360px;max-width:100%;
+        border:1px solid var(--border);padding:24px;max-height:90vh;overflow-y:auto">
+        <div style="font-size:14px;font-weight:800;color:var(--text-primary);margin-bottom:4px">Configurar columnas</div>
         <div style="font-size:11px;color:#9CA3AF;margin-bottom:16px">Arrastra para reordenar · desmarca para ocultar</div>
         <ul id="pc-cols-list" style="list-style:none;padding:0;margin:0 0 18px;display:flex;flex-direction:column;gap:6px"></ul>
         <div style="display:flex;gap:8px;justify-content:space-between">
           <button onclick="ProdCtrlUI.resetCols()"
-            style="padding:7px 14px;border:1px solid var(--c-border);border-radius:6px;
+            style="padding:7px 14px;border:1px solid var(--border);border-radius:6px;
               background:transparent;color:#9CA3AF;font-size:11px;cursor:pointer">Restablecer</button>
           <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('pc-modal-cols').style.display='none'"
-              style="padding:7px 14px;border:1px solid var(--c-border);border-radius:6px;
-                background:transparent;color:var(--c-text);font-size:12px;cursor:pointer">Cancelar</button>
+              style="padding:7px 14px;border:1px solid var(--border);border-radius:6px;
+                background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer">Cancelar</button>
             <button onclick="ProdCtrlUI.guardarCols()"
               style="padding:7px 18px;border:none;border-radius:6px;
                 background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Aplicar</button>
@@ -396,9 +436,22 @@ function _field(id, label, type, placeholder) {
   return `<div>
     <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">${label}</label>
     <input id="${id}" type="${type}" placeholder="${placeholder}"
-      style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
-        font-size:12px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box"
+      style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+        font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box"
       ${type==="number" ? 'min="0" step="0.01"' : 'maxlength="120"'}>
+  </div>`;
+}
+
+// Select con opción "+ Agregar nueva…" para GERENTE/ADMIN
+function _comboField(id, label, placeholder) {
+  return `<div>
+    <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">${label}</label>
+    <select id="${id}"
+      style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+        font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box;
+        appearance:auto">
+      <option value="">${placeholder}</option>
+    </select>
   </div>`;
 }
 
@@ -414,6 +467,70 @@ function _escuchar() {
     window.toast?.("Error al cargar productos", "error");
   });
   _unsubs.push(unsub);
+}
+
+// ── Catálogo de Marcas / Categorías / Subcategorías ───────────
+const _cat = { marcas: [], categorias: [], subcategorias: [] };
+const _CAT_KEYS = { "pc-e-marca": "marcas", "pc-e-categoria": "categorias", "pc-e-subcategoria": "subcategorias" };
+const _PUEDE_CAT = () => Sesion.esSuperAdmin?.() || ["GERENTE","ADMINISTRADOR"].includes(Sesion.rol);
+
+let _catCargado = false;
+
+function _catLoad() {
+  // Extrae valores únicos directamente de los productos ya cargados
+  const campos = { marcas: "marca", categorias: "categoria", subcategorias: "subcategoria" };
+  for (const [tipo, campo] of Object.entries(campos)) {
+    const existentes = new Set(_cat[tipo]);
+    _todos.forEach(p => { const v = (p[campo] || "").trim(); if (v) existentes.add(v); });
+    _cat[tipo] = [...existentes].sort((a, b) => a.localeCompare(b, "es"));
+  }
+  _catCargado = true;
+  return Promise.resolve();
+}
+
+function _catAgregar(tipo, valor) {
+  valor = (valor || "").trim();
+  if (!valor || _cat[tipo].includes(valor)) return;
+  _cat[tipo] = [..._cat[tipo], valor].sort((a, b) => a.localeCompare(b, "es"));
+}
+
+const _CAT_TIPO_CAMPO = { marcas: "marca", categorias: "categoria", subcategorias: "subcategoria" };
+const _CAT_CAMPO_TIPO = { marca: "marcas", categoria: "categorias", subcategoria: "subcategorias" };
+
+// Rellena los <select> con las opciones del catálogo
+function _catPopulateDatalist(currentValues = {}) {
+  const campos = [
+    { inputId: "pc-e-marca",        tipo: "marcas",        cur: currentValues.marca        || "" },
+    { inputId: "pc-e-categoria",    tipo: "categorias",    cur: currentValues.categoria    || "" },
+    { inputId: "pc-e-subcategoria", tipo: "subcategorias", cur: currentValues.subcategoria || "" },
+  ];
+  const puedeAgregar = _PUEDE_CAT();
+
+  for (const { inputId, tipo, cur } of campos) {
+    const sel = document.getElementById(inputId);
+    if (!sel || sel.tagName !== "SELECT") continue;
+    const campo = _CAT_TIPO_CAMPO[tipo];
+
+    const opts = _cat[tipo].map(v =>
+      `<option value="${esc(v)}">${esc(v)}</option>`
+    ).join("");
+    const addOpt = puedeAgregar
+      ? `<option value="__nuevo__">+ Agregar nueva opción…</option>` : "";
+    sel.innerHTML = `<option value="">Selecciona o escribe…</option>${opts}${addOpt}`;
+    if (cur && _cat[tipo].includes(cur)) sel.value = cur;
+
+    sel.onchange = async function() {
+      if (sel.value !== "__nuevo__") return;
+      const nombre = _CAT_TIPO_CAMPO[tipo];
+      const nuevo = await window.promptModal?.({ title: `Nueva ${nombre}`, label: nombre, placeholder: `Escribe la nueva ${nombre.toLowerCase()}…` });
+      if (nuevo && nuevo.trim()) {
+        _catAgregar(tipo, nuevo.trim());
+        _catPopulateDatalist({ ...currentValues, [campo]: nuevo.trim() });
+      } else {
+        sel.value = cur || "";
+      }
+    };
+  }
 }
 
 // ── Render tabla ──────────────────────────────────────────────
@@ -456,7 +573,7 @@ function _renderizar() {
     return;
   }
 
-  const COL_TD = "padding:8px 10px;border-bottom:1px solid var(--c-border);white-space:nowrap;";
+  const COL_TD = "padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;";
 
   tbody.innerHTML = filtrados.map((p, i) => {
     const activo   = p.activo !== false;
@@ -472,10 +589,16 @@ function _renderizar() {
       switch(key) {
         case "check":
           return `<td style="${COL_TD}"><input type="checkbox" class="pc-chk-row" data-id="${esc(p._docId)}" style="cursor:pointer"></td>`;
+        case "foto":
+          return p.fotoUrl
+            ? `<td style="${COL_TD}text-align:center"><img src="${esc(p.fotoUrl)}" alt="foto"
+                style="width:40px;height:40px;object-fit:cover;border-radius:6px;cursor:pointer"
+                onclick="ProdCtrlUI.abrirEdicion('${esc(p._docId)}')" title="Ver producto"></td>`
+            : `<td style="${COL_TD}text-align:center;color:#6B7280;font-size:18px">📷</td>`;
         case "numero":
           return `<td style="${COL_TD}color:#9CA3AF;font-variant-numeric:tabular-nums">${num}</td>`;
         case "codigo":
-          return `<td style="${COL_TD}font-weight:700;color:var(--c-text);font-family:monospace;cursor:pointer"
+          return `<td style="${COL_TD}font-weight:700;color:var(--text-primary);font-family:monospace;cursor:pointer"
             onclick="ProdCtrlUI.abrirDetalle('${esc(p._docId)}')" title="Ver detalle">${esc(codigo)}</td>`;
         case "clave_sat":
           return `<td style="${COL_TD}color:#6B7280">${esc(p.clave_sat || "–")}</td>`;
@@ -483,7 +606,7 @@ function _renderizar() {
           return `<td style="${COL_TD}color:#6B7280">${esc(p.nombre_sucursal || "Nutricion de 10")}</td>`;
         case "nombre":
           return `<td style="${COL_TD}max-width:200px;overflow:hidden;text-overflow:ellipsis;
-            font-weight:600;color:var(--c-text);white-space:nowrap;cursor:pointer"
+            font-weight:600;color:var(--text-primary);white-space:nowrap;cursor:pointer"
             title="${esc(p.nombre)}"
             onclick="ProdCtrlUI.abrirDetalle('${esc(p._docId)}')">${esc(p.nombre || "–")}</td>`;
         case "precio_base":
@@ -516,7 +639,7 @@ function _renderizar() {
             <div style="display:flex;gap:5px;align-items:center;white-space:nowrap">
               <button onclick="ProdCtrlUI.abrirEdicion('${esc(p._docId)}')" title="Editar"
                 style="padding:3px 10px;border-radius:5px;border:1px solid #374151;
-                  background:transparent;color:var(--c-text);font-size:11px;cursor:pointer;font-weight:600">
+                  background:transparent;color:var(--text-primary);font-size:11px;cursor:pointer;font-weight:600">
                 ✏ Editar
               </button>
               <button onclick="ProdCtrlUI.toggleActivo('${esc(p._docId)}',${!activo})"
@@ -529,7 +652,7 @@ function _renderizar() {
       }
     }).join("");
 
-    return `<tr style="${!activo ? "opacity:.45;" : ""}background:${i%2===1?"var(--c-surface2,rgba(255,255,255,.02))":"transparent"}"
+    return `<tr style="${!activo ? "opacity:.45;" : ""}background:${i%2===1?"var(--surface-2))":"transparent"}"
       >${cells}</tr>`;
   }).join("");
 }
@@ -575,14 +698,14 @@ function _renderDetalle(docId) {
   dv.innerHTML = `
     <!-- Barra superior -->
     <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;
-      border-bottom:1px solid var(--c-border);flex-shrink:0;flex-wrap:wrap">
+      border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
       <button onclick="ProdCtrlUI.cerrarDetalle()"
-        style="padding:6px 12px;border-radius:6px;border:1px solid var(--c-border);
-          background:transparent;color:var(--c-text);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">
+        style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);
+          background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">
         ← Catálogo
       </button>
       <div style="flex:1;min-width:0">
-        <div style="font-size:15px;font-weight:800;color:var(--c-text);white-space:nowrap;
+        <div style="font-size:15px;font-weight:800;color:var(--text-primary);white-space:nowrap;
           overflow:hidden;text-overflow:ellipsis">${esc(p.nombre || "Producto")}</div>
         <div style="font-size:11px;color:#9CA3AF;margin-top:1px">
           ${esc(codigo)} · ID: ${num} · ${esc(p.marca || "Sin marca")} · ${esc(p.categoria || "Sin categoría")}
@@ -594,8 +717,8 @@ function _renderDetalle(docId) {
       </span>
       ${PUEDE_EDITAR() ? `
         <button onclick="ProdCtrlUI.abrirEdicion('${esc(docId)}')"
-          style="padding:7px 14px;border-radius:6px;border:1px solid var(--c-border);
-            background:transparent;color:var(--c-text);font-size:12px;cursor:pointer">
+          style="padding:7px 14px;border-radius:6px;border:1px solid var(--border);
+            background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer">
           ✏ Editar
         </button>
         <button onclick="ProdCtrlUI.toggleActivo('${esc(docId)}',${!activo})"
@@ -606,7 +729,7 @@ function _renderDetalle(docId) {
     </div>
 
     <!-- Tabs -->
-    <div style="display:flex;gap:0;flex-shrink:0;border-bottom:1px solid var(--c-border);padding:0 20px">
+    <div style="display:flex;gap:0;flex-shrink:0;border-bottom:1px solid var(--border);padding:0 20px">
       ${["general","precios","stock","granel"].map((t,i) => `
         <button class="pd-tab ${i===0?"pd-tab-active":""}" data-tab="${t}"
           onclick="ProdCtrlUI.switchTab('${t}')"
@@ -629,6 +752,8 @@ function _renderDetalle(docId) {
           ${_dfield("Categoría",          esc(p.categoria || "–"))}
           ${_dfield("Subcategoría",       esc(p.subcategoria || "–"))}
           ${_dfield("Peso",               p.peso > 0 ? p.peso + " kg" : "–")}
+          ${_dfield("Familia",            p.familia === "N10" ? "💧 N10 — Litros" : "Estándar")}
+          ${p.familia === "N10" ? _dfield("Litros por unidad", p.litros_por_unidad > 0 ? p.litros_por_unidad + " L" : "–") : ""}
           ${_dfield("Impuesto",           esc(impuesto))}
           ${_dfield("Materia Prima",      p.materia_prima === true ? "Sí" : "No")}
           ${_dfield("Creado por",         esc(p.creadoPor || "–"))}
@@ -637,8 +762,8 @@ function _renderDetalle(docId) {
         ${p.descripcion ? `
           <div style="margin-top:20px">
             <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Descripción</div>
-            <div style="font-size:13px;color:var(--c-text);line-height:1.6;background:var(--c-surface2,rgba(255,255,255,.03));
-              border-radius:8px;padding:12px 16px;border:1px solid var(--c-border)">${esc(p.descripcion)}</div>
+            <div style="font-size:13px;color:var(--text-primary);line-height:1.6;background:var(--surface-2));
+              border-radius:8px;padding:12px 16px;border:1px solid var(--border)">${esc(p.descripcion)}</div>
           </div>` : ""}
       </div>
 
@@ -652,9 +777,9 @@ function _renderDetalle(docId) {
             ${_pkpi("% Margen",     (((p.precio_base - p.costo_base) / p.precio_base) * 100).toFixed(1) + "%", "#60A5FA")}
           ` : ""}
         </div>
-        <div style="margin-top:20px;padding:16px;background:var(--c-surface2,rgba(255,255,255,.03));
-          border-radius:8px;border:1px solid var(--c-border);font-size:12px;color:#9CA3AF">
-          Los precios por segmento se gestionan en <b style="color:var(--c-text)">Precios por Segmento</b>.
+        <div style="margin-top:20px;padding:16px;background:var(--surface-2));
+          border-radius:8px;border:1px solid var(--border);font-size:12px;color:#9CA3AF">
+          Los precios por segmento se gestionan en <b style="color:var(--text-primary)">Precios por Segmento</b>.
         </div>
       </div>
 
@@ -664,8 +789,8 @@ function _renderDetalle(docId) {
           ${_pkpi("Stock actual", p.stock ?? "–", p.stock > 0 ? "#4ADE80" : "#F87171")}
           ${_pkpi("Mínimo stock", p.stock_minimo ?? "–", "#9CA3AF")}
         </div>
-        <div style="margin-top:20px;padding:16px;background:var(--c-surface2,rgba(255,255,255,.03));
-          border-radius:8px;border:1px solid var(--c-border);font-size:12px;color:#9CA3AF">
+        <div style="margin-top:20px;padding:16px;background:var(--surface-2));
+          border-radius:8px;border:1px solid var(--border);font-size:12px;color:#9CA3AF">
           El stock se actualiza desde los movimientos de almacén (entradas / salidas de pedidos).
           Para ajuste manual usa el botón Editar en la barra superior.
         </div>
@@ -673,11 +798,11 @@ function _renderDetalle(docId) {
 
       <!-- Tab granel -->
       <div id="pd-tab-granel" style="display:none">
-        <div style="margin-bottom:20px;padding:16px;background:var(--c-surface2,rgba(255,255,255,.03));
-          border-radius:10px;border:1px solid var(--c-border)">
+        <div style="margin-bottom:20px;padding:16px;background:var(--surface-2));
+          border-radius:10px;border:1px solid var(--border)">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:${granel?"16px":"0"}">
             <div style="flex:1">
-              <div style="font-size:13px;font-weight:700;color:var(--c-text)">Venta a Granel</div>
+              <div style="font-size:13px;font-weight:700;color:var(--text-primary)">Venta a Granel</div>
               <div style="font-size:11px;color:#9CA3AF;margin-top:2px">
                 Permite vender fracciones o cantidades especiales con precio diferenciado
               </div>
@@ -690,7 +815,7 @@ function _renderDetalle(docId) {
                   <div id="pd-granel-track" style="position:absolute;inset:0;border-radius:11px;
                     background:${granel?"#4ADE80":"#374151"};transition:background .2s"></div>
                   <div id="pd-granel-thumb" style="position:absolute;top:3px;left:${granel?"21px":"3px"};width:16px;height:16px;
-                    border-radius:50%;background:#fff;transition:left .2s"></div>
+                    border-radius:50%;background:var(--surface);transition:left .2s"></div>
                 </div>
                 <span style="font-size:12px;font-weight:600;color:${granel?"#4ADE80":"#9CA3AF"}">
                   ${granel?"Habilitado":"Deshabilitado"}
@@ -698,27 +823,27 @@ function _renderDetalle(docId) {
               </label>` : `<span style="font-size:12px;font-weight:700;color:${granel?"#4ADE80":"#9CA3AF"}">${granel?"Habilitado":"Deshabilitado"}</span>`}
           </div>
           ${granel ? `
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding-top:16px;border-top:1px solid var(--c-border)">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding-top:16px;border-top:1px solid var(--border)">
               <div>
                 <label style="font-size:10px;color:#9CA3AF;display:block;margin-bottom:4px">PRECIO GRANEL ($)</label>
                 <input type="number" id="pd-precio-granel" value="${p.precio_granel || ""}" min="0" step="0.01"
                   ${!PUEDE_EDITAR() ? "disabled" : ""}
-                  style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
-                    font-size:13px;font-weight:700;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+                  style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+                    font-size:13px;font-weight:700;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
               </div>
               <div>
                 <label style="font-size:10px;color:#9CA3AF;display:block;margin-bottom:4px">MÍNIMO GRANEL</label>
                 <input type="number" id="pd-min-granel" value="${p.minimo_granel || ""}" min="0" step="0.1"
                   ${!PUEDE_EDITAR() ? "disabled" : ""}
-                  style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
-                    font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+                  style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+                    font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
               </div>
               <div>
                 <label style="font-size:10px;color:#9CA3AF;display:block;margin-bottom:4px">UNIDAD GRANEL</label>
                 <input type="text" id="pd-unidad-granel" value="${esc(p.unidad_granel || "kg")}" maxlength="20"
                   ${!PUEDE_EDITAR() ? "disabled" : ""}
-                  style="width:100%;padding:7px 10px;border:1px solid var(--c-border);border-radius:6px;
-                    font-size:13px;background:var(--c-surface);color:var(--c-text);box-sizing:border-box">
+                  style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+                    font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
               </div>
             </div>
             ${PUEDE_EDITAR() ? `
@@ -743,11 +868,11 @@ function _renderDetalle(docId) {
 function _dfield(label, val) {
   return `<div>
     <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">${label}</div>
-    <div style="font-size:13px;font-weight:600;color:var(--c-text)">${val}</div>
+    <div style="font-size:13px;font-weight:600;color:var(--text-primary)">${val}</div>
   </div>`;
 }
 function _pkpi(label, val, color) {
-  return `<div style="background:var(--c-surface2,rgba(255,255,255,.03));border:1px solid var(--c-border);
+  return `<div style="background:var(--surface-2));border:1px solid var(--border);
     border-radius:10px;padding:16px">
     <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">${label}</div>
     <div style="font-size:22px;font-weight:800;color:${color};font-variant-numeric:tabular-nums">${val}</div>
@@ -782,6 +907,32 @@ function _bindUI() {
       topScroll.scrollLeft = tableWrap.scrollLeft;
       _syncing = false;
     });
+  }
+
+  // ── Estado foto ──────────────────────────────────────────────
+  let _fotoFile   = null;   // File seleccionado pendiente de subir
+  let _fotoUrlActual = null; // URL ya guardada en Firestore
+  let _fotoEliminada = false;
+
+  function _resetFotoUI(url) {
+    _fotoFile = null;
+    _fotoUrlActual = url;
+    _fotoEliminada = false;
+    const prev   = document.getElementById("pc-foto-preview");
+    const inp    = document.getElementById("pc-foto-input");
+    const btnQ   = document.getElementById("pc-foto-quitar-btn");
+    const prog   = document.getElementById("pc-foto-progreso");
+    if (inp)  inp.value = "";
+    if (prog) prog.style.display = "none";
+    if (prev) {
+      if (url) {
+        prev.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover">`;
+        if (btnQ) btnQ.style.display = "";
+      } else {
+        prev.innerHTML = "📷";
+        if (btnQ) btnQ.style.display = "none";
+      }
+    }
   }
 
   window.ProdCtrlUI = {
@@ -871,10 +1022,10 @@ function _bindUI() {
         const visible = _colsVisibles.includes(key);
         return `<li data-col="${key}" draggable="${!meta.locked}"
           style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;
-            border:1px solid var(--c-border);background:var(--c-surface);cursor:${meta.locked?"default":"grab"};
+            border:1px solid var(--border);background:var(--surface);cursor:${meta.locked?"default":"grab"};
             user-select:none;transition:opacity .15s;${!visible?"opacity:.45":""}">
           <span style="font-size:14px;color:#9CA3AF">${meta.locked ? "⊝" : "⠿"}</span>
-          <span style="flex:1;font-size:12px;font-weight:600;color:var(--c-text)">${meta.label}</span>
+          <span style="flex:1;font-size:12px;font-weight:600;color:var(--text-primary)">${meta.label}</span>
           <input type="checkbox" ${visible?"checked":""} ${meta.locked?"disabled":""} style="cursor:pointer"
             onchange="this.closest('li').style.opacity=this.checked?'1':'.45'">
         </li>`;
@@ -929,6 +1080,7 @@ function _bindUI() {
       const p = _todos.find(x => x._docId === docId);
       if (!p) return;
       _editandoId = docId;
+      _catLoad().then(() => _catPopulateDatalist({ marca: p.marca, categoria: p.categoria, subcategoria: p.subcategoria }));
 
       _val("pc-e-nombre",       p.nombre      ?? "");
       _val("pc-e-codigo",       p.codigo      ?? docId);
@@ -937,9 +1089,7 @@ function _bindUI() {
       if (codigoEl) { codigoEl.readOnly = true; codigoEl.style.opacity = "0.6"; codigoEl.title = "El código N10 es permanente y no puede modificarse"; }
       _val("pc-e-clave_sat",    p.clave_sat   ?? "");
       _val("pc-e-nombre_suc",   p.nombre_sucursal ?? "Nutricion de 10");
-      _val("pc-e-marca",        p.marca       ?? "");
-      _val("pc-e-categoria",    p.categoria   ?? "");
-      _val("pc-e-subcategoria", p.subcategoria ?? "");
+      // pc-e-marca/categoria/subcategoria son <select> — los rellena _catPopulateDatalist
       _val("pc-e-precio",       p.precio_base ?? "");
       _val("pc-e-costo",        p.costo_base  ?? "");
       _val("pc-e-peso",         p.peso        ?? "");
@@ -954,9 +1104,21 @@ function _bindUI() {
       const chkAct = document.getElementById("pc-e-activo");
       if (chkAct) chkAct.checked = p.activo !== false;
 
+      const selFam = document.getElementById("pc-e-familia");
+      if (selFam) {
+        selFam.value = p.familia ?? "";
+        const wrap = document.getElementById("pc-e-litros-wrap");
+        if (wrap) wrap.style.display = selFam.value === "N10" ? "" : "none";
+      }
+      _val("pc-e-litros_pu", p.litros_por_unidad ?? "");
+
       _setText("pc-edit-titulo", `Editar: ${p.nombre || docId}`);
       const err = document.getElementById("pc-edit-error");
       if (err) err.style.display = "none";
+
+      // Cargar foto actual
+      _resetFotoUI(p.fotoUrl || null);
+
       document.getElementById("pc-modal-edit").style.display = "flex";
       setTimeout(() => document.getElementById("pc-e-nombre")?.focus(), 80);
     },
@@ -964,6 +1126,36 @@ function _bindUI() {
     cerrarEdicion() {
       document.getElementById("pc-modal-edit").style.display = "none";
       _editandoId = null;
+      _fotoFile = null;
+    },
+
+    previsualizarFoto(input) {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { window.toast?.("La imagen supera 5 MB.", "error"); return; }
+      _fotoFile = file;
+      _fotoEliminada = false;
+      const prev = document.getElementById("pc-foto-preview");
+      const btnQ = document.getElementById("pc-foto-quitar-btn");
+      if (prev) {
+        const reader = new FileReader();
+        reader.onload = e => {
+          prev.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;
+          if (btnQ) btnQ.style.display = "";
+        };
+        reader.readAsDataURL(file);
+      }
+    },
+
+    quitarFotoProd() {
+      _fotoFile = null;
+      _fotoEliminada = true;
+      const prev = document.getElementById("pc-foto-preview");
+      const inp  = document.getElementById("pc-foto-input");
+      const btnQ = document.getElementById("pc-foto-quitar-btn");
+      if (prev) prev.innerHTML = "📷";
+      if (inp)  inp.value = "";
+      if (btnQ) btnQ.style.display = "none";
     },
 
     async guardarEdicion() {
@@ -995,12 +1187,24 @@ function _bindUI() {
           impuesto:        document.getElementById("pc-e-impuesto")?.value || "Exento",
           materia_prima:   document.getElementById("pc-e-materia_prima")?.checked === true,
           activo:          document.getElementById("pc-e-activo")?.checked !== false,
+          familia:         document.getElementById("pc-e-familia")?.value || "",
+          litros_por_unidad: parseFloat(document.getElementById("pc-e-litros_pu")?.value) || 0,
         };
 
+        // Agregar valores nuevos al catálogo local (en memoria)
+        if (_PUEDE_CAT()) {
+          if (data.marca)        _catAgregar("marcas",        data.marca);
+          if (data.categoria)    _catAgregar("categorias",    data.categoria);
+          if (data.subcategoria) _catAgregar("subcategorias", data.subcategoria);
+        }
+
+        // ── Subir / eliminar foto si hay cambio ──────────────
+        let docIdFinal = _editandoId;
         if (esNuevo) {
-          await addDoc(collection(db, "productos"), {
+          const newRef = await addDoc(collection(db, "productos"), {
             ...data, numero: nextNum, creadoPor: Sesion.alias, creadoEn: serverTimestamp()
           });
+          docIdFinal = newRef.id;
           window.toast?.(`Producto "${nombre}" creado con código ${codigo}.`, "success");
         } else {
           await updateDoc(doc(db, "productos", _editandoId), {
@@ -1008,6 +1212,33 @@ function _bindUI() {
           });
           window.toast?.("Producto actualizado.", "success");
         }
+
+        // Subir foto si hay archivo pendiente
+        if (_fotoFile && docIdFinal) {
+          try {
+            const prog = document.getElementById("pc-foto-progreso");
+            if (prog) prog.style.display = "";
+            const { getStorage, ref: sRef, uploadBytes, getDownloadURL }
+              = await import("./firebase-storage.js");
+            const storage = getStorage();
+            const path    = `fotos/productos/${docIdFinal}/principal.jpg`;
+            const snap2   = await uploadBytes(sRef(storage, path), _fotoFile, { contentType: _fotoFile.type });
+            const url     = await getDownloadURL(snap2.ref);
+            await updateDoc(doc(db, "productos", docIdFinal), { fotoUrl: url });
+            if (prog) prog.style.display = "none";
+          } catch(fe) { console.warn("Error subiendo foto:", fe); }
+        }
+
+        // Eliminar foto si el usuario la quitó
+        if (_fotoEliminada && !esNuevo && _fotoUrlActual) {
+          try {
+            const { getStorage, ref: sRef, deleteObject } = await import("./firebase-storage.js");
+            const storage = getStorage();
+            await deleteObject(sRef(storage, `fotos/productos/${docIdFinal}/principal.jpg`));
+            await updateDoc(doc(db, "productos", docIdFinal), { fotoUrl: "" });
+          } catch(fe) { console.warn("Error eliminando foto:", fe); }
+        }
+
         this.cerrarEdicion();
       } catch(e) {
         errEl.textContent = "Error: " + e.message; errEl.style.display = "block";
@@ -1047,6 +1278,7 @@ function _bindUI() {
     // ── Nuevo Normal ──────────────────────────────────────────
     abrirAltaProducto() {
       _editandoId = null;
+      _catLoad().then(_catPopulateDatalist);
       const nextNum   = Math.max(..._todos.map(p => p.numero ?? 0), 0) + 1;
       const nextCodigo = "N10-" + String(nextNum).padStart(4, "0");
       ["pc-e-nombre","pc-e-clave_sat",
@@ -1064,6 +1296,7 @@ function _bindUI() {
       const chkA = document.getElementById("pc-e-activo"); if (chkA) chkA.checked = true;
       _setText("pc-edit-titulo", "Nuevo producto");
       const err = document.getElementById("pc-edit-error"); if (err) err.style.display = "none";
+      _resetFotoUI(null);
       document.getElementById("pc-modal-edit").style.display = "flex";
       setTimeout(() => document.getElementById("pc-e-nombre")?.focus(), 80);
     },

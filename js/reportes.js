@@ -1,4 +1,4 @@
-// ══════════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════════
 // reportes.js — Generación de reportes por período
 // ══════════════════════════════════════════════════════════════
 
@@ -36,10 +36,10 @@ function _html() {
   <div class="report-body">
 
     <!-- Selector de tipo de reporte -->
-    <div style="background:var(--c-surface);border-radius:10px;border:1px solid var(--c-border);
+    <div style="background:var(--surface);border-radius:10px;border:1px solid var(--border);
       padding:10px 18px;margin-bottom:10px;display:flex;align-items:center;gap:8px;
       box-shadow:0 1px 3px rgba(0,0,0,.06);flex-wrap:wrap">
-      <span style="font-size:11px;font-weight:700;color:var(--c-text-secondary)">REPORTE:</span>
+      <span style="font-size:11px;font-weight:700;color:var(--text-sec)">REPORTE:</span>
       ${[
         ["comisiones", "📊 Comisiones"],
         ["ventas",     "💰 Ventas ejecutivas"],
@@ -52,32 +52,32 @@ function _html() {
           onclick="ReportUI.setTipo('${t}')">${lbl}</button>`).join("")}
       <div style="flex:1"></div>
       <button onclick="ReportUI.exportarPDF()" class="btn-export pdf">↓ PDF</button>
-      <button onclick="ReportUI.exportarExcel()" class="btn-export xls">↓ Excel</button>
+      <button onclick="ReportUI.exportarExcel()" style="padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">⬇️ Excel</button>
     </div>
 
     <!-- Selector de período (oculto para cartera) -->
-    <div id="rp-periodo-bar" style="background:var(--c-surface);border-radius:10px;border:1px solid var(--c-border);
+    <div id="rp-periodo-bar" style="background:var(--surface);border-radius:10px;border:1px solid var(--border);
       padding:10px 18px;margin-bottom:10px;display:flex;align-items:center;gap:10px;
       box-shadow:0 1px 3px rgba(0,0,0,.06);flex-wrap:wrap">
-      <span style="font-size:12px;font-weight:700;color:var(--c-text)">Período:</span>
+      <span style="font-size:12px;font-weight:700;color:var(--text-primary)">Período:</span>
       ${["hoy","semana","mes","trimestre"].map(p => `
         <button class="filter-pill ${p==="semana"?"active":""}" data-periodo="${p}"
           onclick="ReportUI.setPeriodo('${p}')">
           ${{hoy:"Hoy",semana:"Esta semana",mes:"Este mes",trimestre:"Trimestre"}[p]}
         </button>`).join("")}
       <!-- Rango personalizado -->
-      <span style="font-size:11px;font-weight:700;color:#6B7280">Desde</span>
+      <span style="font-size:11px;font-weight:700;color:var(--text-sec)">Desde</span>
       <input type="date" id="rp-desde" class="sel-sm" style="padding:4px 8px"
         onchange="ReportUI.setRango()">
-      <span style="font-size:11px;color:#6B7280">hasta</span>
+      <span style="font-size:11px;color:var(--text-sec)">hasta</span>
       <input type="date" id="rp-hasta" class="sel-sm" style="padding:4px 8px"
         onchange="ReportUI.setRango()">
       <div style="flex:1"></div>
-      <label id="rp-meta-wrap" style="font-size:11px;font-weight:700;color:#6B7280;display:flex;align-items:center;gap:6px">
+      <label id="rp-meta-wrap" style="font-size:11px;font-weight:700;color:var(--text-sec);display:flex;align-items:center;gap:6px">
         META $
         <input id="rp-meta-input" type="number" min="1" step="1000" value="${_getMeta()}"
-          style="width:90px;padding:3px 7px;border:1px solid var(--c-border);border-radius:6px;
-                 font-size:12px;font-weight:700;color:var(--c-text);background:var(--c-surface)"
+          style="width:90px;padding:3px 7px;border:1px solid var(--border);border-radius:6px;
+                 font-size:12px;font-weight:700;color:var(--text-primary);background:var(--surface)"
           onchange="ReportUI.setMeta(this.value)">
       </label>
     </div>
@@ -106,7 +106,7 @@ function _html() {
           <table class="report-table" id="rp-tabla">
             <thead id="rp-thead"></thead>
             <tbody id="rp-tbody">
-              <tr><td colspan="9" style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px">
+              <tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px">
                 Cargando datos…
               </td></tr>
             </tbody>
@@ -179,7 +179,7 @@ function _cargarDatos() {
 function _setLoading(cols = 6) {
   const tbody = document.getElementById("rp-tbody");
   if (tbody) tbody.innerHTML = window.skeletonRows?.(6, cols) ??
-    `<tr><td colspan="${cols}" style="padding:20px;text-align:center;color:#9CA3AF">
+    `<tr><td colspan="${cols}" style="padding:20px;text-align:center;color:var(--text-muted)">
       <div class="spinner" style="margin:0 auto"></div>
     </td></tr>`;
 }
@@ -193,7 +193,7 @@ async function _cargarComisiones() {
   _setText("rp-periodo-label", label);
 
   const thead = document.getElementById("rp-thead");
-  if (thead) thead.innerHTML = `<tr style="border-bottom:2px solid var(--c-border)">
+  if (thead) thead.innerHTML = `<tr style="border-bottom:2px solid var(--border)">
     <th>#</th><th>INGENIERO</th><th>VENDIDO</th><th>META</th>
     <th>AVANCE</th><th>COBRADO</th><th>PEDIDOS</th><th>CARTERA</th><th>STATUS</th>
   </tr>`;
@@ -276,7 +276,7 @@ async function _cargarVentasEjecutivas() {
   _setText("rp-periodo-label", label);
 
   const thead = document.getElementById("rp-thead");
-  if (thead) thead.innerHTML = `<tr style="border-bottom:2px solid var(--c-border)">
+  if (thead) thead.innerHTML = `<tr style="border-bottom:2px solid var(--border)">
     <th>#</th><th>INGENIERO</th><th>ZONA</th>
     <th>PEDIDOS</th><th>VENDIDO</th><th>TICKET PROM.</th>
     <th>COTIZACIONES</th><th>CONVERSIÓN</th>
@@ -331,9 +331,9 @@ async function _cargarVentasEjecutivas() {
       const conv   = s.cots > 0 ? Math.round((s.convertidas / s.cots) * 100) : 0;
       const convC  = conv >= 50 ? "#16A34A" : conv >= 25 ? "#D97706" : "#DC2626";
       return `<tr>
-        <td style="font-weight:800;color:#6B7280">${i+1}</td>
+        <td style="font-weight:800;color:var(--text-sec)">${i+1}</td>
         <td style="font-weight:700">${esc(alias)}</td>
-        <td style="font-size:11px;color:#6B7280">${esc(s.zona)}</td>
+        <td style="font-size:11px;color:var(--text-sec)">${esc(s.zona)}</td>
         <td style="text-align:center">${s.pedidos}</td>
         <td style="font-weight:700;font-variant-numeric:tabular-nums">${_fmt(s.vendido)}</td>
         <td style="font-variant-numeric:tabular-nums">${_fmt(ticket)}</td>
@@ -362,7 +362,7 @@ async function _cargarTopProductos() {
   _setText("rp-periodo-label", label);
 
   const thead = document.getElementById("rp-thead");
-  if (thead) thead.innerHTML = `<tr style="border-bottom:2px solid var(--c-border)">
+  if (thead) thead.innerHTML = `<tr style="border-bottom:2px solid var(--border)">
     <th>#</th><th>PRODUCTO</th><th>UNIDAD</th>
     <th>CANT. VENDIDA</th><th>INGRESOS</th><th>PEDIDOS</th><th>PARTICIPACIÓN</th>
   </tr>`;
@@ -406,7 +406,7 @@ async function _cargarTopProductos() {
       return `<tr>
         <td style="font-weight:800;color:${barC}">${i+1}</td>
         <td style="font-weight:600">${esc(nombre)}</td>
-        <td style="font-size:11px;color:#6B7280">${esc(s.unidad)}</td>
+        <td style="font-size:11px;color:var(--text-sec)">${esc(s.unidad)}</td>
         <td style="text-align:right;font-variant-numeric:tabular-nums">${s.cantidad.toLocaleString("es-MX")}</td>
         <td style="font-weight:700;font-variant-numeric:tabular-nums">${_fmt(s.ingresos)}</td>
         <td style="text-align:center">${s.pedidos}</td>
@@ -439,7 +439,7 @@ async function _cargarCartera() {
   _setLoading(7);
 
   const thead = document.getElementById("rp-thead");
-  if (thead) thead.innerHTML = `<tr style="border-bottom:2px solid var(--c-border)">
+  if (thead) thead.innerHTML = `<tr style="border-bottom:2px solid var(--border)">
     <th style="text-align:left">CLIENTE</th>
     <th style="text-align:left">NOTA</th>
     <th style="text-align:right">TOTAL</th>
@@ -477,9 +477,9 @@ async function _cargarCartera() {
     _renderTabla(rows.length === 0 ? null : rows.map(r => {
       const saldo  = (r.total||0) - (r.totalAbonado||0);
       const isVenc = r.status === "VENCIDA";
-      return `<tr style="border-bottom:1px solid var(--c-border)">
+      return `<tr style="border-bottom:1px solid var(--border)">
         <td style="font-weight:600;padding:7px 8px">${esc(r.clienteNombre||"–")}</td>
-        <td style="padding:7px 8px;color:#6B7280">${esc(r.remisionNumero||"–")}</td>
+        <td style="padding:7px 8px;color:var(--text-sec)">${esc(r.remisionNumero||"–")}</td>
         <td style="padding:7px 8px;text-align:right;font-variant-numeric:tabular-nums">${_fmt(r.total||0)}</td>
         <td style="padding:7px 8px;text-align:right;color:#16A34A;font-variant-numeric:tabular-nums">${_fmt(r.totalAbonado||0)}</td>
         <td style="padding:7px 8px;text-align:right;font-weight:700;color:${isVenc?"#DC2626":"#D97706"};font-variant-numeric:tabular-nums">${_fmt(saldo)}</td>
@@ -489,7 +489,7 @@ async function _cargarCartera() {
             ${r.status}
           </span>
         </td>
-        <td style="padding:7px 8px;color:#6B7280;font-size:11px">${esc(r.aliasVendedor||"–")}</td>
+        <td style="padding:7px 8px;color:var(--text-sec);font-size:11px">${esc(r.aliasVendedor||"–")}</td>
       </tr>`;
     }), 7);
 
@@ -515,7 +515,7 @@ async function _cargarVisitas() {
   _setLoading(6);
 
   const thead = document.getElementById("rp-thead");
-  if (thead) thead.innerHTML = `<tr style="border-bottom:2px solid var(--c-border)">
+  if (thead) thead.innerHTML = `<tr style="border-bottom:2px solid var(--border)">
     <th style="text-align:left">FECHA</th>
     <th style="text-align:left">INGENIERO</th>
     <th style="text-align:left">CLIENTE</th>
@@ -558,13 +558,13 @@ async function _cargarVisitas() {
       const sosp    = v.flagSospechosa;
       const gpsOk   = v.distanciaMetros >= 0 && v.distanciaMetros <= 200;
       const gpsTxt  = sosp ? `⚠ ${v.distanciaMetros?.toFixed(0)||"?"}m` : gpsOk ? "✓ OK" : "–";
-      return `<tr style="border-bottom:1px solid var(--c-border)${sosp?";background:#FFF5F5":""}">
-        <td style="padding:7px 8px;white-space:nowrap;font-size:11px;color:#6B7280">
+      return `<tr style="border-bottom:1px solid var(--border)${sosp?";background:#FFF5F5":""}">
+        <td style="padding:7px 8px;white-space:nowrap;font-size:11px;color:var(--text-sec)">
           ${ts ? ts.toLocaleDateString("es-MX",{day:"2-digit",month:"short"})+" "+ts.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}) : "–"}
         </td>
         <td style="padding:7px 8px;font-weight:600">${esc(v.aliasVendedor||"–")}</td>
         <td style="padding:7px 8px">${esc(v.clienteNombre||"–")}</td>
-        <td style="padding:7px 8px;font-size:11px;color:#6B7280">${esc(v.tipo||"–")}</td>
+        <td style="padding:7px 8px;font-size:11px;color:var(--text-sec)">${esc(v.tipo||"–")}</td>
         <td style="padding:7px 8px;font-size:11px;color:${sosp?"#DC2626":gpsOk?"#16A34A":"#9CA3AF"}">${gpsTxt}</td>
         <td style="padding:7px 8px">
           ${sosp ? `<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:7px;background:#FEE2E2;color:#DC2626">SOSPECHOSA</span>` : ""}
@@ -610,22 +610,22 @@ async function _cargarTendencia() {
   chartArea.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0">
       <div>
-        <div style="font-size:11px;font-weight:700;color:var(--c-text-secondary);margin-bottom:6px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-sec);margin-bottom:6px">
           VENTAS DIARIAS (MXN) — ÚLTIMOS 30 DÍAS</div>
         <canvas id="rp-cvs-ventas" style="width:100%;height:140px"></canvas>
       </div>
       <div>
-        <div style="font-size:11px;font-weight:700;color:var(--c-text-secondary);margin-bottom:6px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-sec);margin-bottom:6px">
           TOP 8 INGENIEROS POR VENTA</div>
         <canvas id="rp-cvs-ing" style="width:100%;height:140px"></canvas>
       </div>
     </div>
     <div style="margin-top:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--c-text-secondary);margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--text-sec);margin-bottom:8px">
         DESGLOSE DIARIO</div>
       <div style="overflow-x:auto">
         <table class="report-table">
-          <thead><tr style="border-bottom:2px solid var(--c-border)">
+          <thead><tr style="border-bottom:2px solid var(--border)">
             <th>DÍA</th><th>PEDIDOS</th><th>VENDIDO</th><th>TICKET PROM.</th><th>TREND</th>
           </tr></thead>
           <tbody id="rp-tbody-tend"></tbody>
@@ -693,8 +693,8 @@ async function _cargarTendencia() {
         const ticket = d.pedidos ? d.vendido / d.pedidos : 0;
         const pct    = Math.round((d.vendido / maxV) * 100);
         const barC   = d.vendido > 0 ? "#16A34A" : "#E5E7EB";
-        return `<tr style="border-bottom:1px solid var(--c-border)">
-          <td style="padding:5px 8px;font-size:12px;color:#6B7280">${fecha}</td>
+        return `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:5px 8px;font-size:12px;color:var(--text-sec)">${fecha}</td>
           <td style="padding:5px 8px;text-align:center">${d.pedidos}</td>
           <td style="padding:5px 8px;font-variant-numeric:tabular-nums;font-weight:${d.vendido?700:400}">
             ${d.vendido ? _fmt(d.vendido) : "–"}</td>

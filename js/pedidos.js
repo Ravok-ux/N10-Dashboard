@@ -1,11 +1,12 @@
-// ══════════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════════
 // pedidos.js — Historial de pedidos con filtros y detalle
 // ══════════════════════════════════════════════════════════════
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
 import {
-  collection, query, orderBy, limit, where, onSnapshot, doc, updateDoc, getDoc, Timestamp, serverTimestamp
+  collection, query, orderBy, limit, where, onSnapshot, doc, updateDoc, getDoc,
+  addDoc, getDocs, Timestamp, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { registrarVentaN10, revertirVentaN10 } from "./comisiones-n10-engine.js";
 
@@ -39,29 +40,56 @@ function _html() {
   <div style="padding:0 0 20px">
 
     <!-- Controles -->
-    <div style="background:#fff;border-radius:10px;border:1px solid #E5E7EB;padding:12px 16px;
-      margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-      box-shadow:0 1px 3px rgba(0,0,0,.06)">
-      <span style="font-size:12px;font-weight:700;color:#374151">Estado:</span>
-      ${STATUS.map(s => `
-        <button class="filter-pill ${s==="TODOS"?"active":""}" data-status="${s}"
-          onclick="PedidosUI.setStatus('${s}')">
+    <div style="background:var(--surface);border-radius:10px;border:1px solid var(--border);
+      padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+      box-shadow:var(--shadow)">
+      <span style="font-size:11px;font-weight:700;color:var(--text-sec);text-transform:uppercase;
+        letter-spacing:.04em">Estado:</span>
+      ${STATUS.map(s => {
+        const colors = {TODOS:"",BORRADOR:"#D97706",CONFIRMADO:"#2563EB",EN_RUTA:"#7C3AED",
+          ENTREGADO:"#16A34A",FACTURADO:"#0E7490",CANCELADO:"#DC2626"};
+        const c = colors[s] || "var(--text-sec)";
+        return `<button class="filter-pill ${s==="TODOS"?"active":""}" data-status="${s}"
+          onclick="PedidosUI.setStatus('${s}')"
+          style="${s!=="TODOS"?`border-color:${c};color:${c}`:""}">
           ${s === "TODOS" ? "Todos" : s.replace(/_/g," ")}
-        </button>`).join("")}
+        </button>`;}).join("")}
       <div style="flex:1"></div>
       <select id="pd-sel-alias" onchange="PedidosUI.setAlias(this.value)"
-        style="border:1px solid #D1D5DB;border-radius:6px;padding:4px 8px;font-size:12px">
+        style="border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;
+          background:var(--surface);color:var(--text-primary)">
         <option value="TODOS">Todos los ingenieros</option>
       </select>
+      <button onclick="PedidosUI.nuevoPedido()"
+        style="padding:7px 14px;background:#1B5E20;color:#fff;border:none;border-radius:6px;
+          cursor:pointer;font-size:13px;font-weight:700">
+        + Pedido
+      </button>
+    </div>
+
+    <!-- Modal Nuevo Pedido -->
+    <div id="pd-form-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
+      z-index:1001;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+      <div style="background:var(--surface);border-radius:16px;width:680px;max-width:100%;
+        border:1px solid var(--border);box-shadow:0 8px 32px rgba(0,0,0,.22);margin:auto">
+        <div id="pd-form-body" style="padding:24px"></div>
+      </div>
     </div>
 
     <!-- KPIs rápidos -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px" id="pd-kpis">
-      ${["Total","Confirmados","En ruta","Entregados"].map(l =>
-        `<div style="background:#fff;border-radius:10px;border:1px solid #E5E7EB;padding:14px 16px;
-          box-shadow:0 1px 3px rgba(0,0,0,.06)">
-          <div style="font-size:20px;font-weight:800;color:#111827" id="pd-k-${l.replace(/ /g,"")}">–</div>
-          <div style="font-size:11px;font-weight:600;color:#6B7280;margin-top:2px">${l.toUpperCase()}</div>
+      ${[
+        {l:"Total",        id:"Total",        c:"var(--text-primary)"},
+        {l:"Confirmados",  id:"Confirmados",  c:"#2563EB"},
+        {l:"En ruta",      id:"Enruta",       c:"#7C3AED"},
+        {l:"Entregados",   id:"Entregados",   c:"#16A34A"},
+      ].map(({l,id,c}) =>
+        `<div style="background:var(--surface);border-radius:10px;border:1px solid var(--border);
+          padding:14px 16px;box-shadow:var(--shadow)">
+          <div style="font-size:22px;font-weight:900;color:${c};font-variant-numeric:tabular-nums"
+            id="pd-k-${id}">0</div>
+          <div style="font-size:10px;font-weight:700;color:var(--text-sec);margin-top:3px;
+            text-transform:uppercase;letter-spacing:.04em">${l}</div>
         </div>`).join("")}
     </div>
 
@@ -72,17 +100,17 @@ function _html() {
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead>
             <tr style="background:var(--surface2,#F9FAFB);border-bottom:1px solid var(--border,#E5E7EB)">
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">FOLIO</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">CLIENTE</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">INGENIERO</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text,#374151)">FECHA</th>
-              <th style="padding:10px 14px;text-align:right;font-weight:700;color:var(--text,#374151)">TOTAL</th>
-              <th style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text,#374151)">STATUS</th>
-              <th style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text,#374151)">TIPO</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-primary)">FOLIO</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-primary)">CLIENTE</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-primary)">INGENIERO</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-primary)">FECHA</th>
+              <th style="padding:10px 14px;text-align:right;font-weight:700;color:var(--text-primary)">TOTAL</th>
+              <th style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text-primary)">STATUS</th>
+              <th style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text-primary)">TIPO</th>
             </tr>
           </thead>
           <tbody id="pd-tbody">
-            <tr><td colspan="7" style="padding:20px;text-align:center;color:#9CA3AF">Cargando…</td></tr>
+            <tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text-muted)">Cargando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -103,7 +131,23 @@ function _bindUI() {
         b.classList.toggle("active", b.dataset.status === s));
       _renderTabla();
     },
-    setAlias(a) { _filtroAlias = a; _renderTabla(); }
+    setAlias(a) { _filtroAlias = a; _renderTabla(); },
+    nuevoPedido() { _abrirFormPedido(); },
+    cerrarFormPedido() {
+      const m = document.getElementById("pd-form-modal");
+      if (m) m.style.display = "none";
+      _pedidoLineas = [];
+      _pedidoCliente = null;
+    },
+    buscarCliente(q) { _buscarClientePedido(q); },
+    seleccionarCliente(id, nombre) { _seleccionarCliente(id, nombre); },
+    buscarProducto(q) { _buscarProductoPedido(q); },
+    agregarProducto(id, nombre, precio) { _agregarLinea(id, nombre, precio); },
+    quitarLinea(idx) { _quitarLinea(idx); },
+    confirmarPedido() { _confirmarPedido(); },
+    _actualizarCantidad(idx, val) { _actualizarCantidadImpl(idx, val); },
+    _actualizarPrecio(idx, val)   { _actualizarPrecioImpl(idx, val); },
+    _cambiarCliente()              { _cambiarClienteImpl(); }
   };
 }
 
@@ -144,24 +188,24 @@ function _renderTabla() {
   const tbody = document.getElementById("pd-tbody");
   if (!tbody) return;
   if (lista.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;text-align:center;color:#9CA3AF">
+    tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text-muted)">
       Sin pedidos para este filtro.</td></tr>`;
     return;
   }
   const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
   tbody.innerHTML = lista.map(p => {
     const color = STATUS_COLOR[p.status] ?? "#9E9E9E";
-    return `<tr style="border-bottom:1px solid #F3F4F6;cursor:pointer" data-id="${esc(p.id)}">
+    return `<tr style="border-bottom:1px solid var(--border);cursor:pointer" data-id="${esc(p.id)}">
       <td style="padding:10px 14px;font-weight:700;font-variant-numeric:tabular-nums">${esc(p.folio || p.id)}</td>
       <td style="padding:10px 14px">${esc(p.clienteNombre || p.clienteId || "–")}</td>
       <td style="padding:10px 14px">${esc(p.ingenieroAlias || p.vendedor || "–")}</td>
-      <td style="padding:10px 14px;color:#6B7280">${p.fechaPedido ? fmtDt(p.fechaPedido) : "–"}</td>
+      <td style="padding:10px 14px;color:var(--text-sec)">${p.fechaPedido ? fmtDt(p.fechaPedido) : "–"}</td>
       <td style="padding:10px 14px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums">
         ${fmt.format(p.total || 0)}</td>
       <td style="padding:10px 14px;text-align:center">
         <span style="font-size:9px;font-weight:800;padding:3px 8px;border-radius:8px;
           background:${color}1A;color:${color}">${esc(p.status?.replace(/_/g," ") || "–")}</span></td>
-      <td style="padding:10px 14px;text-align:center;color:#6B7280;font-size:11px">
+      <td style="padding:10px 14px;text-align:center;color:var(--text-sec);font-size:11px">
         ${esc(p.tipoVenta || "–")}</td>
     </tr>`;
   }).join("");
@@ -191,7 +235,7 @@ function _renderTabla() {
     const itms = ped.items || ped.productos || [];
     const itmsHtml = itms.length
       ? `<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px">
-          <tr style="color:#6B7280">
+          <tr style="color:var(--text-sec)">
             <th style="text-align:left;padding:3px 6px;font-weight:600">Producto</th>
             <th style="text-align:center;padding:3px 6px;font-weight:600">Cant.</th>
             <th style="text-align:right;padding:3px 6px;font-weight:600">Precio</th>
@@ -205,7 +249,7 @@ function _renderTabla() {
               $${((it.cantidad||1)*(it.precio||0)).toLocaleString("es-MX")}</td>
           </tr>`).join("")}
         </table>`
-      : `<span style="color:#9CA3AF;font-size:11px">Sin detalle de productos</span>`;
+      : `<span style="color:var(--text-muted);font-size:11px">Sin detalle de productos</span>`;
 
     // ── Botones de workflow según status actual ─────────────────
     const btn = (txt, onclick, bg="#1D5C33") =>
@@ -465,7 +509,7 @@ function _editarPedido(pedidoId) {
   modal.innerHTML = `
     <div style="font-weight:800;font-size:14px;margin-bottom:12px">
       ✏️ Editar cantidades — ${esc2(ped.folio || ped.id)}</div>
-    <div style="font-size:11px;color:#6B7280;margin-bottom:10px">
+    <div style="font-size:11px;color:var(--text-sec);margin-bottom:10px">
       Solo cantidades. Los precios requieren autorización especial.</div>
     ${items.map((it, i) => `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -512,3 +556,331 @@ function _editarPedido(pedidoId) {
 }
 
 function _setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
+// ═══════════════════════════════════════════════════════════════
+// NUEVO PEDIDO desde panel web
+// ═══════════════════════════════════════════════════════════════
+let _pedidoLineas  = [];  // [{ productoId, nombre, precio, cantidad }]
+let _pedidoCliente = null; // { id, nombre, ingeniero }
+let _productosBusq = [];
+let _clientesBusq  = [];
+
+function _pdinputStyle() {
+  return `width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+    font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box;`;
+}
+
+function _abrirFormPedido() {
+  _pedidoLineas  = [];
+  _pedidoCliente = null;
+  const modal = document.getElementById("pd-form-modal");
+  const body  = document.getElementById("pd-form-body");
+  if (!modal || !body) return;
+  _renderFormPedido(body);
+  modal.style.display = "flex";
+}
+
+function _renderFormPedido(body) {
+  const lineasHtml = _pedidoLineas.length === 0
+    ? `<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px">
+        Sin productos aún</td></tr>`
+    : _pedidoLineas.map((l, i) => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 10px;font-size:12px">${esc(l.nombre)}</td>
+        <td style="padding:8px 10px;text-align:center">
+          <input type="number" min="1" value="${l.cantidad}"
+            onchange="PedidosUI._actualizarCantidad(${i},this.value)"
+            style="width:60px;text-align:center;padding:4px;border:1px solid var(--border);
+              border-radius:4px;background:var(--surface);color:var(--text-primary)">
+        </td>
+        <td style="padding:8px 10px;text-align:right">
+          <input type="number" min="0" step="0.01" value="${l.precio}"
+            onchange="PedidosUI._actualizarPrecio(${i},this.value)"
+            style="width:90px;text-align:right;padding:4px;border:1px solid var(--border);
+              border-radius:4px;background:var(--surface);color:var(--text-primary)">
+        </td>
+        <td style="padding:8px 10px;text-align:right;font-weight:700;font-size:12px">
+          $${(l.cantidad * l.precio).toLocaleString("es-MX",{minimumFractionDigits:2})}
+        </td>
+        <td style="padding:8px 10px;text-align:center">
+          <button onclick="PedidosUI.quitarLinea(${i})"
+            style="border:none;background:#FEE2E2;color:#DC2626;padding:3px 9px;border-radius:5px;cursor:pointer;font-size:11px">
+            ✕
+          </button>
+        </td>
+      </tr>`).join("");
+
+  const total = _pedidoLineas.reduce((s, l) => s + l.cantidad * l.precio, 0);
+
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div style="font-size:16px;font-weight:800;color:var(--text-primary)">📋 Nuevo Pedido</div>
+      <button onclick="PedidosUI.cerrarFormPedido()"
+        style="border:none;background:transparent;font-size:20px;cursor:pointer;color:var(--text-muted)">✕</button>
+    </div>
+
+    <!-- Paso 1: Cliente -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;color:var(--text-sec);letter-spacing:.06em;
+        text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px">
+        👤 Paso 1 — Cliente
+      </div>
+      ${_pedidoCliente
+        ? `<div style="display:flex;align-items:center;gap:10px;background:var(--surface-2);
+              padding:10px 14px;border-radius:8px;border:1px solid var(--border)">
+            <span style="font-size:13px;font-weight:700;color:var(--text-primary)">
+              ✅ ${esc(_pedidoCliente.nombre)}
+            </span>
+            <span style="font-size:11px;color:var(--text-sec)">${esc(_pedidoCliente.ingeniero||"")}</span>
+            <button onclick="PedidosUI._cambiarCliente()"
+              style="margin-left:auto;font-size:11px;border:1px solid var(--border);
+                background:transparent;padding:3px 10px;border-radius:5px;cursor:pointer;color:var(--text-sec)">
+              Cambiar
+            </button>
+          </div>`
+        : `<div style="position:relative">
+            <input id="pd-cli-search" type="text" placeholder="Buscar cliente por nombre…"
+              oninput="PedidosUI.buscarCliente(this.value)"
+              style="${_pdinputStyle()}">
+            <div id="pd-cli-results" style="position:absolute;left:0;right:0;top:100%;background:var(--surface);
+              border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;z-index:10;
+              box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
+          </div>`}
+    </div>
+
+    <!-- Paso 2: Productos -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;color:var(--text-sec);letter-spacing:.06em;
+        text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px">
+        📦 Paso 2 — Productos
+      </div>
+      <div style="position:relative;margin-bottom:10px">
+        <input id="pd-prod-search" type="text" placeholder="Buscar producto por nombre o número…"
+          oninput="PedidosUI.buscarProducto(this.value)"
+          style="${_pdinputStyle()}">
+        <div id="pd-prod-results" style="position:absolute;left:0;right:0;top:100%;background:var(--surface);
+          border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;z-index:10;
+          box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
+      </div>
+      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:var(--surface-2);border-bottom:1px solid var(--border)">
+              <th style="padding:8px 10px;text-align:left;font-weight:700;color:var(--text-sec)">Producto</th>
+              <th style="padding:8px 10px;text-align:center;font-weight:700;color:var(--text-sec)">Cant.</th>
+              <th style="padding:8px 10px;text-align:right;font-weight:700;color:var(--text-sec)">Precio</th>
+              <th style="padding:8px 10px;text-align:right;font-weight:700;color:var(--text-sec)">Subtotal</th>
+              <th style="padding:8px 10px;width:40px"></th>
+            </tr>
+          </thead>
+          <tbody>${lineasHtml}</tbody>
+        </table>
+      </div>
+      ${_pedidoLineas.length > 0
+        ? `<div style="text-align:right;font-size:16px;font-weight:800;color:var(--text-primary);
+              padding:10px 14px">
+            TOTAL: $${total.toLocaleString("es-MX",{minimumFractionDigits:2})}
+          </div>`
+        : ""}
+    </div>
+
+    <!-- Paso 3: Detalles -->
+    <div style="margin-bottom:18px">
+      <div style="font-size:11px;font-weight:800;color:var(--text-sec);letter-spacing:.06em;
+        text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:10px">
+        📝 Paso 3 — Detalles
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px">
+            Ingeniero asignado
+          </div>
+          <input id="pd-ingeniero" style="${_pdinputStyle()}"
+            value="${esc(_pedidoCliente?.ingeniero || Sesion.alias || '')}">
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px">
+            Tipo de venta
+          </div>
+          <select id="pd-tipo" style="${_pdinputStyle()}">
+            ${["Contado","Crédito","Consignación","Muestra"].map(t =>
+              `<option>${t}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px">
+            Condiciones de pago
+          </div>
+          <input id="pd-condpago" style="${_pdinputStyle()}" placeholder="Ej: Crédito 30 días">
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px">
+            Fecha de entrega estimada
+          </div>
+          <input id="pd-fecha-entrega" type="date" style="${_pdinputStyle()}">
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px">
+          Notas del pedido
+        </div>
+        <textarea id="pd-notas" rows="2" style="${_pdinputStyle()}resize:vertical;"
+          placeholder="Instrucciones especiales, referencias…"></textarea>
+      </div>
+    </div>
+
+    <!-- Confirmar -->
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button onclick="PedidosUI.cerrarFormPedido()"
+        style="padding:9px 20px;border:1px solid var(--border);border-radius:6px;
+          background:transparent;color:var(--text-sec);font-size:13px;cursor:pointer">
+        Cancelar
+      </button>
+      <button onclick="PedidosUI.confirmarPedido()"
+        style="padding:9px 26px;border:none;border-radius:6px;
+          background:#1B5E20;color:#fff;font-size:13px;font-weight:700;cursor:pointer"
+        id="pd-btn-confirmar">
+        ✅ Confirmar pedido
+      </button>
+    </div>`;
+}
+
+function _reRenderFormPedido() {
+  const body = document.getElementById("pd-form-body");
+  if (body) _renderFormPedido(body);
+}
+
+async function _buscarClientePedido(q) {
+  const res = document.getElementById("pd-cli-results");
+  if (!res) return;
+  if (!q || q.length < 2) { res.innerHTML = ""; return; }
+  const qLow = q.toLowerCase();
+  const lista = (window._clientesCache || []).filter(c =>
+    (c.nombre || "").toLowerCase().includes(qLow) ||
+    (c.telefono || "").toLowerCase().includes(qLow)
+  ).slice(0, 8);
+  if (!lista.length) {
+    // Fallback Firestore si no hay caché
+    try {
+      const snap = await getDocs(query(collection(db, "clientes"), orderBy("nombre"), limit(300)));
+      window._clientesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      return _buscarClientePedido(q);
+    } catch { res.innerHTML = ""; return; }
+  }
+  res.innerHTML = lista.map(c =>
+    `<div onclick="PedidosUI.seleccionarCliente('${esc(c.id)}','${esc(c.nombre)}')"
+      style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);
+        font-size:12px;color:var(--text-primary)"
+      onmouseover="this.style.background='var(--surface-2)'"
+      onmouseout="this.style.background=''">
+      <strong>${esc(c.nombre)}</strong>
+      ${c.zona ? `<span style="color:var(--text-sec);margin-left:8px">${esc(c.zona)}</span>` : ""}
+      ${c.ingeniero ? `<span style="float:right;color:#1565C0;font-size:11px">${esc(c.ingeniero)}</span>` : ""}
+    </div>`).join("");
+}
+
+function _seleccionarCliente(id, nombre) {
+  const c = (window._clientesCache || []).find(x => x.id === id) || { id, nombre };
+  _pedidoCliente = { id: c.id, nombre: c.nombre, ingeniero: c.ingeniero || "" };
+  _reRenderFormPedido();
+}
+
+async function _buscarProductoPedido(q) {
+  const res = document.getElementById("pd-prod-results");
+  if (!res) return;
+  if (!q || q.length < 2) { res.innerHTML = ""; return; }
+  const qLow = q.toLowerCase();
+  if (!window._productosCache) {
+    try {
+      const snap = await getDocs(query(collection(db, "productos"), orderBy("nombre"), limit(500)));
+      window._productosCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch { res.innerHTML = ""; return; }
+  }
+  const lista = window._productosCache.filter(p =>
+    (p.nombre || "").toLowerCase().includes(qLow) ||
+    (String(p.numero || "")).includes(q)
+  ).slice(0, 8);
+  res.innerHTML = lista.map(p =>
+    `<div onclick="PedidosUI.agregarProducto('${esc(p.id)}','${esc(p.nombre)}',${p.precio||0})"
+      style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);
+        font-size:12px;color:var(--text-primary)"
+      onmouseover="this.style.background='var(--surface-2)'"
+      onmouseout="this.style.background=''">
+      <strong>${esc(p.nombre)}</strong>
+      ${p.numero ? `<span style="color:var(--text-sec);margin-left:8px">#${p.numero}</span>` : ""}
+      <span style="float:right;font-weight:700;color:#1565C0">
+        $${(p.precio||0).toLocaleString("es-MX",{minimumFractionDigits:2})}
+      </span>
+    </div>`).join("");
+}
+
+function _agregarLinea(productoId, nombre, precio) {
+  const existing = _pedidoLineas.find(l => l.productoId === productoId);
+  if (existing) { existing.cantidad++; }
+  else { _pedidoLineas.push({ productoId, nombre, precio: Number(precio) || 0, cantidad: 1 }); }
+  const res = document.getElementById("pd-prod-results");
+  if (res) res.innerHTML = "";
+  const inp = document.getElementById("pd-prod-search");
+  if (inp) inp.value = "";
+  _reRenderFormPedido();
+}
+
+function _quitarLinea(idx) {
+  _pedidoLineas.splice(idx, 1);
+  _reRenderFormPedido();
+}
+
+// Estos métodos se agregan a PedidosUI en _bindUI(); aquí son las implementaciones
+function _actualizarCantidadImpl(idx, val) {
+  if (_pedidoLineas[idx]) { _pedidoLineas[idx].cantidad = Math.max(1, parseInt(val) || 1); _reRenderFormPedido(); }
+}
+function _actualizarPrecioImpl(idx, val) {
+  if (_pedidoLineas[idx]) { _pedidoLineas[idx].precio = parseFloat(val) || 0; _reRenderFormPedido(); }
+}
+function _cambiarClienteImpl() {
+  _pedidoCliente = null; _reRenderFormPedido();
+}
+
+async function _confirmarPedido() {
+  if (!_pedidoCliente) { window.toast?.("Selecciona un cliente.", "warn"); return; }
+  if (!_pedidoLineas.length) { window.toast?.("Agrega al menos un producto.", "warn"); return; }
+
+  const btn = document.getElementById("pd-btn-confirmar");
+  if (btn) { btn.disabled = true; btn.textContent = "Guardando…"; }
+
+  const total   = _pedidoLineas.reduce((s, l) => s + l.cantidad * l.precio, 0);
+  const folio   = "W-" + Date.now().toString(36).toUpperCase();
+  const ingeniero = (document.getElementById("pd-ingeniero")?.value || Sesion.alias || "").trim();
+
+  const payload = {
+    folio,
+    clienteId:       _pedidoCliente.id,
+    clienteNombre:   _pedidoCliente.nombre,
+    cliente:         _pedidoCliente.nombre,
+    ingenieroAlias:  ingeniero,
+    vendedor:        ingeniero,
+    items:           _pedidoLineas.map(l => ({ ...l })),
+    productos:       _pedidoLineas.map(l => ({ ...l })),
+    total,
+    tipoVenta:       document.getElementById("pd-tipo")?.value || "Contado",
+    condicionesPago: document.getElementById("pd-condpago")?.value || "",
+    notas:           document.getElementById("pd-notas")?.value?.trim() || "",
+    fechaEntrega:    document.getElementById("pd-fecha-entrega")?.value || null,
+    status:          "CONFIRMADO",
+    origen:          "web",
+    fechaPedido:     serverTimestamp(),
+    creadoEn:        serverTimestamp(),
+    creadoPor:       Sesion.alias ?? "web",
+    confirmadoEn:    Date.now(),
+    confirmadoPor:   Sesion.alias ?? "web",
+  };
+
+  try {
+    await addDoc(collection(db, "pedidos"), payload);
+    window.toast?.(`✅ Pedido ${folio} creado y confirmado.`, "success");
+    window.PedidosUI.cerrarFormPedido();
+  } catch(e) {
+    window.toast?.("Error al crear pedido: " + e.message, "error");
+    if (btn) { btn.disabled = false; btn.textContent = "✅ Confirmar pedido"; }
+  }
+}

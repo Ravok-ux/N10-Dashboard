@@ -1,4 +1,4 @@
-// ══════════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════════
 // ingenieros.js — Listado de ingenieros con estado de jornada y KPIs
 // ══════════════════════════════════════════════════════════════
 
@@ -72,14 +72,15 @@ function _html() {
   <div style="padding:0 0 20px">
 
     <!-- Controles -->
-    <div style="background:#fff;border-radius:10px;border:1px solid #E5E7EB;padding:12px 16px;
+    <div style="background:var(--surface);border-radius:10px;border:1px solid var(--border);padding:12px 16px;
       margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
       box-shadow:0 1px 3px rgba(0,0,0,.06)">
-      <span style="font-size:12px;font-weight:700;color:#374151">Jornada:</span>
-      ${["TODOS","EN_JORNADA","FUERA"].map(f => `
+      <span style="font-size:12px;font-weight:700;color:var(--text-primary)">Jornada:</span>
+      ${[["TODOS","Todos",""],["EN_JORNADA","En jornada","#16A34A"],["FUERA","Fuera","#DC2626"]].map(([f,label,c]) => `
         <button class="filter-pill ${f==="TODOS"?"active":""}" data-ing-f="${f}"
-          onclick="IngenierosUI.setFiltro('${f}')">
-          ${{TODOS:"Todos",EN_JORNADA:"En jornada",FUERA:"Fuera"}[f]}
+          onclick="IngenierosUI.setFiltro('${f}')"
+          ${c ? `style="border-color:${c};color:${c}"` : ""}>
+          ${label}
         </button>`).join("")}
       <button onclick="Ing_xlExport()" style="margin-left:auto;padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">⬇️ Excel</button>
       <button onclick="IngenierosUI.abrirAlta()"
@@ -91,7 +92,7 @@ function _html() {
 
     <!-- Tarjetas de ingenieros -->
     <div id="ing-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
-      <div style="padding:30px;text-align:center;color:#9CA3AF;font-size:13px;
+      <div style="padding:30px;text-align:center;color:var(--text-muted);font-size:13px;
         grid-column:1/-1">Cargando ingenieros…</div>
     </div>
   </div>
@@ -99,28 +100,28 @@ function _html() {
   <!-- Modal alta de ingeniero -->
   <div id="ing-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
     z-index:1000;align-items:center;justify-content:center">
-    <div style="background:var(--c-surface,#fff);border-radius:14px;padding:28px;
-      width:420px;max-width:94vw;border:1px solid var(--c-border,#E5E7EB);
+    <div style="background:var(--surface);border-radius:14px;padding:28px;
+      width:420px;max-width:94vw;border:1px solid var(--border);
       max-height:90vh;overflow-y:auto">
-      <div style="font-size:15px;font-weight:800;color:var(--c-text,#111);margin-bottom:18px">
+      <div style="font-size:15px;font-weight:800;color:var(--text-primary);margin-bottom:18px">
         Nuevo ingeniero / recuperador
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
         <div>
-          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">
-            Alias* <span style="color:#9CA3AF;font-weight:400">(ID único, sin espacios)</span>
+          <label style="font-size:11px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px">
+            Alias* <span style="color:var(--text-muted);font-weight:400">(ID único, sin espacios)</span>
           </label>
           <input id="ing-f-alias" type="text" maxlength="20" autocomplete="off"
             placeholder="jperez"
-            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
-              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Rol*</label>
+          <label style="font-size:11px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px">Rol*</label>
           <select id="ing-f-rol"
-            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
-              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
             <option value="INGENIERO">Ingeniero</option>
             <option value="RECUPERADOR">Recuperador</option>
             <option value="GERENTE_ZONA">Gerente de zona</option>
@@ -129,50 +130,50 @@ function _html() {
       </div>
 
       <div style="margin-bottom:12px">
-        <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Nombre completo*</label>
+        <label style="font-size:11px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px">Nombre completo*</label>
         <input id="ing-f-nombre" type="text" maxlength="80" placeholder="Juan Pérez García"
-          style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
-            font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+          style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+            font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
         <div>
-          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Correo*</label>
+          <label style="font-size:11px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px">Correo*</label>
           <input id="ing-f-email" type="email" maxlength="80" placeholder="jperez@empresa.com"
-            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
-              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Teléfono</label>
+          <label style="font-size:11px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px">Teléfono</label>
           <input id="ing-f-tel" type="tel" maxlength="15" placeholder="5551234567"
-            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
-              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
         </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
         <div>
-          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Zona</label>
+          <label style="font-size:11px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px">Zona</label>
           <input id="ing-f-zona" type="text" maxlength="40" placeholder="Norte"
-            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
-              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Vehículo</label>
+          <label style="font-size:11px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px">Vehículo</label>
           <input id="ing-f-vehiculo" type="text" maxlength="50" placeholder="Nissan NP300 ABC-123"
-            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
-              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
         </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
         <div>
-          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">
-            Día de liquidación <span style="color:#9CA3AF;font-weight:400">(inicio de semana)</span>
+          <label style="font-size:11px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px">
+            Día de liquidación <span style="color:var(--text-muted);font-weight:400">(inicio de semana)</span>
           </label>
           <select id="ing-f-dia-liq"
-            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
-              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
             <option value="1">Lunes</option>
             <option value="2">Martes</option>
             <option value="3">Miércoles</option>
@@ -183,21 +184,21 @@ function _html() {
           </select>
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">
+          <label style="font-size:11px;font-weight:600;color:var(--text-sec);display:block;margin-bottom:4px">
             Salario base semanal ($)
           </label>
           <input id="ing-f-salario" type="number" min="0" step="100" placeholder="0.00"
-            style="width:100%;padding:7px 10px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
-              font-size:13px;background:var(--c-surface,#fff);color:var(--c-text,#111);box-sizing:border-box">
+            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
         </div>
       </div>
 
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;
-        padding:10px 14px;border:1px solid var(--c-border,#E5E7EB);border-radius:8px;
-        background:var(--c-surface,#fff)">
-        <div style="font-size:12px;font-weight:600;color:var(--c-text,#111);flex:1">
+        padding:10px 14px;border:1px solid var(--border);border-radius:8px;
+        background:var(--surface)">
+        <div style="font-size:12px;font-weight:600;color:var(--text-primary);flex:1">
           Cuenta activa
-          <span style="display:block;font-weight:400;color:#6B7280;font-size:11px">
+          <span style="display:block;font-weight:400;color:var(--text-sec);font-size:11px">
             Desactivar impide el acceso a la plataforma y a la APK
           </span>
         </div>
@@ -208,7 +209,7 @@ function _html() {
             transition:background .2s;flex-shrink:0">
           <div id="ing-toggle-knob"
             style="position:absolute;top:3px;left:22px;width:18px;height:18px;border-radius:50%;
-              background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)"></div>
+              background:var(--surface);transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)"></div>
         </div>
       </div>
 
@@ -223,8 +224,8 @@ function _html() {
 
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button onclick="IngenierosUI.cerrarAlta()"
-          style="padding:8px 18px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
-            background:transparent;color:var(--c-text,#111);font-size:12px;cursor:pointer">
+          style="padding:8px 18px;border:1px solid var(--border);border-radius:6px;
+            background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer">
           Cancelar
         </button>
         <button onclick="IngenierosUI.guardarAlta()"
@@ -409,7 +410,7 @@ function _render() {
   const grid = document.getElementById("ing-grid");
   if (!grid) return;
   if (lista.length === 0) {
-    grid.innerHTML = `<div style="padding:30px;text-align:center;color:#9CA3AF;font-size:13px;
+    grid.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-muted);font-size:13px;
       grid-column:1/-1">Sin ingenieros para este filtro.</div>`;
     return;
   }
@@ -421,7 +422,7 @@ function _render() {
       ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:9px;
           background:#DCFCE7;color:#16A34A">● En jornada</span>`
       : `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:9px;
-          background:#F3F4F6;color:#6B7280">Fuera de jornada</span>`;
+          background:var(--surface-2);color:var(--text-sec)">Fuera de jornada</span>`;
     const senalTxt = u.mins === null
       ? "Sin señal GPS"
       : u.mins < 5 ? "En vivo"
@@ -429,7 +430,7 @@ function _render() {
       : "Sin señal reciente";
     const rolColor = u.rol === "RECUPERADOR" ? "#15803D" : "#1565C0";
 
-    return `<div style="background:#fff;border-radius:12px;border:1px solid #E5E7EB;padding:16px;
+    return `<div style="background:var(--surface);border-radius:12px;border:1px solid var(--border);padding:16px;
       box-shadow:0 1px 3px rgba(0,0,0,.06)">
       <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px">
         <div style="width:40px;height:40px;border-radius:50%;background:${rolColor}1A;
@@ -438,23 +439,26 @@ function _render() {
           ${(u.alias || u.email || "?").charAt(0).toUpperCase()}
         </div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:700;color:#111827;white-space:nowrap;
-            overflow:hidden;text-overflow:ellipsis">${u.alias || u.email}</div>
+          ${u.nombre ? `<div style="font-size:14px;font-weight:700;color:var(--text-primary);white-space:nowrap;
+            overflow:hidden;text-overflow:ellipsis">${u.nombre}</div>
+          <div style="font-size:11px;color:var(--text-sec);margin-top:1px">${u.alias || u.email}</div>` :
+          `<div style="font-size:14px;font-weight:700;color:var(--text-primary);white-space:nowrap;
+            overflow:hidden;text-overflow:ellipsis">${u.alias || u.email}</div>`}
           <div style="font-size:11px;color:${rolColor};font-weight:600;margin-top:1px">${u.rol || "–"}</div>
         </div>
         ${jornadaBadge}
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
         <span style="width:8px;height:8px;border-radius:50%;background:${senalColor};flex-shrink:0"></span>
-        <span style="font-size:11px;color:#6B7280">${senalTxt}</span>
-        ${u.ts ? `<span style="font-size:11px;color:#9CA3AF;margin-left:auto">${fmtHora(new Date(u.ts))}</span>` : ""}
+        <span style="font-size:11px;color:var(--text-sec)">${senalTxt}</span>
+        ${u.ts ? `<span style="font-size:11px;color:var(--text-muted);margin-left:auto">${fmtHora(new Date(u.ts))}</span>` : ""}
       </div>
       ${u.ub?.lat && u.ub?.lon
         ? `<a href="https://www.google.com/maps?q=${u.ub.lat},${u.ub.lon}" target="_blank"
             style="display:block;font-size:11px;color:#1565C0;text-decoration:none;font-weight:600">
             📍 Ver en Google Maps</a>`
-        : `<span style="font-size:11px;color:#9CA3AF">Sin ubicación registrada</span>`}
-      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--c-border,#E5E7EB);
+        : `<span style="font-size:11px;color:var(--text-muted)">Sin ubicación registrada</span>`}
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);
         display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         ${u.diaLiquidacion !== undefined
           ? `<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;padding:2px 7px;border-radius:6px;font-weight:600">
@@ -467,8 +471,8 @@ function _render() {
              </span>`
           : ""}
         <button onclick="IngenierosUI.editarPerfil('${u.alias}')"
-          style="margin-left:auto;font-size:10px;padding:3px 9px;border:1px solid var(--c-border,#D1D5DB);
-            border-radius:5px;background:transparent;cursor:pointer;color:var(--c-text,#111)">
+          style="margin-left:auto;font-size:10px;padding:3px 9px;border:1px solid var(--border);
+            border-radius:5px;background:transparent;cursor:pointer;color:var(--text-primary)">
           ✏️ Editar
         </button>
       </div>

@@ -6,6 +6,7 @@ import { Auth, Sesion, iniciarInactivityTimer, detenerInactivityTimer } from "./
 import { PreferenciasModule, aplicarPrefsIniciales } from "./preferencias.js";
 import { DashboardModule }  from "./dashboard.js";
 import { MapaModule }       from "./mapa.js";
+import { MapaClientesModule } from "./mapa-clientes.js";
 import { FeedModule }       from "./feed.js";
 import { UsuariosModule }   from "./usuarios.js";
 import { ReportesModule }   from "./reportes.js";
@@ -41,6 +42,7 @@ import { JuridicoModule }         from "./juridico.js";
 import { ObservabilidadModule }   from "./observabilidad.js";
 import { MiRhModule }             from "./mi-rh.js";
 import { ManualesModule }          from "./manuales.js";
+import { AsignacionesModule }      from "./asignaciones.js";
 import { ConfigInteresesModule }   from "./config-intereses.js";
 import { mount as rcMount, destroy as rcDestroy } from "./reportes-custom.js";
 import { iniciarNotificaciones, detenerNotificaciones } from "./notificaciones.js";
@@ -78,11 +80,11 @@ window.modal = ({ title = "", message = "", confirmLabel = "Confirmar", cancelLa
     o.innerHTML = `
       <div style="background:var(--surface,#1e293b);border:1px solid var(--border,#334155);border-radius:12px;
         padding:24px 28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.45)">
-        ${title ? `<div style="font-size:14px;font-weight:700;color:var(--text,#f1f5f9);margin-bottom:10px">${esc(title)}</div>` : ""}
-        <div style="font-size:13px;color:var(--text2,#94a3b8);line-height:1.6;margin-bottom:20px">${esc(message)}</div>
+        ${title ? `<div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:10px">${esc(title)}</div>` : ""}
+        <div style="font-size:13px;color:var(--text-sec);line-height:1.6;margin-bottom:20px">${esc(message)}</div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button id="_gm-c" style="padding:8px 18px;border-radius:7px;font-size:12px;font-weight:600;
-            cursor:pointer;border:1px solid var(--border,#334155);background:transparent;color:var(--text2,#94a3b8)">${esc(cancelLabel)}</button>
+            cursor:pointer;border:1px solid var(--border,#334155);background:transparent;color:var(--text-sec)">${esc(cancelLabel)}</button>
           <button id="_gm-ok" style="padding:8px 18px;border-radius:7px;font-size:12px;font-weight:600;
             cursor:pointer;${confirmStyle}">${esc(confirmLabel)}</button>
         </div>
@@ -125,14 +127,14 @@ window.promptModal = ({ title = "", label = "", placeholder = "", confirmLabel =
     o.innerHTML = `
       <div style="background:var(--surface,#1e293b);border:1px solid var(--border,#334155);border-radius:12px;
         padding:24px 28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.45)">
-        ${title ? `<div style="font-size:14px;font-weight:700;color:var(--text,#f1f5f9);margin-bottom:10px">${esc(title)}</div>` : ""}
-        ${label ? `<label style="font-size:12px;color:var(--text2,#94a3b8);display:block;margin-bottom:6px">${esc(label)}</label>` : ""}
+        ${title ? `<div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:10px">${esc(title)}</div>` : ""}
+        ${label ? `<label style="font-size:12px;color:var(--text-sec);display:block;margin-bottom:6px">${esc(label)}</label>` : ""}
         <input id="_gpi" type="text" placeholder="${esc(placeholder)}"
           style="width:100%;padding:9px 12px;border:1px solid var(--border,#334155);border-radius:7px;
-            font-size:13px;background:var(--bg,#0f172a);color:var(--text,#f1f5f9);margin-bottom:16px;outline:none">
+            font-size:13px;background:var(--surface);color:var(--text-primary);margin-bottom:16px;outline:none">
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button id="_gpi-c" style="padding:8px 18px;border-radius:7px;font-size:12px;font-weight:600;
-            cursor:pointer;border:1px solid var(--border,#334155);background:transparent;color:var(--text2,#94a3b8)">${esc(cancelLabel)}</button>
+            cursor:pointer;border:1px solid var(--border,#334155);background:transparent;color:var(--text-sec)">${esc(cancelLabel)}</button>
           <button id="_gpi-ok" style="padding:8px 18px;border-radius:7px;font-size:12px;font-weight:600;
             cursor:pointer;background:var(--primary,#1D5C33);color:#fff;border:1px solid #16A34A">${esc(confirmLabel)}</button>
         </div>
@@ -150,7 +152,8 @@ window.promptModal = ({ title = "", label = "", placeholder = "", confirmLabel =
 // ── Módulos registrados por nombre de vista ────────────────────
 const MODULES = {
   dashboard:  DashboardModule,
-  mapa:       MapaModule,
+  mapa:          MapaModule,
+  mapa_clientes: MapaClientesModule,
   feed:       FeedModule,
   usuarios:   UsuariosModule,
   reportes:   ReportesModule,
@@ -184,6 +187,7 @@ const MODULES = {
   precios_segmento: SegmentoPrecioModule,
   clientes:         ClientesModule,
   manuales:         ManualesModule,
+  asignaciones:     AsignacionesModule,
   config:           ConfigModule,
   config_intereses: ConfigInteresesModule,
   comentarios:      ComentariosModule,
@@ -374,17 +378,19 @@ function _initShell() {
     set(msg = "Hay cambios sin guardar. ¿Salir de todas formas?") { this._msg = msg; },
     clear() { this._msg = null; },
     isDirty() { return this._msg !== null; },
-    confirm() {
+    async confirm() {
       if (!this._msg) return true;
-      return window.confirm(this._msg);
+      return window.modal
+        ? window.modal({ title: "Cambios sin guardar", message: this._msg, confirmLabel: "Salir sin guardar", cancelLabel: "Volver", danger: true })
+        : window.confirm(this._msg);
     }
   };
 }
 
 // ── Navegación ─────────────────────────────────────────────────
-function _navigateGuarded(viewId) {
+async function _navigateGuarded(viewId) {
   if (vistaActual === viewId) return;
-  if (window.DirtyGuard?.isDirty() && !window.DirtyGuard.confirm()) return;
+  if (window.DirtyGuard?.isDirty() && !await window.DirtyGuard.confirm()) return;
   window.DirtyGuard?.clear();
   _navigate(viewId);
 }
@@ -411,7 +417,7 @@ function _navigate(viewId) {
   if (el) el.classList.add("active");
 
   // Breadcrumb
-  const bc = { dashboard:"Dashboard", mapa:"Mapa en vivo", feed:"Feed en vivo",
+  const bc = { dashboard:"Dashboard", mapa:"Mapa en vivo", mapa_clientes:"Mapa de Clientes", feed:"Feed en vivo",
     ingenieros:"Ingenieros", pedidos:"Pedidos", remisiones:"Remisiones",
     cobranza:"Cobranza", usuarios:"Usuarios y flags", reportes:"Reportes",
     comisiones:"Comisiones", compras:"Órdenes de compra", kardex:"Kardex",
@@ -424,8 +430,9 @@ function _navigate(viewId) {
     clientes:"Clientes", auditoria:"Auditoría", devoluciones:"Devoluciones",
     rh:"Recursos Humanos", mi_rh:"Mi RH", chat:"Chat interno",
     juridico:"Jurídico", observabilidad:"Observabilidad", manuales:"Manuales y Políticas",
-    cotizaciones:"Cotizaciones", reportes_custom:"Reportes Configurables" };
-  const subs = { dashboard:"Resumen del día", mapa:"Ingenieros en campo",
+    cotizaciones:"Cotizaciones", reportes_custom:"Reportes Configurables",
+    asignaciones:"Asignaciones" };
+  const subs = { dashboard:"Resumen del día", mapa:"Ingenieros en campo", mapa_clientes:"Localización total de clientes georeferenciados",
     feed:"Actividades globales", usuarios:"Gestión de privilegios",
     reportes:"Generación de reportes", comisiones:"Nómina e incentivos por ingeniero",
     compras:"Órdenes a proveedores", cartera:"Cartera vencida por cliente", visitas:"Programación de visitas",
@@ -436,6 +443,7 @@ function _navigate(viewId) {
     inventario:"Stock en tiempo real por producto",
     crm:"Pipeline de prospectos y conversión a clientes",
     logistica:"Visitas programadas por frecuencia de cliente",
+    asignaciones:"Traspaso de clientes entre ingenieros con auditoría completa",
     clientes:"Directorio y saldos por cliente", auditoria:"Registro de cambios críticos",
     devoluciones:"Gestión de devoluciones y créditos", rh:"Gestión de personal",
     mi_rh:"Mi expediente y nómina", chat:"Mensajería interna del equipo",
@@ -536,6 +544,7 @@ function _initGlobalSearch() {
     { view:"pedidos",          icon:"📋", label:"Pedidos",                  kw:"pedidos ordenes folio borrador confirmado" },
     { view:"clientes",         icon:"🏢", label:"Clientes",                 kw:"clientes empresas semaforo credito" },
     { view:"ingenieros",       icon:"👤", label:"Ingenieros",               kw:"ingenieros vendedores campo representantes" },
+    { view:"asignaciones",     icon:"🔄", label:"Asignaciones",             kw:"asignaciones traspaso reasignar clientes zonas rutas ingeniero" },
     { view:"remisiones",       icon:"📄", label:"Remisiones",               kw:"remisiones credito notas facturas" },
     { view:"cobranza",         icon:"💰", label:"Cobranza",                 kw:"cobranza cobros abonos pagos" },
     { view:"cartera",          icon:"📉", label:"Cartera vencida",          kw:"cartera vencida intereses mora semaforo" },
@@ -553,6 +562,7 @@ function _initGlobalSearch() {
     { view:"logistica",        icon:"🚚", label:"Logistica de visitas",     kw:"logistica rutas visitas" },
     { view:"visitas",          icon:"📍", label:"Visitas",                  kw:"visitas programacion agenda" },
     { view:"mapa",             icon:"🗺️", label:"Mapa en vivo",             kw:"mapa gps campo ubicacion" },
+    { view:"mapa_clientes",   icon:"📍", label:"Mapa de Clientes",          kw:"mapa clientes georeferencia ubicacion visita" },
     { view:"geocercas",        icon:"📐", label:"Geocercas",                kw:"geocercas zonas areas autorizadas" },
     { view:"metas",            icon:"🏆", label:"Metas de venta",           kw:"metas objetivos cuota" },
     { view:"autorizaciones",   icon:"🔐", label:"Autorizaciones",           kw:"autorizaciones aprobaciones bloqueos" },
@@ -864,6 +874,7 @@ function _aplicarVisibilidadSidebar() {
     comisiones:  pvF("PUEDE_VER_COMISIONES","GERENTE","ADMINISTRADOR","INGENIERO"),
     compras:     pv("GERENTE","ALMACENISTA","ADMINISTRADOR"),
     kardex:      pv("GERENTE","ALMACENISTA","ADMINISTRADOR"),
+    asignaciones:pvF("PUEDE_CREAR_CLIENTES","GERENTE","MESA_CONTROL","ADMINISTRADOR"),
     cartera:     pvF("PUEDE_VER_CARTERA_GLOBAL","GERENTE","MESA_CONTROL","RECUPERADOR","ADMINISTRADOR"),
     visitas:     pv("GERENTE","MESA_CONTROL","INGENIERO","ADMINISTRADOR"),
     cotizaciones:pv("GERENTE","MESA_CONTROL","INGENIERO","ADMINISTRADOR"),

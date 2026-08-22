@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-10 Analytics · Panel de Control</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- SheetJS (Excel import/export) — servido localmente, sin CDN externo -->
+  <script src="js/lib/xlsx.min.js"></script>
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0F172A">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="N-10 ERP">
+  <link rel="apple-touch-icon" href="icons/icon-192.svg">
+  <!-- Google Maps — clave inyectada en deploy via Firebase Hosting rewrite o env -->
+  <script>
+    // La clave de Maps se sustituye en CI/CD: %%MAPS_API_KEY%%
+    window.N10_MAPS_KEY = "AIzaSyABlKaosFaAnATC_lpB_BP1K0VpdaEfqe8";
+    // Registro del Service Worker (PWA)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     PANTALLA DE LOGIN
+     ══════════════════════════════════════════ -->
+<div id="login-screen" class="login-screen hidden">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-mark">N<sup>10</sup></div>
+      <div>
+        <div class="login-title">Nutrición de 10</div>
+        <div class="login-sub">PANEL DE CONTROL</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Correo electrónico</label>
+      <input id="login-email" type="email" class="form-input" placeholder="usuario@nutricionde10.mx" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Contraseña</label>
+      <input id="login-password" type="password" class="form-input" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div id="login-error" class="login-error hidden"></div>
+    <button id="login-btn" class="btn-primary" onclick="Auth.login()">Iniciar sesión</button>
+    <div id="login-loading" class="login-loading hidden">
+      <div class="spinner"></div> Verificando…
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     SHELL PRINCIPAL
+     ══════════════════════════════════════════ -->
+<div id="app-shell" class="shell hidden">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand">
+      <div class="sb-mark">N<sup>10</sup></div>
+      <div>
+        <div class="sb-name">Nutrición de 10</div>
+        <div class="sb-sub">ERP COMERCIAL</div>
+      </div>
+    </div>
+
+    <nav class="sb-nav">
+
+      <!-- ── PRINCIPAL ── -->
+      <div class="sb-group" data-section="principal">
+        <span>PRINCIPAL</span><span class="sb-chevron">▾</span>
+      </div>
+      <div class="sb-section-items" id="sbi-principal">
+        <a class="sb-item active" href="#" data-view="dashboard">
+          <span class="sb-icon">📊</span> Dashboard
+        </a>
+        <a class="sb-item" href="#" data-view="mapa">
+          <span class="sb-icon">🗺</span> Mapa en vivo
+          <span class="sb-live" id="sb-live-count">
+            <span class="live-dot"></span><span id="live-count">0</span>
+          </span>
+        </a>
+        <a class="sb-item" href="#" data-view="feed">
+          <span class="sb-icon">⚡</span> Feed en vivo
+          <span class="sb-badge hidden" id="feed-badge">0</span>
+        </a>
+      </div>
+
+      <!-- ── CAMPO ── -->
+      <div class="sb-group" data-section="campo">
+        <span>CAMPO</span><span class="sb-chevron">▾</span>
+      </div>
+      <div class="sb-section-items" id="sbi-campo">
+        <a class="sb-item" href="#" data-view="ingenieros">
+          <span class="sb-icon">👷</span> Ingenieros
+        </a>
+        <a class="sb-item" href="#" data-view="clientes">
+          <span class="sb-icon">🏪</span> Clientes
+        </a>
+        <a class="sb-item" href="#" data-view="mapa_clientes">
+          <span class="sb-icon">📍</span> Mapa de clientes
+        </a>
+        <a class="sb-item" href="#" data-view="asignaciones">
+          <span class="sb-icon">🔄</span> Asignaciones
+        </a>
+        <a class="sb-item" href="#" data-view="pedidos">
+          <span class="sb-icon">🛒</span> Pedidos
+        </a>
+        <a class="sb-item" href="#" data-view="remisiones">
+          <span class="sb-icon">📄</span> Remisiones
+        </a>
+        <a class="sb-item" href="#" data-view="cobranza">
+          <span class="sb-icon">💰</span> Cobranza
+        </a>
+        <a class="sb-item" href="#" data-view="manuales">
+          <span class="sb-icon">📋</span> Manuales
+        </a>
+      </div>
+
+      <!-- ── SUPERVISIÓN ── -->
+      <div class="sb-group" id="sb-grupo-supervision" data-section="supervision">
+        <span>SUPERVISIÓN</span><span class="sb-chevron">▾</span>
+      </div>
+      <div class="sb-section-items" id="sbi-supervision">
+        <a class="sb-item" href="#" data-view="comentarios" id="sb-comentarios">
+          <span class="sb-icon">💬</span> Comentarios
+        </a>
+      </div>
+
+      <!-- ── ADMINISTRACIÓN ── -->
+      <div class="sb-group" id="sb-admin-group" data-section="admin">
+        <span>ADMINISTRACIÓN</span><span class="sb-chevron">▾</span>
+      </div>
+      <div class="sb-section-items" id="sbi-admin">
+        <div class="sb-sublabel" id="sb-sublabel-ops">Operaciones</div>
+        <a class="sb-item" href="#" data-view="usuarios" id="sb-usuarios">
+          <span class="sb-icon">🔐</span> Usuarios y flags
+        </a>
+        <a class="sb-item" href="#" data-view="comisiones">
+          <span class="sb-icon">📊</span> Comisiones
+        </a>
+        <a class="sb-item" href="#" data-view="compras">
+          <span class="sb-icon">📋</span> Órdenes de compra
+        </a>
+        <a class="sb-item" href="#" data-view="kardex">
+          <span class="sb-icon">📦</span> Kardex
+        </a>
+        <a class="sb-item" href="#" data-view="cartera">
+          <span class="sb-icon">💳</span> Cartera vencida
+          <span class="sb-badge hidden" id="cart-badge">0</span>
+        </a>
+        <a class="sb-item" href="#" data-view="visitas">
+          <span class="sb-icon">📅</span> Visitas
+        </a>
+        <a class="sb-item" href="#" data-view="cotizaciones">
+          <span class="sb-icon">📋</span> Cotizaciones
+        </a>
+        <a class="sb-item" href="#" data-view="inventario">
+          <span class="sb-icon">📦</span> Inventario
+        </a>
+        <a class="sb-item" href="#" data-view="devoluciones">
+          <span class="sb-icon">↩️</span> Devoluciones
+          <span class="sb-badge hidden" id="dev-badge">0</span>
+        </a>
+        <a class="sb-item" href="#" data-view="chat">
+          <span class="sb-icon">💬</span> Chat interno
+          <span class="sb-badge hidden" id="chat-badge">0</span>
+        </a>
+        <a class="sb-item" href="#" data-view="rh">
+          <span class="sb-icon">👥</span> Recursos Humanos
+        </a>
+        <a class="sb-item" href="#" data-view="mi_rh" id="sb-mi-rh">
+          <span class="sb-icon">👤</span> Mi RH
+        </a>
+        <a class="sb-item" href="#" data-view="crm">
+          <span class="sb-icon">🎯</span> CRM — Prospectos
+        </a>
+        <a class="sb-item" href="#" data-view="logistica">
+          <span class="sb-icon">🚗</span> Logística de visitas
+        </a>
+        <a class="sb-item" href="#" data-view="juridico" id="sb-juridico">
+          <span class="sb-icon">⚖️</span> Jurídico
+        </a>
+        <a class="sb-item" href="#" data-view="observabilidad" id="sb-observabilidad">
+          <span class="sb-icon">📡</span> Observabilidad
+        </a>
+        <div class="sb-divider-mini" id="sb-div-ctrl"></div>
+        <div class="sb-sublabel" id="sb-sublabel-ctrl">Control</div>
+        <a class="sb-item" href="#" data-view="precios" id="sb-precios">
+          <span class="sb-icon">💲</span> Precios y costos
+        </a>
+        <a class="sb-item" href="#" data-view="geocercas">
+          <span class="sb-icon">📍</span> Geocercas
+        </a>
+        <a class="sb-item" href="#" data-view="metas">
+          <span class="sb-icon">🎯</span> Metas de venta
+        </a>
+        <a class="sb-item" href="#" data-view="autorizaciones">
+          <span class="sb-icon">✅</span> Autorizaciones
+        </a>
+        <a class="sb-item" href="#" data-view="auditoria">
+          <span class="sb-icon">🔍</span> Auditoría
+        </a>
+        <div class="sb-divider-mini" id="sb-div-cfg"></div>
+        <div class="sb-sublabel" id="sb-sublabel-cfg">Configuración</div>
+        <a class="sb-item" href="#" data-view="formularios">
+          <span class="sb-icon">📋</span> Formularios
+        </a>
+        <a class="sb-item" href="#" data-view="promociones">
+          <span class="sb-icon">🎁</span> Recompensa y lealtad
+        </a>
+        <a class="sb-item" href="#" data-view="precios_segmento">
+          <span class="sb-icon">🏷️</span> Precios por segmento
+        </a>
+        <a class="sb-item" href="#" data-view="productos">
+          <span class="sb-icon">📦</span> Catálogo / Productos
+        </a>
+        <a class="sb-item" href="#" data-view="config">
+          <span class="sb-icon">⚙️</span> Config. tickets
+        </a>
+        <a class="sb-item" href="#" data-view="config_intereses">
+          <span class="sb-icon">📊</span> Tasas de interés
+        </a>
+        <a class="sb-item" href="#" data-view="reportes">
+          <span class="sb-icon">📈</span> Reportes
+        </a>
+        <a class="sb-item" href="#" data-view="reportes_custom">
+          <span class="sb-icon">📋</span> Reportes custom
+        </a>
+      </div>
+
+    </nav>
+
+    <div class="sb-user">
+      <div id="sb-popover" class="sb-popover hidden">
+        <!-- Perfil -->
+        <div class="sbp-profile">
+          <div class="sb-ava sbp-ava" id="sbp-ava">SI</div>
+          <div>
+            <div class="sbp-name" id="sbp-name">usuario</div>
+            <div class="sbp-role" id="sbp-role">rol</div>
+          </div>
+        </div>
+        <div class="sbp-divider"></div>
+        <!-- Dark mode toggle -->
+        <div class="sbp-row">
+          <span>🌙 Modo oscuro</span>
+          <label class="sbp-toggle">
+            <input type="checkbox" id="dark-toggle">
+            <span class="sbp-slider"></span>
+          </label>
+        </div>
+        <div class="sbp-divider"></div>
+        <!-- Preferencias -->
+        <button class="sbp-btn-prefs" id="sbp-prefs">⚙ Preferencias</button>
+        <div class="sbp-divider"></div>
+        <!-- Cerrar sesión -->
+        <button class="sbp-btn-logout" id="sbp-logout">⏻ Cerrar sesión</button>
+      </div>
+      <div class="sb-ava" id="sb-ava">?</div>
+      <div>
+        <div class="sb-uname" id="sb-uname">–</div>
+        <div class="sb-urole" id="sb-urole">–</div>
+      </div>
+      <button class="sb-logout" title="Cerrar sesión" onclick="Auth.logout()">⏻ Salir</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <button id="sb-toggle" class="sb-toggle-btn" aria-label="Menú">☰</button>
+      <div class="tb-bc" id="tb-bc">Dashboard <span>/ Resumen del día</span></div>
+      <div class="tb-spacer"></div>
+      <div class="tb-search">
+        <span>🔍</span>
+        <input type="text" placeholder="Buscar folio, ingeniero…" id="global-search">
+      </div>
+      <button class="tb-icon-btn" id="tb-chat-bell" title="Chat interno — mensajes nuevos"
+        style="position:relative;display:none" onclick="navigate('chat')">
+        💬
+        <span class="notif-count" id="tb-chat-count"
+          style="display:none;background:#DC2626"></span>
+      </button>
+      <button class="tb-icon-btn" id="tb-notif-bell" title="Notificaciones" style="position:relative">
+        🔔
+        <span class="notif-count" id="tb-notif-count" style="display:none"></span>
+      </button>
+      <div class="tb-user-pill">
+        <div class="tb-ava" id="tb-ava">?</div>
+        <span class="tb-uname" id="tb-uname">–</span>
+        <span class="tb-caret">▾</span>
+      </div>
+    </header>
+
+    <!-- SUB-HEADER -->
+    <div class="subhdr">
+      <div>
+        <div class="subhdr-title" id="subhdr-title">Resumen del día</div>
+        <div class="subhdr-sub" id="subhdr-sub">Cargando…</div>
+      </div>
+      <div class="subhdr-spacer"></div>
+      <div class="tb-chip" id="chip-campo">
+        <span class="live-dot"></span>
+        <span id="chip-count">0</span> en campo
+      </div>
+      <div class="date-chip" id="date-chip">📅 Hoy</div>
+    </div>
+
+    <!-- VISTAS -->
+    <div class="views-container" id="views-container">
+      <div class="view active" id="view-dashboard"></div>
+      <div class="view" id="view-mapa"></div>
+      <div class="view" id="view-mapa_clientes"></div>
+      <div class="view" id="view-feed"></div>
+      <div class="view" id="view-ingenieros"></div>
+      <div class="view" id="view-asignaciones"></div>
+      <div class="view" id="view-pedidos"></div>
+      <div class="view" id="view-remisiones"></div>
+      <div class="view" id="view-cobranza"></div>
+      <div class="view" id="view-manuales"></div>
+      <div class="view" id="view-usuarios"></div>
+      <div class="view" id="view-comisiones"></div>
+      <div class="view" id="view-compras"></div>
+      <div class="view" id="view-kardex"></div>
+      <div class="view" id="view-cartera"></div>
+      <div class="view" id="view-visitas"></div>
+      <div class="view" id="view-cotizaciones"></div>
+      <div class="view" id="view-devoluciones"></div>
+      <div class="view" id="view-inventario"></div>
+      <div class="view" id="view-crm"></div>
+      <div class="view" id="view-logistica"></div>
+      <div class="view" id="view-chat"></div>
+      <div class="view" id="view-rh"></div>
+      <div class="view" id="view-auditoria"></div>
+      <div class="view" id="view-precios"></div>
+      <div class="view" id="view-config"></div>
+      <div class="view" id="view-config_intereses"></div>
+      <div class="view" id="view-reportes"></div>
+      <div class="view" id="view-comentarios"></div>
+      <div class="view" id="view-geocercas"></div>
+      <div class="view" id="view-metas"></div>
+      <div class="view" id="view-autorizaciones"></div>
+      <div class="view" id="view-formularios"></div>
+      <div class="view" id="view-promociones"></div>
+      <div class="view" id="view-precios_segmento"></div>
+      <div class="view" id="view-productos"></div>
+      <div class="view" id="view-clientes"></div>
+      <div class="view" id="view-observabilidad"></div>
+      <div class="view" id="view-mi_rh"></div>
+      <div class="view" id="view-juridico"></div>
+      <div class="view" id="view-reportes_custom"></div>
+    </div>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div class="statusbar" id="statusbar">
+  <span class="st-item" id="st-firebase">
+    <span class="st-dot" style="background:#374151"></span> Conectando…
+  </span>
+  <span class="st-item" id="st-campo">
+    <span class="st-dot" style="background:#374151"></span> –
+  </span>
+  <div class="st-spacer"></div>
+  <span class="st-sync" id="st-sync">🔄 –</span>
+  <span class="st-item" style="margin-left:10px; color:#334155">N10 ERP · v21.25</span>
+</div>
+
+<!-- Firebase SDK -->
+<script type="module" src="js/firebase-config.js"></script>
+<script type="module" src="js/auth.js"></script>
+<script type="module" src="js/app.js"></script>
+<script type="module" src="js/dashboard.js"></script>
+<script type="module" src="js/mapa.js"></script>
+<script type="module" src="js/feed.js"></script>
+<script type="module" src="js/usuarios.js"></script>
+<script type="module" src="js/reportes.js"></script>
+<script type="module" src="js/manuales.js"></script>
+
+</body>
+</html>

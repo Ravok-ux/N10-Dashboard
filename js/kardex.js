@@ -1,4 +1,4 @@
-// ══════════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════════
 // kardex.js — Historial de movimientos de inventario
 // Muestra entradas, salidas y ajustes por producto
 // ══════════════════════════════════════════════════════════════
@@ -63,37 +63,33 @@ function _html() {
 
     <!-- Header -->
     <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;
-      border-bottom:1px solid var(--c-border);flex-shrink:0;flex-wrap:wrap">
+      border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
       <div>
-        <div style="font-size:13px;font-weight:800;color:var(--c-text)">📋 Kardex de inventario</div>
-        <div style="font-size:10.5px;color:#9CA3AF" id="kx-subtitle">Cargando…</div>
+        <div style="font-size:13px;font-weight:800;color:var(--text-primary)">📋 Kardex de inventario</div>
+        <div style="font-size:10.5px;color:var(--text-muted)" id="kx-subtitle">Cargando…</div>
       </div>
       <div style="flex:1"></div>
 
       <!-- Búsqueda por producto -->
       <input id="kx-buscar" type="text" placeholder="Buscar producto…"
         oninput="KardexUI.buscar(this.value)"
-        style="border:1px solid var(--c-border);border-radius:6px;padding:6px 10px;
-          font-size:12px;background:var(--c-surface);color:var(--c-text);width:200px">
+        style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;
+          font-size:12px;background:var(--surface);color:var(--text-primary);width:200px">
 
       <!-- Filtro tipo -->
       <select id="kx-tipo" onchange="KardexUI.setTipo(this.value)"
-        style="border:1px solid var(--c-border);border-radius:6px;padding:5px 8px;
-          font-size:12px;background:var(--c-surface);color:var(--c-text)">
+        style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;
+          font-size:12px;background:var(--surface);color:var(--text-primary)">
         <option value="">Todos los tipos</option>
         ${Object.keys(TIPO_COLOR).map(t => `<option value="${t}">${t}</option>`).join("")}
       </select>
 
-      <button onclick="KardexUI.exportar()"
-        style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:6px;
-          padding:6px 12px;font-size:11.5px;font-weight:700;color:var(--c-text);cursor:pointer">
-        ⬇ Excel
-      </button>
+      <button onclick="KardexUI.exportar()" style="padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">⬇️ Excel</button>
     </div>
 
     <!-- KPIs -->
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;flex-shrink:0;
-      border-bottom:1px solid var(--c-border)">
+      border-bottom:1px solid var(--border)">
       ${[
         ["kx-k-total",   "Total movimientos", "#9CA3AF"],
         ["kx-k-entrada", "Entradas",          "#4ADE80"],
@@ -101,8 +97,8 @@ function _html() {
         ["kx-k-ajuste",  "Ajustes",           "#93C5FD"],
         ["kx-k-alertas", "Alertas stock bajo","#FBBF24"],
       ].map(([id, label, color]) => `
-        <div style="padding:12px 16px;border-right:1px solid var(--c-border)">
-          <div style="font-size:10px;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">${label}</div>
+        <div style="padding:12px 16px;border-right:1px solid var(--border)">
+          <div style="font-size:10px;color:var(--text-sec);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">${label}</div>
           <div id="${id}" style="font-size:20px;font-weight:800;color:${color}">–</div>
         </div>`).join("")}
     </div>
@@ -121,19 +117,19 @@ function _html() {
     <div style="flex:1;overflow-y:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px" id="kx-tabla">
         <thead>
-          <tr style="background:var(--c-surface-2,#F9FAFB);position:sticky;top:0;z-index:1">
-            <th style="padding:9px 14px;text-align:left;font-weight:700;color:#6B7280;border-bottom:1px solid var(--c-border)">TIPO</th>
-            <th style="padding:9px 14px;text-align:left;font-weight:700;color:#6B7280;border-bottom:1px solid var(--c-border)">PRODUCTO</th>
-            <th style="padding:9px 14px;text-align:right;font-weight:700;color:#6B7280;border-bottom:1px solid var(--c-border)">CANTIDAD</th>
-            <th style="padding:9px 14px;text-align:right;font-weight:700;color:#6B7280;border-bottom:1px solid var(--c-border)">ANTES</th>
-            <th style="padding:9px 14px;text-align:right;font-weight:700;color:#6B7280;border-bottom:1px solid var(--c-border)">DESPUÉS</th>
-            <th style="padding:9px 14px;text-align:left;font-weight:700;color:#6B7280;border-bottom:1px solid var(--c-border)">MOTIVO / REF</th>
-            <th style="padding:9px 14px;text-align:left;font-weight:700;color:#6B7280;border-bottom:1px solid var(--c-border)">REGISTRADO POR</th>
-            <th style="padding:9px 14px;text-align:left;font-weight:700;color:#6B7280;border-bottom:1px solid var(--c-border)">FECHA</th>
+          <tr style="background:var(--surface-2);position:sticky;top:0;z-index:1">
+            <th style="padding:9px 14px;text-align:left;font-weight:700;color:var(--text-sec);border-bottom:1px solid var(--border)">TIPO</th>
+            <th style="padding:9px 14px;text-align:left;font-weight:700;color:var(--text-sec);border-bottom:1px solid var(--border)">PRODUCTO</th>
+            <th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--text-sec);border-bottom:1px solid var(--border)">CANTIDAD</th>
+            <th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--text-sec);border-bottom:1px solid var(--border)">ANTES</th>
+            <th style="padding:9px 14px;text-align:right;font-weight:700;color:var(--text-sec);border-bottom:1px solid var(--border)">DESPUÉS</th>
+            <th style="padding:9px 14px;text-align:left;font-weight:700;color:var(--text-sec);border-bottom:1px solid var(--border)">MOTIVO / REF</th>
+            <th style="padding:9px 14px;text-align:left;font-weight:700;color:var(--text-sec);border-bottom:1px solid var(--border)">REGISTRADO POR</th>
+            <th style="padding:9px 14px;text-align:left;font-weight:700;color:var(--text-sec);border-bottom:1px solid var(--border)">FECHA</th>
           </tr>
         </thead>
         <tbody id="kx-tbody">
-          <tr><td colspan="8" style="padding:40px;text-align:center;color:#9CA3AF">Cargando movimientos…</td></tr>
+          <tr><td colspan="8" style="padding:40px;text-align:center;color:var(--text-muted)">Cargando movimientos…</td></tr>
         </tbody>
       </table>
     </div>
@@ -218,7 +214,7 @@ function _renderTabla() {
   }
 
   if (lista.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="padding:40px;text-align:center;color:#9CA3AF">
+    tbody.innerHTML = `<tr><td colspan="8" style="padding:40px;text-align:center;color:var(--text-muted)">
       Sin movimientos para los filtros seleccionados</td></tr>`;
     return;
   }
@@ -228,12 +224,12 @@ function _renderTabla() {
     const bg  = i % 2 === 0 ? "transparent" : "rgba(255,255,255,.02)";
     const ref = m.folioPedido ? `Pedido ${esc(m.folioPedido)}` : esc(m.motivo || "–");
     return `
-      <tr style="border-bottom:1px solid var(--c-border);background:${bg}">
+      <tr style="border-bottom:1px solid var(--border);background:${bg}">
         <td style="padding:8px 14px">
           <span style="font-size:10px;font-weight:700;background:${tc.bg};color:${tc.text};
             border-radius:4px;padding:2px 8px;white-space:nowrap">${tc.label}</span>
         </td>
-        <td style="padding:8px 14px;color:var(--c-text);font-weight:600;max-width:220px;
+        <td style="padding:8px 14px;color:var(--text-primary);font-weight:600;max-width:220px;
           overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m.nombreProducto)}">
           ${esc(m.nombreProducto || "–")}
         </td>
@@ -241,12 +237,12 @@ function _renderTabla() {
           color:${m.tipo==='SALIDA'?'#FCA5A5':m.tipo==='ENTRADA'?'#4ADE80':'#93C5FD'}">
           ${m.tipo === "SALIDA" ? "−" : "+"}${fmtNum(m.cantidad)}
         </td>
-        <td style="padding:8px 14px;text-align:right;color:#9CA3AF">${fmtNum(m.stockAntes)}</td>
-        <td style="padding:8px 14px;text-align:right;font-weight:600;color:var(--c-text)">${fmtNum(m.stockDespues)}</td>
-        <td style="padding:8px 14px;color:#9CA3AF;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+        <td style="padding:8px 14px;text-align:right;color:var(--text-muted)">${fmtNum(m.stockAntes)}</td>
+        <td style="padding:8px 14px;text-align:right;font-weight:600;color:var(--text-primary)">${fmtNum(m.stockDespues)}</td>
+        <td style="padding:8px 14px;color:var(--text-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
           title="${ref}">${ref}</td>
-        <td style="padding:8px 14px;color:#9CA3AF">${esc(m.quienRegistro || m.ingenieroAlias || "–")}</td>
-        <td style="padding:8px 14px;color:#9CA3AF;white-space:nowrap">${fmtTs(m.timestamp)}</td>
+        <td style="padding:8px 14px;color:var(--text-muted)">${esc(m.quienRegistro || m.ingenieroAlias || "–")}</td>
+        <td style="padding:8px 14px;color:var(--text-muted);white-space:nowrap">${fmtTs(m.timestamp)}</td>
       </tr>`;
   }).join("");
 }

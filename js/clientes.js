@@ -4,11 +4,48 @@
 
 import { db } from "./firebase-config.js";
 import { esc } from "./app.js";
+import { Sesion } from "./auth.js";
 import {
   collection, query, orderBy, onSnapshot,
-  doc, updateDoc, getDoc, serverTimestamp
+  doc, updateDoc, getDoc, addDoc, serverTimestamp,
+  getDocs, where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { exportarExcel } from "./excel-utils.js";
+
+// ── Focus trap utility ────────────────────────────────────────
+// Atrapa el foco dentro de `el` y cierra con Escape via `closeFn`.
+// Devuelve cleanup: llama al regresar el foco al exterior.
+function _trapFocus(el, closeFn) {
+  const sel = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  const getFocusable = () => [...el.querySelectorAll(sel)].filter(n => !n.closest('[style*="display:none"]'));
+  const onKey = e => {
+    if (e.key === "Escape") { closeFn(); return; }
+    if (e.key !== "Tab") return;
+    const nodes = getFocusable();
+    if (!nodes.length) { e.preventDefault(); return; }
+    const first = nodes[0], last = nodes[nodes.length - 1];
+    if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
+      e.preventDefault();
+      (e.shiftKey ? last : first).focus();
+    }
+  };
+  document.addEventListener("keydown", onKey);
+  const firstFocusable = getFocusable()[0];
+  if (firstFocusable) firstFocusable.focus();
+  return () => document.removeEventListener("keydown", onKey);
+}
+
+// Mapa de cleanups por modal id
+const _focusCleanups = {};
+function _openTrap(modalId, closeFn) {
+  _closeTrap(modalId);
+  const el = document.getElementById(modalId);
+  if (el) _focusCleanups[modalId] = _trapFocus(el, closeFn);
+}
+function _closeTrap(modalId) {
+  _focusCleanups[modalId]?.();
+  delete _focusCleanups[modalId];
+}
 
 // ── Columnas Excel ────────────────────────────────────────────
 const _COLS = [
@@ -71,15 +108,15 @@ function _html() {
 
     <!-- KPIs -->
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px">
-      ${_kpi("cli-k-total",  "CLIENTES")}
-      ${_kpi("cli-k-activos","ACTIVOS")}
-      ${_kpi("cli-k-saldo",  "SALDO TOTAL")}
-      ${_kpi("cli-k-visita", "CON VISITA HOY")}
-      ${_kpi("cli-k-segs",   "SEGMENTOS")}
+      ${_kpi("cli-k-total",  "CLIENTES",       "var(--text-primary)")}
+      ${_kpi("cli-k-activos","ACTIVOS",        "#16A34A")}
+      ${_kpi("cli-k-saldo",  "SALDO TOTAL",    "#2563EB")}
+      ${_kpi("cli-k-visita", "CON VISITA HOY", "#7C3AED")}
+      ${_kpi("cli-k-segs",   "SEGMENTOS",      "#D97706")}
     </div>
 
     <!-- Barra de controles -->
-    <div style="background:var(--c-surface,#fff);border-radius:10px;border:1px solid var(--c-border,#E5E7EB);
+    <div style="background:var(--surface);border-radius:10px;border:1px solid var(--border);
       padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
       box-shadow:0 1px 3px rgba(0,0,0,.06)">
 
@@ -89,29 +126,29 @@ function _html() {
           font-size:13px;color:#9CA3AF;pointer-events:none">🔍</span>
         <input id="cli-search" type="text" placeholder="Buscar nombre, teléfono, dirección…"
           oninput="ClientesUI.buscar(this.value)"
-          style="width:100%;padding:7px 10px 7px 30px;border:1px solid var(--c-border,#D1D5DB);
-            border-radius:6px;font-size:12px;background:var(--c-surface,#fff);
-            color:var(--c-text,#111);box-sizing:border-box">
+          style="width:100%;padding:7px 10px 7px 30px;border:1px solid var(--border);
+            border-radius:6px;font-size:12px;background:var(--surface);
+            color:var(--text-primary);box-sizing:border-box">
       </div>
 
       <!-- Segmento -->
       <select id="cli-sel-seg" onchange="ClientesUI.setSegmento(this.value)"
-        style="border:1px solid var(--c-border,#D1D5DB);border-radius:6px;padding:6px 8px;
-          font-size:12px;background:var(--c-surface,#fff);color:var(--c-text,#111)">
+        style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;
+          font-size:12px;background:var(--surface);color:var(--text-primary)">
         <option value="TODOS">Todos los segmentos</option>
       </select>
 
       <!-- Ingeniero -->
       <select id="cli-sel-ing" onchange="ClientesUI.setIngeniero(this.value)"
-        style="border:1px solid var(--c-border,#D1D5DB);border-radius:6px;padding:6px 8px;
-          font-size:12px;background:var(--c-surface,#fff);color:var(--c-text,#111)">
+        style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;
+          font-size:12px;background:var(--surface);color:var(--text-primary)">
         <option value="TODOS">Todos los ingenieros</option>
       </select>
 
       <!-- Estado -->
       <select id="cli-sel-estado" onchange="ClientesUI.setEstado(this.value)"
-        style="border:1px solid var(--c-border,#D1D5DB);border-radius:6px;padding:6px 8px;
-          font-size:12px;background:var(--c-surface,#fff);color:var(--c-text,#111)">
+        style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;
+          font-size:12px;background:var(--surface);color:var(--text-primary)">
         <option value="TODOS">Activos e inactivos</option>
         <option value="activos">Solo activos</option>
         <option value="inactivos">Solo inactivos</option>
@@ -119,23 +156,32 @@ function _html() {
 
       <!-- Saldo -->
       <select id="cli-sel-saldo" onchange="ClientesUI.setSaldo(this.value)"
-        style="border:1px solid var(--c-border,#D1D5DB);border-radius:6px;padding:6px 8px;
-          font-size:12px;background:var(--c-surface,#fff);color:var(--c-text,#111)">
+        style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;
+          font-size:12px;background:var(--surface);color:var(--text-primary)">
         <option value="TODOS">Con y sin saldo</option>
         <option value="con_saldo">Con saldo pendiente</option>
         <option value="sin_saldo">Sin saldo</option>
       </select>
 
-      <!-- Exportar -->
-      <button onclick="ClientesUI.exportar()"
-        style="padding:6px 14px;border:1px solid #D1D5DB;border-radius:6px;background:transparent;
-          color:var(--c-text,#374151);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">
-        ⬇ Exportar Excel
+      <!-- Columnas -->
+      <button onclick="ClientesUI.abrirConfigCols()"
+        style="padding:7px 12px;background:var(--surface-2);color:var(--text-primary);
+          border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px">
+        ⚙ Columnas
       </button>
-      <button onclick="Cli_xlExport()"
-        style="padding:6px 14px;border-radius:6px;border:none;background:#1565C0;
-          color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">
-        ⬇ Exportar Clientes
+
+      <!-- Exportar -->
+      <button onclick="ClientesUI.exportar()" style="padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">⬇️ Excel</button>
+
+      <!-- Importar -->
+      <button onclick="ClientesUI.importarExcel()" style="padding:7px 12px;background:#0E7490;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">⬆️ Importar</button>
+      <input id="cli-file-input" type="file" accept=".xlsx" style="display:none"
+        onchange="ClientesUI._onFileSelected(this)">
+
+      <!-- Nuevo cliente -->
+      <button onclick="ClientesUI.nuevoCliente()"
+        style="padding:7px 14px;background:#1B5E20;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700">
+        + Cliente
       </button>
 
       <!-- Contador -->
@@ -143,47 +189,191 @@ function _html() {
         style="font-size:11px;color:#6B7280;white-space:nowrap;margin-left:auto"></span>
     </div>
 
-    <!-- Tabla -->
-    <div style="background:var(--c-surface,#fff);border-radius:10px;border:1px solid var(--c-border,#E5E7EB);
+    <!-- Tabla con doble scroll (arriba y abajo) + header fijo -->
+    <div style="background:var(--surface);border-radius:10px;border:1px solid var(--border);
       overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-      <div style="overflow-x:auto">
+      <!-- Scrollbar fantasma superior -->
+      <div id="cli-scroll-top" style="overflow-x:auto;overflow-y:hidden;height:10px;border-bottom:1px solid var(--border)">
+        <div id="cli-scroll-phantom" style="height:1px"></div>
+      </div>
+      <div id="cli-scroll-outer" style="overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 330px)">
         <table style="width:100%;border-collapse:collapse;font-size:12px" id="cli-table">
           <thead>
-            <tr style="background:var(--c-surface2,#F9FAFB);border-bottom:1px solid var(--c-border,#E5E7EB)">
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151;white-space:nowrap">CLIENTE</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151;white-space:nowrap">SEGMENTO</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151;white-space:nowrap">INGENIERO</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#374151;white-space:nowrap">ZONA</th>
-              <th style="padding:10px 14px;text-align:right;font-weight:700;color:#374151;white-space:nowrap">SALDO</th>
-              <th style="padding:10px 14px;text-align:center;font-weight:700;color:#374151;white-space:nowrap">ÚLTIMA VISITA</th>
-              <th style="padding:10px 14px;text-align:center;font-weight:700;color:#374151;white-space:nowrap">ESTADO</th>
-              <th style="padding:10px 14px;text-align:center;font-weight:700;color:#374151"></th>
+            <tr style="background:var(--surface-2);border-bottom:2px solid var(--border)">
+              <th id="cli-th-nombre"    style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">CLIENTE</th>
+              <th id="cli-th-clienteId" style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">ID</th>
+              <th id="cli-th-segmento"  style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">SEGMENTO</th>
+              <th id="cli-th-ingeniero" style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">INGENIERO</th>
+              <th id="cli-th-zona"      style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">ZONA</th>
+              <th id="cli-th-saldo"     style="padding:10px 14px;text-align:right;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">SALDO</th>
+              <th id="cli-th-visita"    style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">ÚLTIMA VISITA</th>
+              <th id="cli-th-estado"    style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">ESTADO</th>
+              <th id="cli-th-acciones"  style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text-sec);position:sticky;top:0;background:var(--surface-2);z-index:2"></th>
             </tr>
           </thead>
           <tbody id="cli-tbody">
-            <tr><td colspan="8" style="padding:32px;text-align:center;color:#9CA3AF">Cargando clientes…</td></tr>
+            <tr><td colspan="9" style="padding:32px;text-align:center;color:#9CA3AF">Cargando clientes…</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 
+  <!-- ── Modal configuración de columnas ── -->
+  <div id="cli-modal-cols" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);
+    z-index:1002;align-items:center;justify-content:center;padding:20px">
+    <div style="background:var(--surface);border-radius:14px;width:360px;max-width:100%;
+      border:1px solid var(--border);padding:24px;max-height:90vh;overflow-y:auto">
+      <div style="font-size:14px;font-weight:800;color:var(--text-primary);margin-bottom:4px">Configurar columnas</div>
+      <div style="font-size:11px;color:#9CA3AF;margin-bottom:16px">Arrastra para reordenar · desmarca para ocultar</div>
+      <ul id="cli-cols-list" style="list-style:none;padding:0;margin:0 0 18px;display:flex;flex-direction:column;gap:6px"></ul>
+      <div style="display:flex;gap:8px;justify-content:space-between">
+        <button onclick="ClientesUI.resetCols()"
+          style="padding:7px 14px;border:1px solid var(--border);border-radius:6px;
+            background:transparent;color:#9CA3AF;font-size:11px;cursor:pointer">Restablecer</button>
+        <div style="display:flex;gap:8px">
+          <button onclick="ClientesUI.cerrarConfigCols()"
+            style="padding:7px 14px;border:1px solid var(--border);border-radius:6px;
+              background:transparent;color:var(--text-sec);font-size:12px;cursor:pointer">Cancelar</button>
+          <button onclick="ClientesUI.guardarCols()"
+            style="padding:7px 18px;border:none;border-radius:6px;
+              background:#1565C0;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal ubicación con Google Maps ── -->
+  <div id="cli-ubic-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+    z-index:1004;align-items:center;justify-content:center;padding:16px">
+    <div style="background:var(--surface);border-radius:14px;width:680px;max-width:100%;
+      max-height:92vh;overflow-y:auto;border:1px solid var(--border);padding:24px">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <span id="cli-ubic-titulo" style="font-size:15px;font-weight:800;color:var(--text-primary)">Nueva ubicación</span>
+        <button onclick="ClientesUI.cerrarUbicacion()"
+          aria-label="Cerrar"
+          style="border:none;background:transparent;font-size:20px;cursor:pointer;color:#9CA3AF">✕</button>
+      </div>
+
+      <!-- Mapa -->
+      <div id="cli-ubic-map" style="width:100%;height:320px;border-radius:10px;
+        border:1px solid var(--border);overflow:hidden;margin-bottom:14px;
+        background:#1a1a2e;display:flex;align-items:center;justify-content:center;color:#6B7280">
+        Cargando mapa…
+      </div>
+      <p style="font-size:11px;color:#6B7280;margin:0 0 14px">
+        Haz clic en el mapa o arrastra el marcador para fijar la posición exacta.
+      </p>
+
+      <!-- Campos -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:10px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Tipo *</label>
+          <select id="cli-ubic-tipo"
+            style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
+            <option value="parcela">🌾 Parcela / Campo</option>
+            <option value="domicilio">🏠 Domicilio</option>
+            <option value="invernadero">🏗 Invernadero</option>
+            <option value="otro">📌 Otro</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Etiqueta</label>
+          <input id="cli-ubic-etiqueta" type="text" placeholder="Ej. Campo norte, Domicilio principal…"
+            style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Zona / Ingeniero responsable</label>
+        <input id="cli-ubic-zona" type="text" placeholder="Alias del ingeniero responsable de esta ubicación"
+          style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+            font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Dirección (se completa automáticamente)</label>
+        <input id="cli-ubic-dir" type="text" readonly
+          style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+            font-size:12px;background:var(--surface-2);color:var(--text-primary);box-sizing:border-box;opacity:.8">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Latitud</label>
+          <input id="cli-ubic-lat" type="text" readonly
+            style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:12px;font-family:monospace;background:var(--surface-2);color:var(--text-primary);box-sizing:border-box;opacity:.8">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Longitud</label>
+          <input id="cli-ubic-lng" type="text" readonly
+            style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:12px;font-family:monospace;background:var(--surface-2);color:var(--text-primary);box-sizing:border-box;opacity:.8">
+        </div>
+      </div>
+
+      <div id="cli-ubic-err" style="display:none;background:#FEE2E2;border-radius:6px;
+        padding:8px 12px;font-size:11.5px;color:#DC2626;margin-bottom:12px"></div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="ClientesUI.cerrarUbicacion()"
+          style="padding:8px 18px;border:1px solid var(--border);border-radius:6px;
+            background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer">
+          Cancelar
+        </button>
+        <button id="cli-ubic-btn-guardar" onclick="ClientesUI.guardarUbicacion()"
+          style="padding:8px 22px;border:none;border-radius:6px;
+            background:#1565C0;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+          Guardar ubicación
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal fotos del cliente (APK) ── -->
+  <div id="cli-fotos-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+    z-index:1003;align-items:center;justify-content:center;padding:20px">
+    <div style="background:var(--surface);border-radius:14px;width:700px;max-width:100%;
+      border:1px solid var(--border);box-shadow:0 8px 32px rgba(0,0,0,.3);padding:24px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div>
+          <div id="cli-fotos-title" style="font-size:15px;font-weight:800;color:var(--text-primary)">📷 Fotos del cliente</div>
+          <div id="cli-fotos-sub" style="font-size:11px;color:var(--text-sec);margin-top:2px"></div>
+        </div>
+        <button onclick="ClientesUI.cerrarFotos()"
+          aria-label="Cerrar"
+          style="border:none;background:transparent;font-size:20px;cursor:pointer;color:#9CA3AF">✕</button>
+      </div>
+      <div id="cli-fotos-body"></div>
+    </div>
+  </div>
+
+  <!-- ── Modal Nuevo/Editar Cliente ── -->
+  <div id="cli-form-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
+    z-index:1001;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+    <div style="background:var(--surface);border-radius:16px;width:620px;max-width:100%;
+      border:1px solid var(--border);box-shadow:0 8px 32px rgba(0,0,0,.22);margin:auto">
+      <div id="cli-form-body" style="padding:24px"></div>
+    </div>
+  </div>
+
   <!-- ── Modal detalle ── -->
   <div id="cli-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);
     z-index:1000;align-items:center;justify-content:center;padding:16px">
-    <div style="background:var(--c-surface,#fff);border-radius:16px;width:520px;max-width:100%;
-      max-height:90vh;overflow-y:auto;border:1px solid var(--c-border,#E5E7EB);
+    <div style="background:var(--surface);border-radius:16px;width:520px;max-width:100%;
+      max-height:90vh;overflow-y:auto;border:1px solid var(--border);
       box-shadow:0 8px 32px rgba(0,0,0,.18)">
       <div id="cli-modal-body" style="padding:24px"></div>
     </div>
   </div>`;
 }
 
-function _kpi(id, label) {
-  return `<div style="background:var(--c-surface,#fff);border-radius:10px;border:1px solid var(--c-border,#E5E7EB);
+function _kpi(id, label, color = "var(--text-primary)") {
+  return `<div style="background:var(--surface);border-radius:10px;border:1px solid var(--border);
     padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-    <div style="font-size:20px;font-weight:800;color:var(--c-text,#111827)" id="${id}">–</div>
-    <div style="font-size:11px;font-weight:600;color:#6B7280;margin-top:2px">${label}</div>
+    <div style="font-size:20px;font-weight:800;color:${color};font-variant-numeric:tabular-nums" id="${id}">–</div>
+    <div style="font-size:11px;font-weight:600;color:var(--text-sec);margin-top:2px">${label}</div>
   </div>`;
 }
 
@@ -205,6 +395,8 @@ function _bindUI() {
 
     cerrarDetalle() {
       document.getElementById("cli-modal").style.display = "none";
+      document.body.style.overflow = "";
+      _closeTrap("cli-modal");
       _detalleId = null;
     },
 
@@ -227,12 +419,144 @@ function _bindUI() {
       } finally {
         if (btn) { btn.disabled = false; btn.textContent = "Guardar nota"; }
       }
-    }
+    },
+    abrirConfigCols() {
+      const list = document.getElementById("cli-cols-list");
+      if (!list) return;
+      const ordered = [
+        ..._colsVisibles,
+        ...CLI_ALL_COLS.map(c => c.key).filter(k => !_colsVisibles.includes(k))
+      ];
+      list.innerHTML = ordered.map(key => {
+        const meta = CLI_ALL_COLS.find(c => c.key === key);
+        if (!meta) return "";
+        const visible = _colsVisibles.includes(key);
+        return `<li data-col="${key}" draggable="${!meta.locked}"
+          style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;
+            border:1px solid var(--border);background:var(--surface);cursor:${meta.locked?"default":"grab"};
+            user-select:none;transition:opacity .15s;${!visible?"opacity:.45":""}">
+          <span style="font-size:14px;color:#9CA3AF">${meta.locked ? "⊝" : "⠿"}</span>
+          <span style="flex:1;font-size:12px;font-weight:600;color:var(--text-primary)">${meta.label||"—"}</span>
+          <input type="checkbox" ${visible?"checked":""} ${meta.locked?"disabled":""} style="cursor:pointer;width:16px;height:16px">
+        </li>`;
+      }).join("");
+      // Drag & drop
+      let _dragSrc = null;
+      list.querySelectorAll("li[draggable=true]").forEach(li => {
+        li.addEventListener("dragstart", e => { _dragSrc = li; li.style.opacity=".4"; e.dataTransfer.effectAllowed="move"; });
+        li.addEventListener("dragend",   () => { li.style.opacity = li.querySelector("input").checked ? "1" : ".45"; });
+        li.addEventListener("dragover",  e => { e.preventDefault(); e.dataTransfer.dropEffect="move"; });
+        li.addEventListener("drop",      e => {
+          e.preventDefault();
+          if (_dragSrc && _dragSrc !== li) {
+            const items = [...list.children];
+            const from = items.indexOf(_dragSrc), to = items.indexOf(li);
+            if (from < to) list.insertBefore(_dragSrc, li.nextSibling);
+            else            list.insertBefore(_dragSrc, li);
+            _dragSrc.style.opacity = _dragSrc.querySelector("input").checked ? "1" : ".45";
+          }
+        });
+        li.querySelector("input")?.addEventListener("change", function() {
+          li.style.opacity = this.checked ? "1" : ".45";
+        });
+      });
+      document.getElementById("cli-modal-cols").style.display = "flex";
+      document.body.style.overflow = "hidden";
+      _openTrap("cli-modal-cols", () => window.ClientesUI.cerrarConfigCols());
+    },
+    cerrarConfigCols() {
+      document.getElementById("cli-modal-cols").style.display = "none";
+      document.body.style.overflow = "";
+      _closeTrap("cli-modal-cols");
+    },
+    guardarCols() {
+      const list = document.getElementById("cli-cols-list");
+      if (!list) return;
+      _colsVisibles = [...list.querySelectorAll("li")].filter(li => {
+        const meta = CLI_ALL_COLS.find(c => c.key === li.dataset.col);
+        return meta?.locked || li.querySelector("input")?.checked;
+      }).map(li => li.dataset.col);
+      _saveColPrefs(_colsVisibles);
+      _aplicarColPrefs();
+      document.getElementById("cli-modal-cols").style.display = "none";
+    },
+    resetCols() {
+      _colsVisibles = CLI_ALL_COLS.map(c => c.key);
+      _saveColPrefs(_colsVisibles);
+      _aplicarColPrefs();
+      document.getElementById("cli-modal-cols").style.display = "none";
+    },
+    verFotos(clienteId, nombre) { _verFotosCliente(clienteId, nombre); },
+    cerrarFotos() { document.getElementById("cli-fotos-modal").style.display = "none"; document.body.style.overflow = ""; _closeTrap("cli-fotos-modal"); },
+    abrirUbicacion(clienteDocId, ubicId) { _abrirModalUbicacion(clienteDocId, ubicId || null); },
+    cerrarUbicacion() { document.getElementById("cli-ubic-modal").style.display = "none"; document.body.style.overflow = ""; _closeTrap("cli-ubic-modal"); },
+    guardarUbicacion() { _guardarUbicacion(); },
+    navegarUbicacion(lat, lng) {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, "_blank");
+    },
+    async eliminarUbicacion(clienteDocId, ubicId) {
+      if (!await window.modal?.({ title:"Eliminar ubicación", message:"¿Confirmas eliminar esta ubicación? Esta acción no puede deshacerse." })) return;
+      try {
+        const { doc: d2, deleteDoc } =
+          await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        await deleteDoc(d2(db, "clientes", clienteDocId, "ubicaciones", ubicId));
+        window.toast?.("Ubicación eliminada.", "success");
+        _cargarUbicaciones(clienteDocId);
+      } catch(e) { window.toast?.("Error: " + e.message, "error"); }
+    },
+    importarExcel() {
+      document.getElementById("cli-file-input")?.click();
+    },
+    _onFileSelected(input) {
+      const file = input.files?.[0];
+      if (file) { _importarExcel(file); input.value = ""; }
+    },
+    nuevoCliente() { _abrirFormCliente(null); },
+    cerrarFormCliente() {
+      const m = document.getElementById("cli-form-modal");
+      if (m) m.style.display = "none";
+      document.body.style.overflow = "";
+      _closeTrap("cli-form-modal");
+    },
+    _guardarFormCliente(clienteId) { return _guardarFormCliente(clienteId); }
   };
+
+  // Sincronización de doble scroll (top ↔ bottom)
+  const scrollTop   = document.getElementById("cli-scroll-top");
+  const scrollOuter = document.getElementById("cli-scroll-outer");
+  const phantom     = document.getElementById("cli-scroll-phantom");
+  if (scrollTop && scrollOuter && phantom) {
+    // Ajustar ancho del phantom al renderizar la tabla
+    const syncPhantom = () => {
+      const table = document.getElementById("cli-table");
+      if (table) phantom.style.width = table.offsetWidth + "px";
+    };
+    scrollOuter.addEventListener("scroll", () => { scrollTop.scrollLeft = scrollOuter.scrollLeft; syncPhantom(); });
+    scrollTop.addEventListener("scroll",   () => { scrollOuter.scrollLeft = scrollTop.scrollLeft; });
+    setTimeout(syncPhantom, 300);
+  }
+
+  // Aplicar preferencias guardadas
+  _colsVisibles = _loadColPrefs();
+  _aplicarColPrefs();
+
+  // Cerrar modal cols al hacer clic en fondo
+  document.getElementById("cli-modal-cols")?.addEventListener("click", e => {
+    if (e.target.id === "cli-modal-cols") window.ClientesUI.cerrarConfigCols();
+  });
+  document.getElementById("cli-fotos-modal")?.addEventListener("click", e => {
+    if (e.target.id === "cli-fotos-modal") window.ClientesUI.cerrarFotos();
+  });
+  document.getElementById("cli-ubic-modal")?.addEventListener("click", e => {
+    if (e.target.id === "cli-ubic-modal") window.ClientesUI.cerrarUbicacion();
+  });
 
   // Cerrar modal al hacer clic en fondo
   document.getElementById("cli-modal")?.addEventListener("click", e => {
     if (e.target.id === "cli-modal") window.ClientesUI.cerrarDetalle();
+  });
+  document.getElementById("cli-form-modal")?.addEventListener("click", e => {
+    if (e.target.id === "cli-form-modal") window.ClientesUI.cerrarFormCliente();
   });
 }
 
@@ -247,7 +571,7 @@ function _escuchar() {
     },
     err => {
       console.error("[Clientes]", err);
-      window.toast?.("Error al cargar clientes.", "error");
+      window.toast?.("Error al cargar clientes: " + err.message, "error");
     }
   );
 }
@@ -287,12 +611,13 @@ function _applyFilters() {
 
   if (_fBusqueda) {
     lista = lista.filter(c =>
-      (c.nombre    ?? "").toLowerCase().includes(_fBusqueda) ||
-      (c.telefono  ?? "").toLowerCase().includes(_fBusqueda) ||
-      (c.direccion ?? "").toLowerCase().includes(_fBusqueda) ||
-      (c.colonia   ?? "").toLowerCase().includes(_fBusqueda) ||
-      (c.ciudad    ?? "").toLowerCase().includes(_fBusqueda) ||
-      (c.ingeniero ?? "").toLowerCase().includes(_fBusqueda)
+      (c.nombre     ?? "").toLowerCase().includes(_fBusqueda) ||
+      (c.clienteId  ?? "").toLowerCase().includes(_fBusqueda) ||
+      (c.telefono   ?? "").toLowerCase().includes(_fBusqueda) ||
+      (c.direccion  ?? "").toLowerCase().includes(_fBusqueda) ||
+      (c.colonia    ?? "").toLowerCase().includes(_fBusqueda) ||
+      (c.ciudad     ?? "").toLowerCase().includes(_fBusqueda) ||
+      (c.ingeniero  ?? "").toLowerCase().includes(_fBusqueda)
     );
   }
 
@@ -335,14 +660,14 @@ function _renderTabla() {
   if (!tbody) return;
 
   if (!_filtrados.length) {
-    tbody.innerHTML = `<tr><td colspan="8"
+    tbody.innerHTML = `<tr><td colspan="9"
       style="padding:32px;text-align:center;color:#9CA3AF;font-size:13px">
       Sin clientes para los filtros seleccionados.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = _filtrados.map((c, i) => {
-    const saldo  = Number(c.saldo) || 0;
+    const saldo  = Number(c.saldo)  || 0;
     const activo = c.activo !== false;
 
     const saldoColor = saldo > 0 ? "#DC2626" : "#16A34A";
@@ -350,13 +675,16 @@ function _renderTabla() {
 
     const segBg = _segColor(c.segmento);
 
-    return `<tr style="border-bottom:1px solid var(--c-border,#F3F4F6);
-      ${i % 2 === 1 ? "background:var(--c-surface2,#FAFAFA)" : ""}
+    return `<tr style="border-bottom:1px solid var(--border);
+      ${i % 2 === 1 ? "background:var(--surface-2)" : ""}
       cursor:pointer" onclick="ClientesUI.abrirDetalle('${esc(c.id)}')">
       <td style="padding:10px 14px">
-        <div style="font-weight:700;font-size:12px;color:var(--c-text,#111827)">${esc(c.nombre || "—")}</div>
+        <div style="font-weight:700;font-size:12px;color:var(--text-primary)">${esc(c.nombre || "—")}</div>
         ${c.telefono ? `<div style="font-size:11px;color:#6B7280">${esc(c.telefono)}</div>` : ""}
         ${c.ciudad || c.colonia ? `<div style="font-size:10px;color:#9CA3AF">${esc([c.colonia,c.ciudad].filter(Boolean).join(", "))}</div>` : ""}
+      </td>
+      <td style="padding:10px 14px;font-size:11px;font-family:monospace;color:#6B7280;white-space:nowrap">
+        ${esc(c.clienteId || "—")}
       </td>
       <td style="padding:10px 14px">
         ${c.segmento
@@ -364,7 +692,7 @@ function _renderTabla() {
               background:${segBg}22;color:${segBg}">${esc(c.segmento)}</span>`
           : `<span style="color:#D1D5DB;font-size:11px">—</span>`}
       </td>
-      <td style="padding:10px 14px;font-size:12px;color:var(--c-text,#374151)">${esc(c.ingeniero || "—")}</td>
+      <td style="padding:10px 14px;font-size:12px;color:var(--text-sec)">${esc(c.ingeniero || "—")}</td>
       <td style="padding:10px 14px;font-size:11px;color:#6B7280">${esc(c.zona || "—")}</td>
       <td style="padding:10px 14px;text-align:right;font-size:12px;font-weight:700;color:${saldoColor}">${saldoTxt}</td>
       <td style="padding:10px 14px;text-align:center;font-size:11px;color:#6B7280">${fmtDt(c.ultimaVisita)}</td>
@@ -379,6 +707,8 @@ function _renderTabla() {
       </td>
     </tr>`;
   }).join("");
+  // Reaplicar visibilidad de columnas tras renderizar
+  _aplicarColPrefs();
 }
 
 // ── Colores de segmento ───────────────────────────────────────
@@ -400,6 +730,8 @@ async function _abrirDetalle(id) {
 
   body.innerHTML = `<div style="padding:20px;text-align:center;color:#9CA3AF">Cargando…</div>`;
   modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+  _openTrap("cli-modal", () => window.ClientesUI.cerrarDetalle());
 
   // Buscar en caché local primero
   let c = _clientes.find(x => x.id === id);
@@ -428,25 +760,36 @@ async function _abrirDetalle(id) {
           ${esc((c.nombre || "?").charAt(0).toUpperCase())}
         </div>
         <div>
-          <div style="font-size:16px;font-weight:800;color:var(--c-text,#111)">${esc(c.nombre || "—")}</div>
+          <div style="font-size:16px;font-weight:800;color:var(--text-primary)">${esc(c.nombre || "—")}</div>
           <div style="font-size:12px;color:#6B7280;margin-top:2px">
+            ${c.clienteId ? `<span style="font-family:monospace;font-weight:700;color:var(--text-sec)">${esc(c.clienteId)}</span> · ` : ""}
             ${c.segmento ? `<span style="font-weight:600;color:${segCol}">${esc(c.segmento)}</span> · ` : ""}
             <span style="font-weight:600;color:${activo?"#16A34A":"#9CA3AF"}">${activo?"Activo":"Inactivo"}</span>
           </div>
+          ${c.compartido && c.ingenierosCompartidos?.length ? `
+          <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:9px;
+              background:rgba(37,99,235,0.15);color:var(--blue,#2563EB);border:1px solid rgba(37,99,235,0.3)">🔗 COMPARTIDO</span>
+            ${c.ingenierosCompartidos.map(a =>
+              `<span style="font-size:10px;padding:2px 8px;border-radius:9px;
+                background:var(--surface-2);border:1px solid var(--border);color:var(--text-sec)">${esc(a)}</span>`
+            ).join("")}
+          </div>` : ""}
         </div>
       </div>
       <button onclick="ClientesUI.cerrarDetalle()"
+        aria-label="Cerrar"
         style="border:none;background:transparent;font-size:20px;cursor:pointer;
           color:#9CA3AF;padding:4px 8px;border-radius:6px">✕</button>
     </div>
 
     <!-- Grid de datos -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:18px">
       ${_campo("📞 Teléfono", c.telefono)}
       ${_campo("👷 Ingeniero", c.ingeniero)}
       ${_campo("📍 Zona", c.zona)}
       ${_campo("🏙 Ciudad", [c.colonia, c.ciudad].filter(Boolean).join(", ") || null)}
-      ${_campo("🏠 Dirección", c.direccion)}
+      ${_campo("🏠 Dirección", [c.calle, c.numExt ? `#${c.numExt}` : null].filter(Boolean).join(" ") || c.direccion || null)}
       ${_campo("📅 Última visita", fmtDt(c.ultimaVisita))}
     </div>
 
@@ -461,15 +804,30 @@ async function _abrirDetalle(id) {
       </span>
     </div>
 
+    <!-- Ubicaciones -->
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:12px;font-weight:700;color:var(--text-primary)">📍 Ubicaciones</span>
+        <button onclick="ClientesUI.abrirUbicacion('${esc(c.id)}', null)"
+          style="padding:5px 12px;border:1px solid #1565C0;border-radius:6px;
+            background:transparent;color:#1565C0;font-size:11px;font-weight:700;cursor:pointer">
+          + Agregar
+        </button>
+      </div>
+      <div id="cli-ubicaciones-list" style="display:flex;flex-direction:column;gap:8px">
+        <div style="padding:16px;text-align:center;color:#9CA3AF;font-size:12px">Cargando…</div>
+      </div>
+    </div>
+
     <!-- Nota web -->
     <div style="margin-bottom:16px">
       <label style="font-size:11px;font-weight:700;color:#374151;display:block;margin-bottom:6px">
         📝 Nota interna (solo panel web)
       </label>
       <textarea id="cli-det-nota" rows="3" placeholder="Agrega una nota sobre este cliente…"
-        style="width:100%;padding:9px 12px;border:1px solid var(--c-border,#D1D5DB);border-radius:8px;
-          font-size:12px;resize:vertical;background:var(--c-surface,#fff);
-          color:var(--c-text,#111);box-sizing:border-box;font-family:inherit"
+        style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;
+          font-size:12px;resize:vertical;background:var(--surface);
+          color:var(--text-primary);box-sizing:border-box;font-family:inherit"
       >${esc(c.notaWeb || "")}</textarea>
       ${c.notaWebActualizado
         ? `<div style="font-size:10px;color:#9CA3AF;margin-top:3px">
@@ -479,24 +837,854 @@ async function _abrirDetalle(id) {
     </div>
 
     <!-- Acciones -->
-    <div style="display:flex;gap:10px;justify-content:flex-end">
-      <button onclick="ClientesUI.cerrarDetalle()"
-        style="padding:8px 18px;border:1px solid var(--c-border,#D1D5DB);border-radius:6px;
-          background:transparent;color:var(--c-text,#374151);font-size:12px;cursor:pointer">
-        Cerrar
+    <div style="display:flex;gap:10px;justify-content:space-between;align-items:center">
+      <button onclick="ClientesUI.verFotos('${esc(c.id)}','${esc(c.nombre||'')}')"
+        style="padding:8px 14px;border:1px solid var(--border);border-radius:6px;
+          background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer">
+        📷 Fotos APK
       </button>
-      <button id="cli-det-guardar" onclick="ClientesUI.guardarNota()"
-        style="padding:8px 22px;border:none;border-radius:6px;
-          background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
-        Guardar nota
-      </button>
+      <div style="display:flex;gap:10px">
+        <button onclick="ClientesUI.cerrarDetalle()"
+          style="padding:8px 18px;border:1px solid var(--border);border-radius:6px;
+            background:transparent;color:var(--text-sec);font-size:12px;cursor:pointer">
+          Cerrar
+        </button>
+        <button id="cli-det-guardar" onclick="ClientesUI.guardarNota()"
+          style="padding:8px 22px;border:none;border-radius:6px;
+            background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+          Guardar nota
+        </button>
+      </div>
     </div>`;
+
+  // Cargar ubicaciones de la subcolección (asíncrono, tras renderizar el modal)
+  _cargarUbicaciones(id);
 }
 
 function _campo(label, valor) {
-  return `<div style="background:var(--c-surface2,#F9FAFB);border-radius:8px;padding:10px 12px;
-    border:1px solid var(--c-border,#F3F4F6)">
+  return `<div style="background:var(--surface-2);border-radius:8px;padding:10px 12px;
+    border:1px solid var(--border)">
     <div style="font-size:10px;font-weight:700;color:#9CA3AF;margin-bottom:3px">${label}</div>
-    <div style="font-size:12px;font-weight:600;color:var(--c-text,#111)">${esc(valor) || `<span style="color:#D1D5DB">—</span>`}</div>
+    <div style="font-size:12px;font-weight:600;color:var(--text-primary)">${esc(valor) || `<span style="color:#D1D5DB">—</span>`}</div>
   </div>`;
 }
+
+// ── Definición de columnas (mismo patrón que productos-control) ──
+const CLI_ALL_COLS = [
+  { key:"nombre",    label:"CLIENTE",        locked:true  },
+  { key:"clienteId", label:"ID"                           },
+  { key:"segmento",  label:"SEGMENTO"                     },
+  { key:"ingeniero", label:"INGENIERO"                    },
+  { key:"zona",      label:"ZONA"                         },
+  { key:"saldo",     label:"SALDO"                        },
+  { key:"visita",    label:"ÚLTIMA VISITA"                },
+  { key:"estado",    label:"ESTADO"                       },
+  { key:"acciones",  label:"",               locked:true  },
+];
+const CLI_LS_KEY = "n10_cli_cols";
+
+function _loadColPrefs() {
+  try {
+    const s = JSON.parse(localStorage.getItem(CLI_LS_KEY) || "null");
+    if (Array.isArray(s) && s.length) return s;
+  } catch {}
+  return CLI_ALL_COLS.map(c => c.key);
+}
+function _saveColPrefs(cols) { localStorage.setItem(CLI_LS_KEY, JSON.stringify(cols)); }
+
+let _colsVisibles = _loadColPrefs();
+
+function _aplicarColPrefs() {
+  CLI_ALL_COLS.forEach((col, i) => {
+    const visible = _colsVisibles.includes(col.key);
+    // <th> del header
+    const th = document.getElementById(`cli-th-${col.key}`);
+    if (th) th.style.display = visible ? "" : "none";
+    // <td> de cada fila (columna i+1, base 1)
+    document.querySelectorAll(`#cli-tbody tr td:nth-child(${i + 1})`).forEach(td => {
+      td.style.display = visible ? "" : "none";
+    });
+  });
+}
+
+// ── Importar Excel (hoja 11 Coordenadas del APK) ──────────────
+const _IMPORT_MAP = {
+  "Nombre":        "nombre",
+  "Número":        "numeroCliente",
+  "Zona":          "zona",
+  "Tipo":          "segmento",
+  "Municipio":     "ciudad",
+  "Localidad":     "colonia",
+  "Estado":        "estado",
+  "Teléfono":      "telefono",
+  "Latitud":       "lat",
+  "Longitud":      "lng",
+  "Calle":         "calle",
+  "Num. Ext.":     "numExt",
+  "CP":            "cp",
+  "Estado Legal":  "estadoLegal",
+  "Deuda original":"deudaOriginal",
+  "Notas":         "notas",
+};
+
+async function _importarExcel(file) {
+  const XLSX = window.XLSX;
+  if (!XLSX) { window.toast?.("SheetJS no disponible.", "error"); return; }
+  if (!Sesion.esSuperAdmin?.() && !["GERENTE","ADMINISTRADOR","SUPER_ADMIN"].includes(Sesion.rol)) {
+    window.toast?.("Sin permiso para importar clientes.", "error"); return;
+  }
+
+  window.toast?.("Leyendo archivo…", "info");
+  const buf = await file.arrayBuffer();
+  const wb  = XLSX.read(buf, { type: "array" });
+
+  // Buscar hoja con columna Latitud (hoja 11 Coordenadas)
+  let wsName = wb.SheetNames.find(n => {
+    const ws = wb.Sheets[n];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+    return rows[0]?.includes("Latitud");
+  }) ?? wb.SheetNames[0];
+
+  const ws   = wb.Sheets[wsName];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  if (rows.length < 2) { window.toast?.("Hoja vacía.", "warn"); return; }
+
+  const headers = rows[0].map(h => String(h).trim());
+  const records = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const obj = {};
+    headers.forEach((h, idx) => {
+      const campo = _IMPORT_MAP[h];
+      if (!campo) return;
+      let val = row[idx];
+      if (val === null || val === undefined || val === "—" || val === "") return;
+      if (campo === "lat" || campo === "lng") val = parseFloat(String(val).replace(",", "."));
+      else if (campo === "deudaOriginal") val = parseFloat(String(val).replace(/[^0-9.]/g, "")) || 0;
+      else if (campo === "cp") val = String(val).trim();
+      else val = String(val).trim();
+      obj[campo] = val;
+    });
+    if (!obj.nombre) continue;
+    records.push(obj);
+  }
+
+  if (!records.length) { window.toast?.("Sin registros válidos.", "warn"); return; }
+
+  // Cargar solo usuarios con rol INGENIERO
+  let ingenierosList = [];
+  try {
+    const ingSnap = await getDocs(query(collection(db, "usuarios"),
+      where("rol", "==", "INGENIERO")));
+    ingenierosList = ingSnap.docs
+      .filter(d => d.data().activo !== false)
+      .map(d => d.data().alias || d.data().email || d.id)
+      .filter(Boolean).sort();
+  } catch { /* si falla, continuar sin lista */ }
+
+  // Modal personalizado para seleccionar ingeniero
+  let ingenieroDefault = "";
+  ingenieroDefault = await new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px";
+    const selectOpts = ingenierosList.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+    overlay.innerHTML = `
+      <div style="background:var(--surface);border-radius:14px;width:420px;max-width:100%;
+        border:1px solid var(--border);box-shadow:0 8px 32px rgba(0,0,0,.25);padding:24px">
+        <div style="font-size:16px;font-weight:800;color:var(--text-primary);margin-bottom:8px">Asignar ingeniero</div>
+        <div style="font-size:12px;color:var(--text-sec);margin-bottom:16px">
+          Se importarán <strong>${records.length}</strong> clientes de la hoja «${esc(wsName)}».<br>
+          Selecciona el ingeniero al que se asignarán (solo roles Ingeniero).
+        </div>
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px">Ingeniero asignado</div>
+          <select id="_imp-ing-sel" style="width:100%;padding:8px 10px;border:1px solid var(--border);
+            border-radius:6px;font-size:13px;background:var(--surface);color:var(--text-primary)">
+            <option value="">— Importar sin asignar —</option>
+            ${selectOpts}
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button id="_imp-cancel" style="padding:9px 20px;border:1px solid var(--border);border-radius:6px;
+            background:transparent;color:var(--text-sec);font-size:13px;cursor:pointer">Cancelar</button>
+          <button id="_imp-ok" style="padding:9px 24px;border:none;border-radius:6px;
+            background:#1565C0;color:#fff;font-size:13px;font-weight:700;cursor:pointer">✅ Importar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector("#_imp-cancel").onclick = () => { document.body.removeChild(overlay); resolve(null); };
+    overlay.querySelector("#_imp-ok").onclick = () => {
+      const val = overlay.querySelector("#_imp-ing-sel").value;
+      document.body.removeChild(overlay);
+      resolve(val);
+    };
+  });
+
+  if (ingenieroDefault === null) return; // usuario canceló
+
+  // Obtener nombres existentes para upsert (clave: nombre+zona normalizados)
+  const norm = s => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+  const existSnap = await getDocs(collection(db, "clientes"));
+  const existMap  = {};
+  existSnap.forEach(d => {
+    const data = d.data();
+    const key  = norm(data.nombre) + "|" + norm(data.zona || "");
+    existMap[key] = d.id;
+  });
+
+  let creados = 0, actualizados = 0, errores = 0;
+  window.toast?.(`Importando ${records.length} registros…`, "info");
+
+  for (const rec of records) {
+    try {
+      const key = norm(rec.nombre) + "|" + norm(rec.zona || "");
+      const payload = {
+        ...rec,
+        activo: true,
+        importadoEn: serverTimestamp(),
+        importadoPor: Sesion.alias ?? "web",
+      };
+      if (ingenieroDefault) payload.ingeniero = ingenieroDefault;
+
+      if (existMap[key]) {
+        await updateDoc(doc(db, "clientes", existMap[key]), payload);
+        actualizados++;
+      } else {
+        await addDoc(collection(db, "clientes"), payload);
+        creados++;
+      }
+    } catch(eRec) { errores++; console.warn("[Clientes import] fila error:", eRec.message, rec); }
+  }
+
+  window.toast?.(
+    `✅ Importación: ${creados} nuevos, ${actualizados} actualizados${errores ? ", " + errores + " errores" : ""}.`,
+    errores ? "warn" : "success"
+  );
+}
+
+// ── Nuevo / Editar Cliente ─────────────────────────────────────
+let _ingenierosList = [];
+
+async function _abrirFormCliente(clienteId = null) {
+  const modal = document.getElementById("cli-form-modal");
+  const body  = document.getElementById("cli-form-body");
+  if (!modal || !body) return;
+
+  // Cargar solo ingenieros (rol estrictamente INGENIERO)
+  try {
+    const snap = await getDocs(query(collection(db, "usuarios"),
+      where("rol", "==", "INGENIERO")));
+    _ingenierosList = snap.docs
+      .filter(d => d.data().activo !== false)
+      .map(d => d.data().alias || d.id)
+      .filter(Boolean).sort();
+  } catch { _ingenierosList = []; }
+
+  let c = clienteId ? _clientes.find(x => x.id === clienteId) ?? {} : {};
+
+  const DIAS = [
+    { bit: 1,  label: "Lun" }, { bit: 2,  label: "Mar" }, { bit: 4,  label: "Mié" },
+    { bit: 8,  label: "Jue" }, { bit: 16, label: "Vie" }, { bit: 32, label: "Sáb" },
+    { bit: 64, label: "Dom" },
+  ];
+  const diasChecks = DIAS.map(d =>
+    `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+      <input type="checkbox" value="${d.bit}" class="cli-dia-check"
+        ${(c.diasVisita & d.bit) ? "checked" : ""}> ${d.label}
+    </label>`).join("");
+
+  const ingSelect = `<select id="clf-ingeniero" style="${_inputStyle()}">
+    <option value="">— Sin asignar —</option>
+    ${_ingenierosList.map(a => `<option value="${esc(a)}" ${c.ingeniero===a?"selected":""}>${esc(a)}</option>`).join("")}
+  </select>`;
+
+  const ESTADOS_LEGAL = ["Al corriente","En gestión","Incumplimiento","Demanda","Promesa de pago","Cancelado"];
+  const SEGMENTOS = ["Vivero","Ferretería","Agrícola","Comercial","Industrial","Otro"];
+
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-size:16px;font-weight:800;color:var(--text-primary)">
+        ${clienteId ? "✏️ Editar cliente" : "➕ Nuevo cliente"}
+      </div>
+      <button onclick="ClientesUI.cerrarFormCliente()"
+        aria-label="Cerrar"
+        style="border:none;background:transparent;font-size:20px;cursor:pointer;color:#9CA3AF">✕</button>
+    </div>
+
+    <div style="display:grid;gap:16px">
+      <!-- Identificación -->
+      ${_seccion("📋 Identificación")}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${_field("Nombre completo *", `<input id="clf-nombre" required style="${_inputStyle()}" value="${esc(c.nombre||'')}">`)}
+        ${_field("ID del cliente", `<input id="clf-clienteid" readonly style="${_inputStyle()}opacity:.6;font-family:monospace"
+          value="${esc(c.clienteId || (clienteId ? '—' : '(se asignará al guardar)'))}"
+          title="El ID se genera automáticamente y no puede modificarse">`)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        ${_field("Número cliente (externo)", `<input id="clf-numero" style="${_inputStyle()}" value="${esc(c.numeroCliente||'')}">`)}
+        ${_field("RFC", `<input id="clf-rfc" style="${_inputStyle()}" placeholder="XXXX000000XXX" value="${esc(c.rfc||'')}">`)}
+        ${_field("Teléfono", `<input id="clf-tel" style="${_inputStyle()}" placeholder="10 dígitos" value="${esc(c.telefono||'')}">`)}
+      </div>
+      <!-- Dirección -->
+      ${_seccion("📍 Dirección")}
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px">
+        ${_field("Calle", `<input id="clf-calle" style="${_inputStyle()}" value="${esc(c.calle||'')}">` )}
+        ${_field("Núm. Ext.", `<input id="clf-numext" style="${_inputStyle()}" value="${esc(c.numExt||'')}">`)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        ${_field("Colonia / Localidad", `<input id="clf-colonia" style="${_inputStyle()}" value="${esc(c.colonia||'')}">`)}
+        ${_field("Municipio / Ciudad", `<input id="clf-ciudad" style="${_inputStyle()}" value="${esc(c.ciudad||'')}">`)}
+        ${_field("Estado", `<input id="clf-estado" style="${_inputStyle()}" value="${esc(c.estado||'')}">`)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${_field("CP", `<input id="clf-cp" style="${_inputStyle()}" placeholder="00000" value="${esc(c.cp||'')}">`)}
+        ${_field("Zona / Ruta", `<input id="clf-zona" style="${_inputStyle()}" value="${esc(c.zona||'')}">`)}
+      </div>
+
+      <!-- Geolocalización -->
+      ${_seccion("🌐 Geolocalización")}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${_field("Latitud", `<input id="clf-lat" type="number" step="any" style="${_inputStyle()}" placeholder="18.9234" value="${esc(c.lat||'')}">`)}
+        ${_field("Longitud", `<input id="clf-lng" type="number" step="any" style="${_inputStyle()}" placeholder="-99.2340" value="${esc(c.lng||'')}">`)}
+      </div>
+      <div style="font-size:11px;color:#6B7280;background:var(--surface-2);padding:8px 12px;border-radius:6px;border:1px solid var(--border)">
+        💡 Abre <a href="https://maps.google.com" target="_blank" style="color:#1565C0">Google Maps</a>,
+        haz clic derecho sobre el punto y copia las coordenadas (lat, lng).
+      </div>
+
+      <!-- Comercial -->
+      ${_seccion("💼 Datos comerciales")}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${_field("Segmento / Tipo", `<select id="clf-segmento" style="${_inputStyle()}">
+          <option value="">— Seleccionar —</option>
+          ${SEGMENTOS.map(s => `<option value="${s}" ${c.segmento===s?"selected":""}>${s}</option>`).join("")}
+          ${c.segmento && !SEGMENTOS.includes(c.segmento) ? `<option value="${esc(c.segmento)}" selected>${esc(c.segmento)}</option>` : ""}
+        </select>`)}
+        ${_field("Ingeniero asignado", ingSelect)}
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text-sec);margin-bottom:6px">Días de visita</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;padding:10px;background:var(--surface-2);
+          border:1px solid var(--border);border-radius:6px">${diasChecks}</div>
+      </div>
+
+      <!-- Cliente compartido -->
+      ${_seccion("🔗 Cliente compartido entre ingenieros")}
+      <div style="border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--surface-2)">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:10px">
+          <input type="checkbox" id="clf-compartido" style="width:16px;height:16px;cursor:pointer"
+            ${c.compartido ? "checked" : ""}
+            onchange="document.getElementById('clf-ing-compartidos-wrap').style.display=this.checked?'':'none'">
+          <span style="font-size:12px;font-weight:600;color:var(--text-primary)">
+            Este cliente tiene parcelas o actividad en zonas de más de un ingeniero
+          </span>
+        </label>
+        <div id="clf-ing-compartidos-wrap" style="display:${c.compartido ? '' : 'none'}">
+          <div style="font-size:11px;font-weight:600;color:#6B7280;margin-bottom:6px">
+            Ingenieros adicionales con acceso a este cliente:
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px" id="clf-ing-compartidos-list">
+            ${_ingenierosList.map(alias => {
+              const checked = (c.ingenierosCompartidos || []).includes(alias);
+              return `<label style="display:flex;align-items:center;gap:5px;padding:4px 10px;
+                border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:11px;
+                background:${checked ? "#EFF6FF" : "var(--surface)"};
+                color:${checked ? "#1565C0" : "var(--text-primary)"}">
+                <input type="checkbox" class="clf-ing-comp-chk" value="${esc(alias)}"
+                  style="cursor:pointer" ${checked ? "checked" : ""}>
+                ${esc(alias)}
+              </label>`;
+            }).join("")}
+            ${_ingenierosList.length === 0 ? `<span style="font-size:11px;color:#9CA3AF">No hay ingenieros registrados.</span>` : ""}
+          </div>
+        </div>
+      </div>
+
+      <!-- Cartera -->
+      ${_seccion("💰 Cartera y crédito")}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${_field("Estado legal", `<select id="clf-estadolegal" style="${_inputStyle()}">
+          <option value="">— Seleccionar —</option>
+          ${ESTADOS_LEGAL.map(e => `<option value="${e}" ${c.estadoLegal===e?"selected":""}>${e}</option>`).join("")}
+        </select>`)}
+        ${_field("Deuda original ($)", `<input id="clf-deuda" type="number" min="0" step="0.01" style="${_inputStyle()}" value="${esc(c.deudaOriginal||'')}">`)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${_field("Límite de crédito ($)", `<input id="clf-limite" type="number" min="0" step="0.01" style="${_inputStyle()}" value="${esc(c.limiteCredito||'')}">`)}
+        ${_field("Condiciones de pago", `<input id="clf-condpago" style="${_inputStyle()}" placeholder="Crédito 30 días" value="${esc(c.condicionesPago||'')}">`)}
+      </div>
+
+      <!-- Observaciones -->
+      ${_seccion("📝 Observaciones")}
+      ${_field("Notas", `<textarea id="clf-notas" rows="3"
+        style="${_inputStyle()}resize:vertical;">${esc(c.notas||'')}</textarea>`)}
+
+      <!-- Acciones -->
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+        <button onclick="ClientesUI.cerrarFormCliente()"
+          style="padding:9px 20px;border:1px solid var(--border);border-radius:6px;
+            background:transparent;color:var(--text-sec);font-size:13px;cursor:pointer">
+          Cancelar
+        </button>
+        <button id="clf-btn-guardar" onclick="ClientesUI._guardarFormCliente('${clienteId||''}')"
+          style="padding:9px 24px;border:none;border-radius:6px;
+            background:#1B5E20;color:#fff;font-size:13px;font-weight:700;cursor:pointer">
+          ${clienteId ? "💾 Guardar cambios" : "✅ Crear cliente"}
+        </button>
+      </div>
+    </div>`;
+
+  modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+  _openTrap("cli-form-modal", () => window.ClientesUI.cerrarFormCliente());
+}
+
+function _inputStyle() {
+  return `width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+    font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box;`;
+}
+function _seccion(label) {
+  return `<div style="font-size:11px;font-weight:800;color:var(--text-sec);letter-spacing:.06em;
+    text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;margin-top:4px">${label}</div>`;
+}
+function _field(label, inputHtml) {
+  return `<div>
+    <div style="font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px">${label}</div>
+    ${inputHtml}
+  </div>`;
+}
+
+// _guardarFormCliente se expone desde _bindUI(); esta función
+// es la implementación real invocada por window.ClientesUI._guardarFormCliente
+async function _guardarFormCliente(clienteId) {
+    const v = id => document.getElementById(id)?.value?.trim() ?? "";
+    const nombre = v("clf-nombre");
+    if (!nombre) { window.toast?.("El nombre es obligatorio.", "warn"); return; }
+
+    // Validar duplicado por nombre exacto + zona (solo en alta, no en edición)
+    if (!clienteId) {
+      const zona = v("clf-zona");
+      const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+      const dup = _clientes.find(c =>
+        norm(c.nombre || "") === norm(nombre) &&
+        (!zona || norm(c.zona || "") === norm(zona))
+      );
+      if (dup) {
+        window.toast?.(`⚠ Ya existe un cliente con ese nombre${zona ? " y zona" : ""}: ${dup.clienteId || dup.nombre}`, "warn");
+        return;
+      }
+    }
+
+    const diasChecks = [...document.querySelectorAll(".cli-dia-check:checked")];
+    const diasVisita = diasChecks.reduce((acc, cb) => acc | Number(cb.value), 0);
+
+    const payload = {
+      nombre,
+      numeroCliente: v("clf-numero") || null,
+      rfc:           v("clf-rfc")    || null,
+      telefono:      v("clf-tel")    || null,
+      calle:         v("clf-calle")  || null,
+      numExt:        v("clf-numext") || null,
+      colonia:       v("clf-colonia")|| null,
+      ciudad:        v("clf-ciudad") || null,
+      estado:        v("clf-estado") || null,
+      cp:            v("clf-cp")     || null,
+      zona:          v("clf-zona")   || null,
+      lat:           parseFloat(v("clf-lat"))  || null,
+      lng:           parseFloat(v("clf-lng"))  || null,
+      segmento:      v("clf-segmento")  || null,
+      ingeniero:     v("clf-ingeniero") || null,
+      diasVisita:    diasVisita || 0,
+      compartido:    document.getElementById("clf-compartido")?.checked === true,
+      ingenierosCompartidos: [...document.querySelectorAll(".clf-ing-comp-chk:checked")].map(cb => cb.value),
+      estadoLegal:   v("clf-estadolegal") || null,
+      deudaOriginal: parseFloat(v("clf-deuda").replace(/[^0-9.]/g,"")) || null,
+      limiteCredito: parseFloat(v("clf-limite").replace(/[^0-9.]/g,"")) || null,
+      condicionesPago: v("clf-condpago") || null,
+      notas:         document.getElementById("clf-notas")?.value?.trim() || null,
+      activo: true,
+    };
+    // Limpiar nulos para no sobreescribir con null en update
+    Object.keys(payload).forEach(k => { if (payload[k] === null) delete payload[k]; });
+
+    const btn = document.getElementById("clf-btn-guardar");
+    if (btn) { btn.disabled = true; btn.textContent = "Guardando…"; }
+    try {
+      if (clienteId) {
+        payload.actualizadoEn  = serverTimestamp();
+        payload.actualizadoPor = window.Sesion?.alias ?? "web";
+        await updateDoc(doc(db, "clientes", clienteId), payload);
+        window.toast?.("Cliente actualizado.", "success");
+      } else {
+        // Generar CLI-XXXXX: siguiente número al máximo existente
+        const maxNum = Math.max(
+          ..._clientes.map(x => parseInt(x.clienteId?.replace("CLI-","")) || 0),
+          0
+        );
+        payload.clienteId = "CLI-" + String(maxNum + 1).padStart(5, "0");
+        payload.creadoEn  = serverTimestamp();
+        payload.creadoPor = window.Sesion?.alias ?? "web";
+        await addDoc(collection(db, "clientes"), payload);
+        window.toast?.("Cliente creado.", "success");
+      }
+      window.ClientesUI.cerrarFormCliente();
+    } catch(e) {
+      window.toast?.("Error: " + e.message, "error");
+      if (btn) { btn.disabled = false; btn.textContent = clienteId ? "💾 Guardar cambios" : "✅ Crear cliente"; }
+    }
+  }
+
+// ── Ubicaciones de cliente ────────────────────────────────────
+const GMAPS_KEY = "AIzaSyCZS7tBcukVcQ5EPQdHGbEZky7LwHG0AS0";
+let _gmapsLoaded = false;
+let _gmapsLoading = false;
+
+async function _loadGMaps() {
+  if (_gmapsLoaded) return;
+  if (_gmapsLoading) {
+    await new Promise(r => { const t = setInterval(() => { if (_gmapsLoaded) { clearInterval(t); r(); } }, 100); });
+    return;
+  }
+  _gmapsLoading = true;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&libraries=places&language=es`;
+    s.async = true; s.defer = true;
+    s.onload  = () => { _gmapsLoaded = true; resolve(); };
+    s.onerror = () => reject(new Error("Error cargando Google Maps"));
+    document.head.appendChild(s);
+  });
+}
+
+const _TIPO_ICON = { parcela:"🌾", domicilio:"🏠", invernadero:"🏗", otro:"📌" };
+const _TIPO_COLOR = { parcela:"#15803D", domicilio:"#1565C0", invernadero:"#7E22CE", otro:"#B45309" };
+
+async function _cargarUbicaciones(clienteDocId) {
+  const list = document.getElementById("cli-ubicaciones-list");
+  if (!list) return;
+  try {
+    const { getDocs: gd, collection: col, orderBy: ob, query: q } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const snap = await gd(q(col(db, "clientes", clienteDocId, "ubicaciones"), ob("creadoEn")));
+    if (snap.empty) {
+      list.innerHTML = `<div style="padding:14px;text-align:center;color:#9CA3AF;font-size:12px;
+        border:1px dashed var(--border);border-radius:8px">
+        Sin ubicaciones registradas. Agrega la parcela o domicilio del cliente.
+      </div>`;
+      return;
+    }
+    list.innerHTML = snap.docs.map(d => {
+      const u = d.data(); const uid = d.id;
+      const icon  = _TIPO_ICON[u.tipo]  || "📌";
+      const color = _TIPO_COLOR[u.tipo] || "#6B7280";
+      return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;
+        background:var(--surface-2);display:flex;align-items:flex-start;gap:10px">
+        <span style="font-size:20px;flex-shrink:0;margin-top:2px">${icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+            <span style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase">${esc(u.tipo||"otro")}</span>
+            ${u.etiqueta ? `<span style="font-size:12px;font-weight:600;color:var(--text-primary)">${esc(u.etiqueta)}</span>` : ""}
+          </div>
+          <div style="font-size:11px;color:#6B7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${esc(u.direccionFormateada || `${u.lat?.toFixed(6)}, ${u.lng?.toFixed(6)}`)}
+          </div>
+          ${u.zonaIngeniero ? `<div style="font-size:10px;color:#9CA3AF;margin-top:2px">Zona: ${esc(u.zonaIngeniero)}</div>` : ""}
+          <div style="font-size:10px;color:#9CA3AF;margin-top:2px">
+            ${u.modificadoPor ? `Editado por ${esc(u.modificadoPor)}` : `Por ${esc(u.creadoPor||"—")}`}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+          <button onclick="ClientesUI.navegarUbicacion(${u.lat},${u.lng})"
+            title="Abrir en Google Maps"
+            style="padding:4px 10px;border:1px solid #1565C0;border-radius:5px;background:transparent;
+              color:#1565C0;font-size:11px;cursor:pointer;font-weight:600">🗺 Navegar</button>
+          <button onclick="ClientesUI.abrirUbicacion('${esc(clienteDocId)}','${esc(uid)}')"
+            style="padding:4px 10px;border:1px solid var(--border);border-radius:5px;background:transparent;
+              color:var(--text-primary);font-size:11px;cursor:pointer">✏ Editar</button>
+          <button onclick="ClientesUI.eliminarUbicacion('${esc(clienteDocId)}','${esc(uid)}')"
+            style="padding:4px 10px;border:1px solid #FCA5A5;border-radius:5px;background:transparent;
+              color:#DC2626;font-size:11px;cursor:pointer">🗑</button>
+        </div>
+      </div>`;
+    }).join("");
+  } catch(e) {
+    if (list) list.innerHTML = `<div style="padding:12px;color:#DC2626;font-size:12px">
+      Error al cargar ubicaciones: ${esc(e.message)}</div>`;
+  }
+}
+
+// Estado del modal de ubicación
+let _ubicEdit = { clienteDocId: null, ubicId: null, map: null, marker: null, lat: null, lng: null };
+
+async function _abrirModalUbicacion(clienteDocId, ubicId) {
+  const modal = document.getElementById("cli-ubic-modal");
+  if (!modal) return;
+
+  _ubicEdit.clienteDocId = clienteDocId;
+  _ubicEdit.ubicId = ubicId;
+
+  // Cargar datos existentes si es edición
+  let u = {};
+  if (ubicId) {
+    try {
+      const { getDoc: gd2, doc: d2 } =
+        await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      const snap = await gd2(d2(db, "clientes", clienteDocId, "ubicaciones", ubicId));
+      if (snap.exists()) u = snap.data();
+    } catch {}
+  }
+
+  document.getElementById("cli-ubic-titulo").textContent = ubicId ? "Editar ubicación" : "Nueva ubicación";
+  document.getElementById("cli-ubic-tipo").value    = u.tipo    || "parcela";
+  document.getElementById("cli-ubic-etiqueta").value = u.etiqueta || "";
+  document.getElementById("cli-ubic-zona").value    = u.zonaIngeniero || "";
+  document.getElementById("cli-ubic-dir").value     = u.direccionFormateada || "";
+  document.getElementById("cli-ubic-lat").value     = u.lat || "";
+  document.getElementById("cli-ubic-lng").value     = u.lng || "";
+  document.getElementById("cli-ubic-err").style.display = "none";
+
+  _ubicEdit.lat = u.lat || null;
+  _ubicEdit.lng = u.lng || null;
+
+  modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+  _openTrap("cli-ubic-modal", () => window.ClientesUI.cerrarUbicacion());
+
+  // Inicializar Google Maps
+  try {
+    await _loadGMaps();
+    const defaultCenter = { lat: _ubicEdit.lat || 18.97, lng: _ubicEdit.lng || -99.22 };
+    const mapDiv = document.getElementById("cli-ubic-map");
+    if (!mapDiv) return;
+
+    const map = new google.maps.Map(mapDiv, {
+      center: defaultCenter, zoom: _ubicEdit.lat ? 15 : 8,
+      mapTypeId: "hybrid",
+      mapTypeControl: true, streetViewControl: false,
+      fullscreenControl: true, zoomControl: true,
+    });
+
+    const marker = new google.maps.Marker({
+      position: defaultCenter, map, draggable: true,
+      title: "Arrastra para ajustar la posición",
+      animation: google.maps.Animation.DROP,
+    });
+
+    if (!_ubicEdit.lat) marker.setVisible(false);
+
+    // Click en mapa → mover marker
+    map.addListener("click", e => {
+      const pos = e.latLng;
+      marker.setPosition(pos);
+      marker.setVisible(true);
+      _updateUbicCoords(pos.lat(), pos.lng());
+    });
+
+    // Drag del marker
+    marker.addListener("dragend", e => {
+      _updateUbicCoords(e.latLng.lat(), e.latLng.lng());
+    });
+
+    _ubicEdit.map = map;
+    _ubicEdit.marker = marker;
+
+    // Geocoder inverso al cargar si ya hay coords
+    if (_ubicEdit.lat && _ubicEdit.lng) _reverseGeocode(_ubicEdit.lat, _ubicEdit.lng);
+
+  } catch(e) {
+    document.getElementById("cli-ubic-map").innerHTML =
+      `<div style="padding:20px;color:#DC2626;font-size:12px">Error cargando mapa: ${esc(e.message)}</div>`;
+  }
+}
+
+function _updateUbicCoords(lat, lng) {
+  _ubicEdit.lat = lat; _ubicEdit.lng = lng;
+  document.getElementById("cli-ubic-lat").value = lat.toFixed(7);
+  document.getElementById("cli-ubic-lng").value = lng.toFixed(7);
+  _reverseGeocode(lat, lng);
+}
+
+function _reverseGeocode(lat, lng) {
+  if (!window.google?.maps?.Geocoder) return;
+  const gc = new google.maps.Geocoder();
+  gc.geocode({ location: { lat, lng } }, (results, status) => {
+    if (status === "OK" && results[0]) {
+      const dir = results[0].formatted_address;
+      const el  = document.getElementById("cli-ubic-dir");
+      if (el) el.value = dir;
+    }
+  });
+}
+
+async function _guardarUbicacion() {
+  const clienteDocId = _ubicEdit.clienteDocId;
+  const ubicId       = _ubicEdit.ubicId;
+  const tipo     = document.getElementById("cli-ubic-tipo")?.value;
+  const etiqueta = document.getElementById("cli-ubic-etiqueta")?.value.trim();
+  const zona     = document.getElementById("cli-ubic-zona")?.value.trim();
+  const dir      = document.getElementById("cli-ubic-dir")?.value.trim();
+  const lat      = _ubicEdit.lat;
+  const lng      = _ubicEdit.lng;
+  const errEl    = document.getElementById("cli-ubic-err");
+
+  if (!lat || !lng) {
+    errEl.textContent = "Selecciona la ubicación en el mapa.";
+    errEl.style.display = "block"; return;
+  }
+  if (!tipo) {
+    errEl.textContent = "Selecciona el tipo de ubicación.";
+    errEl.style.display = "block"; return;
+  }
+
+  const btn = document.getElementById("cli-ubic-btn-guardar");
+  if (btn) { btn.disabled = true; btn.textContent = "Guardando…"; }
+  errEl.style.display = "none";
+
+  try {
+    const { collection: col, doc: d2, addDoc: ad, updateDoc: ud, serverTimestamp: st }
+      = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+
+    const alias = window.Sesion?.alias ?? "web";
+    const rol   = window.Sesion?.rol   ?? "—";
+
+    if (ubicId) {
+      // Edición — guardar historial de cambios
+      const oldData = {};
+      try {
+        const { getDoc: gd3 } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        const snap = await gd3(d2(db, "clientes", clienteDocId, "ubicaciones", ubicId));
+        Object.assign(oldData, snap.data() || {});
+      } catch {}
+
+      await ud(d2(db, "clientes", clienteDocId, "ubicaciones", ubicId), {
+        tipo, etiqueta: etiqueta || "", zonaIngeniero: zona || "",
+        lat, lng, direccionFormateada: dir || "",
+        modificadoPor: alias, modificadoEn: st(),
+      });
+
+      // Registrar log de cambios (best-effort)
+      const cambios = [];
+      if (oldData.lat !== lat || oldData.lng !== lng) cambios.push({ campo:"coordenadas", antes:`${oldData.lat},${oldData.lng}`, despues:`${lat},${lng}` });
+      if (oldData.tipo !== tipo) cambios.push({ campo:"tipo", antes:oldData.tipo, despues:tipo });
+      if (oldData.etiqueta !== etiqueta) cambios.push({ campo:"etiqueta", antes:oldData.etiqueta, despues:etiqueta });
+      if (cambios.length) {
+        ad(col(db, "clientes", clienteDocId, "ubicaciones", ubicId, "historial"), {
+          quien: alias, rol, cuándo: st(), cambios
+        }).catch(() => {});
+      }
+    } else {
+      await ad(col(db, "clientes", clienteDocId, "ubicaciones"), {
+        tipo, etiqueta: etiqueta || "", zonaIngeniero: zona || "",
+        lat, lng, direccionFormateada: dir || "",
+        creadoPor: alias, creadoEn: st(),
+        modificadoPor: alias, modificadoEn: st(),
+      });
+    }
+
+    window.toast?.(ubicId ? "Ubicación actualizada." : "Ubicación agregada.", "success");
+    document.getElementById("cli-ubic-modal").style.display = "none";
+    _cargarUbicaciones(clienteDocId);
+  } catch(e) {
+    errEl.textContent = "Error: " + e.message;
+    errEl.style.display = "block";
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Guardar ubicación"; }
+  }
+}
+
+// ── Fotos del cliente (tomadas en APK, guardadas en Firebase Storage) ──
+async function _verFotosCliente(clienteId, nombre) {
+  const modal  = document.getElementById("cli-fotos-modal");
+  const title  = document.getElementById("cli-fotos-title");
+  const sub    = document.getElementById("cli-fotos-sub");
+  const body   = document.getElementById("cli-fotos-body");
+  if (!modal || !body) return;
+
+  if (title) title.textContent = `📷 Fotos — ${nombre || clienteId}`;
+  if (sub)   sub.textContent   = "Cargando fotos registradas desde el APK…";
+  body.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-sec)">Cargando…</div>`;
+  modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+  _openTrap("cli-fotos-modal", () => window.ClientesUI.cerrarFotos());
+
+  try {
+    const { getStorage, ref, listAll, getDownloadURL } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js");
+    const storage = getStorage();
+
+    // Rutas donde el APK puede guardar fotos del cliente
+    const paths = [
+      `fotos/clientes/${clienteId}`,
+      `clientes/${clienteId}/fotos`,
+      `visitas/fotos/${clienteId}`,
+    ];
+
+    let items = [];
+    for (const path of paths) {
+      try {
+        const result = await listAll(ref(storage, path));
+        items = [...items, ...result.items];
+        // También busca en subcarpetas (ej. fechas)
+        for (const prefix of result.prefixes) {
+          try {
+            const sub2 = await listAll(prefix);
+            items = [...items, ...sub2.items];
+          } catch {}
+        }
+      } catch {}
+    }
+
+    if (!items.length) {
+      body.innerHTML = `
+        <div style="text-align:center;padding:32px;color:var(--text-sec)">
+          <div style="font-size:40px;margin-bottom:12px">📷</div>
+          <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:6px">Sin fotos registradas</div>
+          <div style="font-size:12px">Las fotos tomadas por el ingeniero en el APK aparecerán aquí automáticamente.</div>
+          <div style="font-size:11px;color:#9CA3AF;margin-top:10px">
+            Rutas buscadas: ${paths.map(p => `<code>${p}</code>`).join(", ")}
+          </div>
+        </div>`;
+      if (sub) sub.textContent = "Sin fotos registradas";
+      return;
+    }
+
+    if (sub) sub.textContent = `${items.length} foto${items.length !== 1 ? "s" : ""}`;
+
+    // Obtener URLs de descarga en paralelo
+    const urls = await Promise.all(items.map(async item => {
+      try {
+        const url  = await getDownloadURL(item);
+        const name = item.name;
+        const ts   = name.match(/(\d{8,})/)?.[1] ?? "";
+        const date = ts.length >= 8
+          ? new Date(+ts).toLocaleDateString("es-MX", { day:"numeric", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" })
+          : name;
+        return { url, name, date };
+      } catch { return null; }
+    }));
+
+    const validas = urls.filter(Boolean);
+
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
+        ${validas.map(({ url, name, date }) => `
+          <a href="${url}" target="_blank" rel="noopener"
+            style="display:block;border-radius:8px;overflow:hidden;border:1px solid var(--border);
+              text-decoration:none;transition:transform .1s"
+            onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform=''">
+            <img src="${url}" alt="${esc(name)}" loading="lazy"
+              style="width:100%;aspect-ratio:1;object-fit:cover;display:block;background:var(--surface-2)">
+            <div style="padding:6px 8px;background:var(--surface)">
+              <div style="font-size:10px;color:var(--text-sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                ${esc(date)}
+              </div>
+            </div>
+          </a>`).join("")}
+      </div>`;
+  } catch(e) {
+    body.innerHTML = `<div style="text-align:center;padding:24px;color:#DC2626;font-size:13px">
+      Error: ${esc(e.message)}</div>`;
+    if (sub) sub.textContent = "Error al cargar";
+  }
+}
+

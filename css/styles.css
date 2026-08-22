@@ -112,9 +112,17 @@ html, body {
 .form-input  {
   width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
   padding: 9px 12px; font-size: 13px; color: var(--text-primary);
-  outline: none; transition: border-color .15s;
+  background: var(--surface); outline: none; transition: border-color .15s;
+  font-family: inherit;
 }
 .form-input:focus { border-color: var(--green-mid); }
+
+/* ── Inputs y selects nativos sin clase (herencia de tema) ─── */
+input:not([class]), select:not([class]), textarea:not([class]) {
+  background: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
 
 .login-error {
   background: #FEE2E2; border: 1px solid #FECACA; border-radius: 7px;
@@ -678,6 +686,17 @@ html, body {
 .action-btn.del  { color: var(--red); border-color: rgba(220,38,38,.25); }
 .action-btn.del:hover  { background: rgba(220,38,38,.05); }
 
+/* ── Filter pills (shared across modules) ───────────────────── */
+.filter-pill {
+  padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 700;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-sec); cursor: pointer; transition: .15s; white-space: nowrap;
+}
+.filter-pill:hover { background: var(--surface-2); }
+.filter-pill.active {
+  background: var(--green-dark); color: #fff; border-color: var(--green-dark);
+}
+
 /* ══════════════════════════════
    CARDS / TABLES (shared)
    ══════════════════════════════ */
@@ -1062,6 +1081,55 @@ html, body {
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) body { background: #0D1117; } }
 [data-theme="dark"] body { background: #0D1117; }
 
+/* ── Chips / badges con fondos hardcodeados — overrides dark ── */
+/* Chip azul claro (#EFF6FF) → tinte azul oscuro semitransparente */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) [style*="background:#EFF6FF"],
+  :root:not([data-theme="light"]) [style*="background: #EFF6FF"] {
+    background: rgba(37,99,235,0.18) !important;
+  }
+  :root:not([data-theme="light"]) [style*="background:#FEF2F2"],
+  :root:not([data-theme="light"]) [style*="background: #FEF2F2"] {
+    background: rgba(220,38,38,0.15) !important;
+  }
+  :root:not([data-theme="light"]) [style*="background:#FFF7ED"],
+  :root:not([data-theme="light"]) [style*="background: #FFF7ED"] {
+    background: rgba(217,119,6,0.15) !important;
+  }
+  :root:not([data-theme="light"]) [style*="background:#FEF3C7"],
+  :root:not([data-theme="light"]) [style*="background: #FEF3C7"] {
+    background: rgba(217,119,6,0.15) !important;
+  }
+  :root:not([data-theme="light"]) [style*="background:#F0FDF4"],
+  :root:not([data-theme="light"]) [style*="background: #F0FDF4"] {
+    background: rgba(22,163,74,0.12) !important;
+  }
+  :root:not([data-theme="light"]) [style*="background:#DCFCE7"],
+  :root:not([data-theme="light"]) [style*="background: #DCFCE7"] {
+    background: rgba(22,163,74,0.12) !important;
+  }
+  :root:not([data-theme="light"]) [style*="color:#1565C0"] { color: #93C5FD !important; }
+  :root:not([data-theme="light"]) [style*="color:#1D4ED8"] { color: #93C5FD !important; }
+  :root:not([data-theme="light"]) [style*="color:#1B5E20"] { color: #86EFAC !important; }
+  :root:not([data-theme="light"]) [style*="color:#166534"] { color: #86EFAC !important; }
+}
+[data-theme="dark"] [style*="background:#EFF6FF"],
+[data-theme="dark"] [style*="background: #EFF6FF"] { background: rgba(37,99,235,0.18) !important; }
+[data-theme="dark"] [style*="background:#FEF2F2"],
+[data-theme="dark"] [style*="background: #FEF2F2"] { background: rgba(220,38,38,0.15) !important; }
+[data-theme="dark"] [style*="background:#FFF7ED"],
+[data-theme="dark"] [style*="background: #FFF7ED"] { background: rgba(217,119,6,0.15) !important; }
+[data-theme="dark"] [style*="background:#FEF3C7"],
+[data-theme="dark"] [style*="background: #FEF3C7"] { background: rgba(217,119,6,0.15) !important; }
+[data-theme="dark"] [style*="background:#F0FDF4"],
+[data-theme="dark"] [style*="background: #F0FDF4"] { background: rgba(22,163,74,0.12) !important; }
+[data-theme="dark"] [style*="background:#DCFCE7"],
+[data-theme="dark"] [style*="background: #DCFCE7"] { background: rgba(22,163,74,0.12) !important; }
+[data-theme="dark"] [style*="color:#1565C0"] { color: #93C5FD !important; }
+[data-theme="dark"] [style*="color:#1D4ED8"] { color: #93C5FD !important; }
+[data-theme="dark"] [style*="color:#1B5E20"] { color: #86EFAC !important; }
+[data-theme="dark"] [style*="color:#166534"] { color: #86EFAC !important; }
+
 /* Fondos principales */
 [data-theme="dark"] .login-card   { background: #161B22; border: 1px solid #30363D; color: #E6EDF3; }
 [data-theme="dark"] .topbar       { background: #161B22; border-color: #30363D; }
@@ -1214,6 +1282,25 @@ html, body {
 [data-theme="dark"] .bar-wrap     { background: #21262D; }
 [data-theme="dark"] .st-item      { color: #6E7681; }
 [data-theme="dark"] .st-sync      { color: #484F58; }
+
+/* ── Fuerza fondos/textos de elementos con inline-style generados dinámicamente ── */
+[data-theme="dark"] [style*="background:#F9FAFB"],
+[data-theme="dark"] [style*="background: #F9FAFB"] { background: var(--surface-2) !important; }
+[data-theme="dark"] [style*="background:#FFFFFF"],
+[data-theme="dark"] [style*="background: #FFFFFF"],
+[data-theme="dark"] [style*="background:white"],
+[data-theme="dark"] [style*="background:#fff"],
+[data-theme="dark"] [style*="background: #fff"] { background: var(--surface) !important; }
+[data-theme="dark"] [style*="background:#F3F4F6"],
+[data-theme="dark"] [style*="background: #F3F4F6"] { background: var(--surface-2) !important; }
+[data-theme="dark"] [style*="color:#111827"],
+[data-theme="dark"] [style*="color: #111827"],
+[data-theme="dark"] [style*="color:#1F2937"],
+[data-theme="dark"] [style*="color: #1F2937"] { color: var(--text-primary) !important; }
+[data-theme="dark"] [style*="color:#374151"],
+[data-theme="dark"] [style*="color: #374151"] { color: var(--text-sec) !important; }
+[data-theme="dark"] [style*="border-color:#E5E7EB"] { border-color: var(--border) !important; }
+[data-theme="dark"] [style*="border:1px solid #E5E7EB"] { border-color: var(--border) !important; }
 
 /* ════════════════════════════════════════════════════
    MODAL DE PREFERENCIAS

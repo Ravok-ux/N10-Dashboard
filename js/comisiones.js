@@ -1,4 +1,4 @@
-// ══════════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════════
 // comisiones.js — Configuración de comisiones por ingeniero
 // ══════════════════════════════════════════════════════════════
 
@@ -62,11 +62,11 @@ function _html() {
   <div style="display:flex;flex-direction:column;height:100%;gap:0">
 
     <!-- Header + tabs -->
-    <div style="padding:14px 20px 0;border-bottom:1px solid var(--c-border);flex-shrink:0">
+    <div style="padding:14px 20px 0;border-bottom:1px solid var(--border);flex-shrink:0">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <div>
-          <div style="font-size:13px;font-weight:800;color:var(--c-text)">Comisiones e ingenieros</div>
-          <div style="font-size:10.5px;color:#9CA3AF" id="com-subtitle">Cargando…</div>
+          <div style="font-size:13px;font-weight:800;color:var(--text-primary)">Comisiones e ingenieros</div>
+          <div style="font-size:10.5px;color:var(--text-muted)" id="com-subtitle">Cargando…</div>
         </div>
         <div style="flex:1"></div>
         <button onclick="ComisionesUI.nuevaConfig()" id="com-btn-nueva"
@@ -78,17 +78,17 @@ function _html() {
       <div style="display:flex;gap:4px">
         <button data-com-tab="config" onclick="ComisionesUI.cambiarTab('config')"
           style="padding:6px 14px;border:none;border-radius:6px 6px 0 0;cursor:pointer;
-            font-size:12px;font-weight:600;background:transparent;color:#9CA3AF">
+            font-size:12px;font-weight:600;background:transparent;color:var(--text-muted)">
           ⚙️ Configuración
         </button>
         <button data-com-tab="n10" onclick="ComisionesUI.cambiarTab('n10')"
           style="padding:6px 14px;border:none;border-radius:6px 6px 0 0;cursor:pointer;
-            font-size:12px;font-weight:600;background:transparent;color:#9CA3AF">
+            font-size:12px;font-weight:600;background:transparent;color:var(--text-muted)">
           💧 N10 — Litros
         </button>
         <button data-com-tab="cobranza" onclick="ComisionesUI.cambiarTab('cobranza')"
           style="padding:6px 14px;border:none;border-radius:6px 6px 0 0;cursor:pointer;
-            font-size:12px;font-weight:600;background:transparent;color:#9CA3AF">
+            font-size:12px;font-weight:600;background:transparent;color:var(--text-muted)">
           💳 Cobranza
         </button>
       </div>
@@ -96,27 +96,27 @@ function _html() {
 
     <!-- Panel: Configuración (existente) -->
     <div id="com-panel-config" style="display:flex;flex:1;overflow:hidden;gap:0">
-      <div style="flex:1;overflow-y:auto;border-right:1px solid var(--c-border);padding:16px">
-        <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;
+      <div style="flex:1;overflow-y:auto;border-right:1px solid var(--border);padding:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;
           letter-spacing:.07em;margin-bottom:12px">Configuración por ingeniero</div>
         <div id="com-configs-list">
-          <div style="color:#9CA3AF;font-size:12px;text-align:center;padding:32px">Cargando…</div>
+          <div style="color:var(--text-muted);font-size:12px;text-align:center;padding:32px">Cargando…</div>
         </div>
       </div>
       <div style="flex:1.2;overflow-y:auto;padding:16px">
-        <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;
           letter-spacing:.07em;margin-bottom:12px">Historial de liquidaciones</div>
         <div id="com-liq-list">
-          <div style="color:#9CA3AF;font-size:12px;text-align:center;padding:32px">Cargando…</div>
+          <div style="color:var(--text-muted);font-size:12px;text-align:center;padding:32px">Cargando…</div>
         </div>
       </div>
     </div>
 
     <!-- Panel: Cobranza -->
     <div id="com-panel-cobranza" style="display:none;flex-direction:column;flex:1;overflow:hidden">
-      <div style="padding:12px 20px;border-bottom:1px solid var(--c-border);
+      <div style="padding:12px 20px;border-bottom:1px solid var(--border);
         display:flex;align-items:center;gap:10px;flex-shrink:0">
-        <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">
           Reglas de comisión por cobranza — por ingeniero
         </div>
         <div style="flex:1"></div>
@@ -127,11 +127,11 @@ function _html() {
         </button>
       </div>
       <div style="flex:1;overflow-y:auto;padding:16px 20px">
-        <div style="font-size:11px;color:#9CA3AF;margin-bottom:12px">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
           Define cuánto se le paga al ingeniero por recuperar notas vencidas. Cada regla es editable en cualquier momento.
         </div>
         <div id="cob-config-list">
-          <div style="color:#9CA3AF;text-align:center;padding:32px">Cargando…</div>
+          <div style="color:var(--text-muted);text-align:center;padding:32px">Cargando…</div>
         </div>
       </div>
     </div>
@@ -139,17 +139,17 @@ function _html() {
     <!-- Panel: N10 Litros -->
     <div id="com-panel-n10" style="display:none;flex-direction:column;flex:1;overflow:hidden">
       <!-- Subheader N10 -->
-      <div style="padding:12px 20px;border-bottom:1px solid var(--c-border);
-        display:flex;align-items:center;gap:12px;flex-shrink:0;background:var(--c-surface)">
-        <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em">
+      <div style="padding:12px 20px;border-bottom:1px solid var(--border);
+        display:flex;align-items:center;gap:12px;flex-shrink:0;background:var(--surface)">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">
           Mes:
         </div>
         <input type="month" id="n10-mes-picker" value="${mesHoy}"
           onchange="ComisionesUI.setMesN10(this.value)"
-          style="border:1px solid var(--c-border);border-radius:6px;padding:4px 8px;
-            font-size:12px;background:var(--c-surface);color:var(--c-text);cursor:pointer">
+          style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;
+            font-size:12px;background:var(--surface);color:var(--text-primary);cursor:pointer">
         <div style="flex:1"></div>
-        <div style="font-size:10.5px;color:#9CA3AF" id="n10-subtitle">Cargando…</div>
+        <div style="font-size:10.5px;color:var(--text-muted)" id="n10-subtitle">Cargando…</div>
       </div>
 
       <!-- KPIs N10 -->
@@ -157,27 +157,27 @@ function _html() {
         id="n10-kpis">
         ${[["n10-k-litros","LITROS TOTALES MES","💧"],["n10-k-comision","COMISIÓN TOTAL","💰"],
            ["n10-k-activos","INGENIEROS ACTIVOS","👷"],["n10-k-top","TOP INGENIERO","🏆"]].map(([id,lbl,ico]) => `
-          <div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:10px;padding:14px 16px">
-            <div style="font-size:10px;color:#9CA3AF;font-weight:700;text-transform:uppercase;
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+            <div style="font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;
               letter-spacing:.06em;margin-bottom:6px">${ico} ${lbl}</div>
-            <div style="font-size:18px;font-weight:800;color:var(--c-text);
+            <div style="font-size:18px;font-weight:800;color:var(--text-primary);
               font-variant-numeric:tabular-nums" id="${id}">–</div>
           </div>`).join("")}
       </div>
 
       <!-- Tabla tabulador N10 -->
       <div style="padding:0 20px 10px;flex-shrink:0">
-        <div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:8px;overflow:hidden">
-          <div style="padding:8px 14px;border-bottom:1px solid var(--c-border);
-            font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <div style="padding:8px 14px;border-bottom:1px solid var(--border);
+            font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">
             Tabulador vigente N10
           </div>
           <div style="display:grid;grid-template-columns:repeat(4,1fr)">
             ${TRAMOS_N10.map(t => `
-              <div style="padding:10px 14px;border-right:1px solid var(--c-border);text-align:center">
-                <div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">Tramo ${t.n}</div>
+              <div style="padding:10px 14px;border-right:1px solid var(--border);text-align:center">
+                <div style="font-size:9px;color:var(--text-muted);font-weight:700;text-transform:uppercase">Tramo ${t.n}</div>
                 <div style="font-size:13px;font-weight:800;color:#6366F1;margin:3px 0">$${t.rate}/L</div>
-                <div style="font-size:9px;color:#9CA3AF">${t.hasta === Infinity ? "500+ L" : `${t.desde}–${t.hasta} L`}</div>
+                <div style="font-size:9px;color:var(--text-muted)">${t.hasta === Infinity ? "500+ L" : `${t.desde}–${t.hasta} L`}</div>
               </div>`).join("")}
           </div>
         </div>
@@ -186,7 +186,7 @@ function _html() {
       <!-- Tabla por ingeniero -->
       <div style="flex:1;overflow-y:auto;padding:0 20px 20px">
         <div id="n10-tabla" style="font-size:12px">
-          <div style="color:#9CA3AF;text-align:center;padding:32px">Cargando…</div>
+          <div style="color:var(--text-muted);text-align:center;padding:32px">Cargando…</div>
         </div>
       </div>
     </div>
@@ -234,7 +234,7 @@ function _html() {
         </div>
       </div>
 
-      <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;
         letter-spacing:.06em;margin:14px 0 8px">Tramos de comisión (por volumen de ventas)</div>
 
       <div id="com-tramos">
@@ -246,8 +246,8 @@ function _html() {
         + Agregar tramo
       </button>
 
-      <div style="font-size:10px;color:#9CA3AF;padding:8px 10px;background:var(--c-surface);
-        border-radius:6px;border:1px solid var(--c-border);margin-bottom:12px">
+      <div style="font-size:10px;color:var(--text-muted);padding:8px 10px;background:var(--surface);
+        border-radius:6px;border:1px solid var(--border);margin-bottom:12px">
         💡 Cada tramo aplica el porcentaje sobre el intervalo entre la meta anterior y esta.
         Ejemplo: hasta $100k → 3%, hasta $150k → 5% = sobre los primeros $100k cobra 3%, sobre el tramo $100k-$150k cobra 5%.
       </div>
@@ -268,7 +268,7 @@ function _html() {
         <label class="form-label">Ingeniero (alias)</label>
         <input id="cob-alias" type="text" class="form-input" readonly>
       </div>
-      <div style="font-size:11px;color:#9CA3AF;margin-bottom:10px;line-height:1.5">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">
         Define la regla de comisión para notas vencidas recuperadas en el período de liquidación del ingeniero.
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
@@ -288,8 +288,8 @@ function _html() {
             title="Pesos de comisión por cada unidad base cobrada">
         </div>
       </div>
-      <div style="font-size:10px;color:#9CA3AF;padding:8px 10px;background:var(--c-surface);
-        border-radius:6px;border:1px solid var(--c-border);margin-bottom:14px" id="cob-ejemplo">
+      <div style="font-size:10px;color:var(--text-muted);padding:8px 10px;background:var(--surface);
+        border-radius:6px;border:1px solid var(--border);margin-bottom:14px" id="cob-ejemplo">
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" onclick="ComisionesUI.cerrarModal()">Cancelar</button>
@@ -324,7 +324,7 @@ function _escucharConfigs() {
     if (sub) sub.textContent = `${snap.size} ingenieros configurados`;
 
     if (snap.empty) {
-      el.innerHTML = `<div style="color:#9CA3AF;font-size:12px;text-align:center;padding:32px">
+      el.innerHTML = `<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:32px">
         Sin configuraciones. Usa "+ Configurar ingeniero".</div>`;
       return;
     }
@@ -333,10 +333,10 @@ function _escucharConfigs() {
       const c = d.data();
       const tramos = _descTramos(c.tramosJson);
       return `
-        <div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:8px;
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;
           padding:12px 14px;margin-bottom:8px">
           <div style="display:flex;align-items:center;margin-bottom:6px">
-            <div style="flex:1;font-size:13px;font-weight:700;color:var(--c-text)">${esc(c.aliasIngeniero)}</div>
+            <div style="flex:1;font-size:13px;font-weight:700;color:var(--text-primary)">${esc(c.aliasIngeniero)}</div>
             <div style="font-size:12px;color:#4ADE80;font-weight:700">
               ${fmtMXN(c.salarioBase)}/sem · ${c.diasLaborales||6}d
             </div>
@@ -344,10 +344,10 @@ function _escucharConfigs() {
           <div style="font-size:11px;color:#60A5FA;margin-bottom:6px">
             📅 Período: ${DIAS_SEM[c.diaLiquidacion ?? 1]} → ${DIAS_SEM[((c.diaLiquidacion ?? 1) + 6) % 7]}
           </div>
-          <div style="font-size:11px;color:#9CA3AF;margin-bottom:8px">${tramos}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">${tramos}</div>
           <button onclick="ComisionesUI.editarConfig('${d.id}')"
-            style="font-size:11px;background:var(--c-surface2);border:1px solid var(--c-border);
-              border-radius:5px;padding:4px 10px;cursor:pointer;color:var(--c-text)">
+            style="font-size:11px;background:var(--surface-2);border:1px solid var(--border);
+              border-radius:5px;padding:4px 10px;cursor:pointer;color:var(--text-primary)">
             ✏️ Editar
           </button>
         </div>`;
@@ -366,7 +366,7 @@ function _escucharLiquidaciones() {
     if (!el) return;
 
     if (snap.empty) {
-      el.innerHTML = `<div style="color:#9CA3AF;font-size:12px;text-align:center;padding:32px">
+      el.innerHTML = `<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:32px">
         Sin liquidaciones registradas.</div>`;
       return;
     }
@@ -375,25 +375,25 @@ function _escucharLiquidaciones() {
       const l = d.data();
       const statusColor = l.status === "PAGADO" ? "#4ADE80" : l.status === "CANCELADO" ? "#EF4444" : "#FBBF24";
       return `
-        <div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:8px;
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;
           padding:12px 14px;margin-bottom:8px">
           <div style="display:flex;align-items:center;margin-bottom:4px">
-            <div style="flex:1;font-size:13px;font-weight:700;color:var(--c-text)">${esc(l.aliasIngeniero)}</div>
+            <div style="flex:1;font-size:13px;font-weight:700;color:var(--text-primary)">${esc(l.aliasIngeniero)}</div>
             <div style="font-size:11px;font-weight:700;color:${statusColor};
               background:${statusColor}22;border-radius:4px;padding:2px 8px">${esc(l.status || "PENDIENTE")}</div>
           </div>
-          <div style="font-size:11px;color:#9CA3AF;margin-bottom:6px">${l.periodoLabel}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">${l.periodoLabel}</div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
             <div>
-              <div style="font-size:9px;color:#6B7280;text-transform:uppercase">Ventas</div>
-              <div style="font-size:12px;font-weight:700;color:var(--c-text)">${fmtMXN(l.totalVendido)}</div>
+              <div style="font-size:9px;color:var(--text-sec);text-transform:uppercase">Ventas</div>
+              <div style="font-size:12px;font-weight:700;color:var(--text-primary)">${fmtMXN(l.totalVendido)}</div>
             </div>
             <div>
-              <div style="font-size:9px;color:#6B7280;text-transform:uppercase">Comisión</div>
+              <div style="font-size:9px;color:var(--text-sec);text-transform:uppercase">Comisión</div>
               <div style="font-size:12px;font-weight:700;color:#60A5FA">${fmtMXN(l.montoComision)}</div>
             </div>
             <div>
-              <div style="font-size:9px;color:#6B7280;text-transform:uppercase">Total pago</div>
+              <div style="font-size:9px;color:var(--text-sec);text-transform:uppercase">Total pago</div>
               <div style="font-size:12px;font-weight:700;color:#4ADE80">${fmtMXN(l.totalPago)}</div>
             </div>
           </div>
@@ -619,17 +619,17 @@ function _bindAcciones() {
       const ingenieros = snap.docs
         .filter(d => ["INGENIERO","RECUPERADOR"].includes(d.data().rol) && d.data().activo !== false);
       list.innerHTML = ingenieros.length === 0
-        ? `<div style="color:#9CA3AF;text-align:center;padding:16px">Sin ingenieros registrados</div>`
+        ? `<div style="color:var(--text-muted);text-align:center;padding:16px">Sin ingenieros registrados</div>`
         : ingenieros.map(d => {
             const u = d.data();
             const alias = u.alias || d.id;
             return `
               <div onclick="window._comAliasCallback('${alias}')"
                 style="padding:10px 12px;border-radius:6px;cursor:pointer;
-                  border-bottom:1px solid var(--c-border);font-size:13px;color:var(--c-text);
+                  border-bottom:1px solid var(--border);font-size:13px;color:var(--text-primary);
                   font-weight:600">
                 ${alias}
-                <span style="font-size:10px;color:#9CA3AF;font-weight:400;margin-left:6px">${u.email || ""}</span>
+                <span style="font-size:10px;color:var(--text-muted);font-weight:400;margin-left:6px">${u.email || ""}</span>
               </div>`;
           }).join("");
     });
@@ -642,12 +642,12 @@ function _bindAcciones() {
     el.innerHTML = _tramos.map((t, i) => `
       <div class="tramo-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
         <div style="flex:1">
-          <label style="font-size:10px;color:#9CA3AF">Meta ventas ($)</label>
+          <label style="font-size:10px;color:var(--text-muted)">Meta ventas ($)</label>
           <input class="tramo-meta form-input" type="number" value="${t.meta}" min="0" step="1000"
             style="width:100%;margin-top:2px">
         </div>
         <div style="flex:0.6">
-          <label style="font-size:10px;color:#9CA3AF">% comisión</label>
+          <label style="font-size:10px;color:var(--text-muted)">% comisión</label>
           <input class="tramo-pct form-input" type="number" value="${t.pct}" min="0" max="100" step="0.5"
             style="width:100%;margin-top:2px">
         </div>
@@ -668,27 +668,27 @@ function _escucharCobranzaConfigs() {
   _unsubCob = onSnapshot(q, snap => {
     if (!document.getElementById("cob-config-list")) return;
     if (snap.empty) {
-      el.innerHTML = `<div style="color:#9CA3AF;text-align:center;padding:40px">
+      el.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:40px">
         Sin reglas de cobranza. Usa "+ Configurar ingeniero".</div>`;
       return;
     }
     el.innerHTML = snap.docs.map(d => {
       const c = d.data();
       return `
-        <div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:8px;
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;
           padding:12px 14px;margin-bottom:8px">
           <div style="display:flex;align-items:center;margin-bottom:6px">
-            <div style="flex:1;font-size:13px;font-weight:700;color:var(--c-text)">${esc(c.aliasIngeniero)}</div>
+            <div style="flex:1;font-size:13px;font-weight:700;color:var(--text-primary)">${esc(c.aliasIngeniero)}</div>
             <div style="font-size:11px;color:#60A5FA;font-weight:700">
               $${(c.comisionPor||0)} / $${(c.montoPorCada||1000).toLocaleString("es-MX")}
             </div>
           </div>
-          <div style="font-size:11px;color:#9CA3AF;margin-bottom:8px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
             Umbral: <b>${c.umbralDias||60} días</b> de mora · Por cada <b>$${(c.montoPorCada||1000).toLocaleString("es-MX")}</b> cobrado → <b>$${c.comisionPor||10}</b>
           </div>
           <button onclick="_abrirEditCobranza('${d.id}')"
-            style="font-size:11px;background:var(--c-surface2);border:1px solid var(--c-border);
-              border-radius:5px;padding:4px 10px;cursor:pointer;color:var(--c-text)">
+            style="font-size:11px;background:var(--surface-2);border:1px solid var(--border);
+              border-radius:5px;padding:4px 10px;cursor:pointer;color:var(--text-primary)">
             ✏️ Editar
           </button>
         </div>`;
@@ -707,7 +707,7 @@ function _escucharN10(mesKey) {
   _unsubN10?.();
   const el = document.getElementById("n10-tabla");
   if (!el) return;
-  el.innerHTML = `<div style="color:#9CA3AF;text-align:center;padding:32px">Cargando…</div>`;
+  el.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:32px">Cargando…</div>`;
 
   const q = query(collection(db, "comisiones_n10"), where("mes_key", "==", mesKey));
   _unsubN10 = onSnapshot(q, snap => {
@@ -729,7 +729,7 @@ function _escucharN10(mesKey) {
     if (sub) sub.textContent = `${registros.length} ingeniero${registros.length !== 1 ? "s" : ""} · ${mesKey}`;
 
     if (registros.length === 0) {
-      el.innerHTML = `<div style="color:#9CA3AF;text-align:center;padding:40px">
+      el.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:40px">
         Sin ventas N10 registradas para ${mesKey}.<br>
         <span style="font-size:11px">Las comisiones se generan automáticamente al marcar un pedido como Entregado.</span>
       </div>`;
@@ -737,16 +737,16 @@ function _escucharN10(mesKey) {
     }
 
     el.innerHTML = `
-      <div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:10px;overflow:hidden">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead>
-            <tr style="background:var(--c-surface2,#0F172A);border-bottom:1px solid var(--c-border)">
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#9CA3AF">INGENIERO</th>
-              <th style="padding:10px 14px;text-align:right;font-weight:700;color:#9CA3AF">LITROS MES</th>
-              <th style="padding:10px 14px;text-align:center;font-weight:700;color:#9CA3AF">TRAMO</th>
-              <th style="padding:10px 14px;text-align:center;font-weight:700;color:#9CA3AF">$/L</th>
-              <th style="padding:10px 14px;text-align:right;font-weight:700;color:#9CA3AF">COMISIÓN</th>
-              <th style="padding:10px 14px;text-align:left;font-weight:700;color:#9CA3AF">AVANCE vs META</th>
+            <tr style="background:var(--surface-2);border-bottom:1px solid var(--border)">
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-muted)">INGENIERO</th>
+              <th style="padding:10px 14px;text-align:right;font-weight:700;color:var(--text-muted)">LITROS MES</th>
+              <th style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text-muted)">TRAMO</th>
+              <th style="padding:10px 14px;text-align:center;font-weight:700;color:var(--text-muted)">$/L</th>
+              <th style="padding:10px 14px;text-align:right;font-weight:700;color:var(--text-muted)">COMISIÓN</th>
+              <th style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-muted)">AVANCE vs META</th>
             </tr>
           </thead>
           <tbody>
@@ -769,10 +769,10 @@ function _rowN10(r) {
   const uid = esc(r.uid ?? "");
 
   return `
-    <tr style="border-bottom:1px solid var(--c-border);cursor:pointer"
+    <tr style="border-bottom:1px solid var(--border);cursor:pointer"
       onclick="ComisionesUI.toggleVentasN10('${uid}','${esc(r.mes_key)}')"
       data-n10-row="${uid}">
-      <td style="padding:10px 14px;font-weight:700;color:var(--c-text)">${esc(r.alias ?? "–")}</td>
+      <td style="padding:10px 14px;font-weight:700;color:var(--text-primary)">${esc(r.alias ?? "–")}</td>
       <td style="padding:10px 14px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700">
         ${fmtL(r.litros)}</td>
       <td style="padding:10px 14px;text-align:center">
@@ -787,35 +787,35 @@ function _rowN10(r) {
         font-variant-numeric:tabular-nums">${fmtMXN(r.comision)}</td>
       <td style="padding:10px 14px;min-width:180px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="flex:1;height:6px;background:var(--c-border);border-radius:3px;overflow:hidden">
+          <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
             <div style="height:100%;width:${pct}%;background:${pct>=100?"#4ADE80":"#6366F1"};
               border-radius:3px;transition:width .4s"></div>
           </div>
-          <span style="font-size:10px;color:#9CA3AF;white-space:nowrap;min-width:32px">${pct}%</span>
+          <span style="font-size:10px;color:var(--text-muted);white-space:nowrap;min-width:32px">${pct}%</span>
         </div>
-        ${faltan ? `<div style="font-size:9px;color:#9CA3AF;margin-top:2px">Faltan ${faltan} L → T${proximoTramo(r.litros).tramoSig ?? "∞"}</div>` : `<div style="font-size:9px;color:#4ADE80;margin-top:2px">✓ Meta superada</div>`}
+        ${faltan ? `<div style="font-size:9px;color:var(--text-muted);margin-top:2px">Faltan ${faltan} L → T${proximoTramo(r.litros).tramoSig ?? "∞"}</div>` : `<div style="font-size:9px;color:#4ADE80;margin-top:2px">✓ Meta superada</div>`}
       </td>
     </tr>
     <tr class="n10-ventas-detail" data-for-uid="${uid}" data-for-mes="${esc(r.mes_key)}" style="display:none">
-      <td colspan="6" style="padding:0 14px 12px;background:var(--c-surface)">
-        <div style="font-size:11px;font-weight:700;color:#9CA3AF;margin:8px 0 6px">
+      <td colspan="6" style="padding:0 14px 12px;background:var(--surface)">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin:8px 0 6px">
           Ventas individuales (${ventas.length})
         </div>
         ${ventas.length === 0
-          ? `<div style="color:#9CA3AF;font-size:11px">Sin ventas registradas</div>`
+          ? `<div style="color:var(--text-muted);font-size:11px">Sin ventas registradas</div>`
           : `<table style="width:100%;border-collapse:collapse;font-size:11px">
-              <tr style="color:#9CA3AF">
+              <tr style="color:var(--text-muted)">
                 <th style="text-align:left;padding:3px 8px;font-weight:600">Pedido</th>
                 <th style="text-align:left;padding:3px 8px;font-weight:600">Cliente</th>
                 <th style="text-align:right;padding:3px 8px;font-weight:600">Litros</th>
                 <th style="text-align:left;padding:3px 8px;font-weight:600">Fecha</th>
               </tr>
               ${ventas.map(v => `
-                <tr style="border-top:1px solid var(--c-border)">
+                <tr style="border-top:1px solid var(--border)">
                   <td style="padding:4px 8px;font-weight:700;font-family:monospace">${esc(v.ventaId ?? "–")}</td>
                   <td style="padding:4px 8px">${esc(v.cliente ?? "–")}</td>
                   <td style="padding:4px 8px;text-align:right;font-weight:700">${fmtL(v.litros)}</td>
-                  <td style="padding:4px 8px;color:#9CA3AF">
+                  <td style="padding:4px 8px;color:var(--text-muted)">
                     ${v.fecha ? new Date(v.fecha).toLocaleDateString("es-MX",{day:"numeric",month:"short"}) : "–"}
                   </td>
                 </tr>`).join("")}

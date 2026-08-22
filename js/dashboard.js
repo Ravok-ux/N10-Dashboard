@@ -1,4 +1,4 @@
-// ══════════════════════════════════════════════════════════════
+﻿// ══════════════════════════════════════════════════════════════
 // dashboard.js — KPIs en tiempo real + ranking + mini-mapa + feed
 // ══════════════════════════════════════════════════════════════
 
@@ -419,7 +419,7 @@ function _html() {
           </tr>
         </thead>
         <tbody id="ranking-body">
-          <tr><td colspan="7" style="padding:20px;text-align:center;color:#9CA3AF;font-size:12px">
+          <tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px">
             <div class="skeleton" style="height:12px;width:200px;margin:0 auto"></div>
           </td></tr>
         </tbody>
@@ -445,7 +445,7 @@ function _html() {
         <span class="rp-filter">Filtrar ▾</span>
       </div>
       <div class="rp-feed" id="dash-feed">
-        <div style="padding:16px;text-align:center;color:#9CA3AF;font-size:11px">Cargando…</div>
+        <div style="padding:16px;text-align:center;color:var(--text-muted);font-size:11px">Cargando…</div>
       </div>
     </div>
 
