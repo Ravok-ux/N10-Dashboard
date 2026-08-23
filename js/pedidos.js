@@ -9,6 +9,7 @@ import {
   addDoc, getDocs, Timestamp, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { registrarVentaN10, revertirVentaN10 } from "./comisiones-n10-engine.js";
+import { getIngenieros } from "./erp-cache.js";
 
 let _unsub    = null;
 let _filtroStatus  = "TODOS";
@@ -147,7 +148,23 @@ function _bindUI() {
     confirmarPedido() { _confirmarPedido(); },
     _actualizarCantidad(idx, val) { _actualizarCantidadImpl(idx, val); },
     _actualizarPrecio(idx, val)   { _actualizarPrecioImpl(idx, val); },
-    _cambiarCliente()              { _cambiarClienteImpl(); }
+    _cambiarCliente()              { _cambiarClienteImpl(); },
+    async _filtrarIng(q) {
+      const dd = document.getElementById("pd-ing-dd");
+      if (!dd) return;
+      const ings = await getIngenieros();
+      const filtrados = ings.filter(a => a.toLowerCase().includes(q.toLowerCase()));
+      if (!q || !filtrados.length) { dd.style.display = "none"; return; }
+      dd.innerHTML = filtrados.map(a =>
+        `<div style="padding:7px 10px;cursor:pointer;font-size:12px;color:var(--text-primary);border-bottom:1px solid var(--border)"
+          onmousedown="event.preventDefault()"
+          onclick="document.getElementById('pd-ingeniero').value='${esc(a)}';document.getElementById('pd-ing-dd').style.display='none'"
+          >${esc(a)}</div>`
+      ).join("");
+      dd.style.display = "block";
+      document.getElementById("pd-ingeniero").onblur = () =>
+        setTimeout(() => { dd.style.display = "none"; }, 150);
+    }
   };
 }
 
@@ -695,8 +712,14 @@ function _renderFormPedido(body) {
           <div style="font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px">
             Ingeniero asignado
           </div>
-          <input id="pd-ingeniero" style="${_pdinputStyle()}"
-            value="${esc(_pedidoCliente?.ingeniero || Sesion.alias || '')}">
+          <div style="position:relative">
+            <input id="pd-ingeniero" style="${_pdinputStyle()}" autocomplete="off"
+              value="${esc(_pedidoCliente?.ingeniero || Sesion.alias || '')}"
+              oninput="PedidosUI._filtrarIng(this.value)" placeholder="Ingeniero…">
+            <div id="pd-ing-dd" style="display:none;position:absolute;top:100%;left:0;right:0;
+              background:var(--surface);border:1px solid var(--border);border-radius:6px;
+              max-height:140px;overflow-y:auto;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,.3)"></div>
+          </div>
         </div>
         <div>
           <div style="font-size:11px;font-weight:600;color:var(--text-sec);margin-bottom:4px">

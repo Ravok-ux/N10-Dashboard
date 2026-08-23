@@ -16,6 +16,7 @@ import { CobranzaModule }   from "./cobranza.js";
 import { IngenierosModule } from "./ingenieros.js";
 import { ComisionesModule } from "./comisiones.js";
 import { ComprasModule }       from "./compras.js";
+import { ProveedoresModule }   from "./proveedores.js";
 import { ConfigModule }        from "./config.js";
 import { ComentariosModule }   from "./comentarios.js";
 import { PreciosModule }         from "./precios.js";
@@ -163,6 +164,7 @@ const MODULES = {
   ingenieros: IngenierosModule,
   comisiones: ComisionesModule,
   compras:      ComprasModule,
+  proveedores:  ProveedoresModule,
   kardex:       KardexModule,
   cartera:      CarteraModule,
   visitas:      VisitasModule,
@@ -420,7 +422,7 @@ function _navigate(viewId) {
   const bc = { dashboard:"Dashboard", mapa:"Mapa en vivo", mapa_clientes:"Mapa de Clientes", feed:"Feed en vivo",
     ingenieros:"Ingenieros", pedidos:"Pedidos", remisiones:"Remisiones",
     cobranza:"Cobranza", usuarios:"Usuarios y flags", reportes:"Reportes",
-    comisiones:"Comisiones", compras:"Órdenes de compra", kardex:"Kardex",
+    comisiones:"Comisiones", compras:"Órdenes de compra", proveedores:"Proveedores", kardex:"Kardex",
     cartera:"Cartera vencida", visitas:"Visitas", precios:"Precios y costos", config:"Config. tickets",
     config_intereses:"Tasas de interés",
     geocercas:"Geocercas", metas:"Metas de venta", autorizaciones:"Autorizaciones",

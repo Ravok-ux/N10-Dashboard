@@ -11,14 +11,20 @@ import {
 
 // ── Definición de flags ────────────────────────────────────────
 const PRIVILEGIOS = [
-  { key:"PUEDE_EDITAR_PRECIO",      label:"Editar precio",          icon:"💲", soloSA: true },
-  { key:"PUEDE_CANCELAR_PEDIDO",    label:"Cancelar pedido",        icon:"❌", soloSA: false },
-  { key:"PUEDE_VER_CARTERA_GLOBAL", label:"Cartera global",         icon:"👁", soloSA: false },
-  { key:"PUEDE_IMPORTAR_CATALOGO",  label:"Import. catálogo",       icon:"📦", soloSA: false },
-  { key:"PUEDE_EXPORTAR_BACKUP",    label:"Export. reportes",       icon:"💾", soloSA: false },
-  { key:"PUEDE_REGISTRAR_REMISION", label:"Remisión / liquidar",    icon:"📄", soloSA: false },
-  { key:"PUEDE_REGISTRAR_ABONO",    label:"Abono / cobro",          icon:"💳", soloSA: false },
-  { key:"PUEDE_VER_RH",             label:"Acceso a RH / Nómina",  icon:"👥", soloSA: false }
+  { key:"PUEDE_EDITAR_PRECIO",        label:"Editar precio",          icon:"💲", soloSA: true },
+  { key:"PUEDE_CANCELAR_PEDIDO",      label:"Cancelar pedido",        icon:"❌", soloSA: false },
+  { key:"PUEDE_VER_CARTERA_GLOBAL",   label:"Cartera global",         icon:"👁", soloSA: false },
+  { key:"PUEDE_IMPORTAR_CATALOGO",    label:"Import. catálogo",       icon:"📦", soloSA: false },
+  { key:"PUEDE_EXPORTAR_BACKUP",      label:"Export. reportes",       icon:"💾", soloSA: false },
+  { key:"PUEDE_REGISTRAR_REMISION",   label:"Remisión / liquidar",    icon:"📄", soloSA: false },
+  { key:"PUEDE_REGISTRAR_ABONO",      label:"Abono / cobro",          icon:"💳", soloSA: false },
+  { key:"PUEDE_VER_RH",               label:"Ver RH",                 icon:"👥", soloSA: false },
+  { key:"PUEDE_EDITAR_NOMINA",        label:"Editar nómina",          icon:"💵", soloSA: true  },
+  { key:"PUEDE_VER_CLIENTES",         label:"Ver clientes",           icon:"🧑", soloSA: false },
+  { key:"PUEDE_EXPORTAR_CLIENTES",    label:"Exportar clientes",      icon:"📤", soloSA: false },
+  { key:"PUEDE_VER_COBRANZA",         label:"Ver cobranza",           icon:"💰", soloSA: false },
+  { key:"PUEDE_APROBAR_DEVOLUCIONES", label:"Aprobar devoluciones",   icon:"↩️", soloSA: false },
+  { key:"PUEDE_CREAR_COTIZACIONES",   label:"Crear cotizaciones",     icon:"📝", soloSA: false }
 ];
 
 const MODULOS = [
@@ -37,7 +43,9 @@ const ADMIN_FLAGS = [
   { key:"PUEDE_VER_COMISIONES",     label:"Ver comisiones",         icon:"📊" },
   { key:"PUEDE_CONFIG_COMISIONES",  label:"Config. comisiones",     icon:"⚙️" },
   { key:"PUEDE_CARTERA_GLOBAL",     label:"Cartera global (admin)", icon:"💰" },
-  { key:"PUEDE_MODULO_JURIDICO",    label:"Módulo jurídico",        icon:"⚖️" }
+  { key:"PUEDE_MODULO_JURIDICO",    label:"Módulo jurídico",        icon:"⚖️" },
+  { key:"PUEDE_CONFIG_INTERESES",   label:"Config. intereses",      icon:"📈" },
+  { key:"PUEDE_REPORTES_CUSTOM",    label:"Reportes custom",        icon:"📉" }
 ];
 
 const TODOS_FLAGS = [...PRIVILEGIOS, ...MODULOS];
@@ -47,32 +55,46 @@ const TODOS_FLAGS_ADMIN = [...PRIVILEGIOS, ...MODULOS, ...ADMIN_FLAGS];
 const PRESET = {
   SUPER_ADMIN: Object.fromEntries(TODOS_FLAGS.map(f => [f.key, true])),
   GERENTE: {
-    PUEDE_EDITAR_PRECIO:      false,
-    PUEDE_CANCELAR_PEDIDO:    true,
-    PUEDE_VER_CARTERA_GLOBAL: true,
-    PUEDE_IMPORTAR_CATALOGO:  true,
-    PUEDE_EXPORTAR_BACKUP:    true,
-    PUEDE_REGISTRAR_REMISION: true,
-    PUEDE_REGISTRAR_ABONO:    true,
-    PUEDE_CREAR_CLIENTES:     true,
-    PUEDE_ACCESO_STOCK:       true,
-    PUEDE_CREAR_PEDIDOS:      true,
-    PUEDE_VER_PEDIDOS:        true,
-    PUEDE_RUTA_OPTIMA:        true
+    PUEDE_EDITAR_PRECIO:        false,
+    PUEDE_CANCELAR_PEDIDO:      true,
+    PUEDE_VER_CARTERA_GLOBAL:   true,
+    PUEDE_IMPORTAR_CATALOGO:    true,
+    PUEDE_EXPORTAR_BACKUP:      true,
+    PUEDE_REGISTRAR_REMISION:   true,
+    PUEDE_REGISTRAR_ABONO:      true,
+    PUEDE_VER_RH:               true,
+    PUEDE_EDITAR_NOMINA:        false,
+    PUEDE_VER_CLIENTES:         true,
+    PUEDE_EXPORTAR_CLIENTES:    true,
+    PUEDE_VER_COBRANZA:         true,
+    PUEDE_APROBAR_DEVOLUCIONES: true,
+    PUEDE_CREAR_COTIZACIONES:   true,
+    PUEDE_CREAR_CLIENTES:       true,
+    PUEDE_ACCESO_STOCK:         true,
+    PUEDE_CREAR_PEDIDOS:        true,
+    PUEDE_VER_PEDIDOS:          true,
+    PUEDE_RUTA_OPTIMA:          true
   },
   INGENIERO: {
-    PUEDE_EDITAR_PRECIO:      false,
-    PUEDE_CANCELAR_PEDIDO:    false,
-    PUEDE_VER_CARTERA_GLOBAL: false,
-    PUEDE_IMPORTAR_CATALOGO:  false,
-    PUEDE_EXPORTAR_BACKUP:    false,
-    PUEDE_REGISTRAR_REMISION: true,
-    PUEDE_REGISTRAR_ABONO:    true,
-    PUEDE_CREAR_CLIENTES:     true,
-    PUEDE_ACCESO_STOCK:       true,
-    PUEDE_CREAR_PEDIDOS:      true,
-    PUEDE_VER_PEDIDOS:        true,
-    PUEDE_RUTA_OPTIMA:        true
+    PUEDE_EDITAR_PRECIO:        false,
+    PUEDE_CANCELAR_PEDIDO:      false,
+    PUEDE_VER_CARTERA_GLOBAL:   false,
+    PUEDE_IMPORTAR_CATALOGO:    false,
+    PUEDE_EXPORTAR_BACKUP:      false,
+    PUEDE_REGISTRAR_REMISION:   true,
+    PUEDE_REGISTRAR_ABONO:      true,
+    PUEDE_VER_RH:               false,
+    PUEDE_EDITAR_NOMINA:        false,
+    PUEDE_VER_CLIENTES:         true,
+    PUEDE_EXPORTAR_CLIENTES:    false,
+    PUEDE_VER_COBRANZA:         false,
+    PUEDE_APROBAR_DEVOLUCIONES: false,
+    PUEDE_CREAR_COTIZACIONES:   true,
+    PUEDE_CREAR_CLIENTES:       true,
+    PUEDE_ACCESO_STOCK:         true,
+    PUEDE_CREAR_PEDIDOS:        true,
+    PUEDE_VER_PEDIDOS:          true,
+    PUEDE_RUTA_OPTIMA:          true
   },
   RECUPERADOR: {
     PUEDE_EDITAR_PRECIO:      false,
@@ -96,25 +118,34 @@ const PRESET = {
     PUEDE_MODULO_JURIDICO:    false
   },
   ADMINISTRADOR: {
-    PUEDE_EDITAR_PRECIO:      false,
-    PUEDE_CANCELAR_PEDIDO:    true,
-    PUEDE_VER_CARTERA_GLOBAL: true,
-    PUEDE_IMPORTAR_CATALOGO:  true,
-    PUEDE_EXPORTAR_BACKUP:    true,
-    PUEDE_REGISTRAR_REMISION: true,
-    PUEDE_REGISTRAR_ABONO:    true,
-    PUEDE_CREAR_CLIENTES:     true,
-    PUEDE_ACCESO_STOCK:       true,
-    PUEDE_CREAR_PEDIDOS:      true,
-    PUEDE_VER_PEDIDOS:        true,
-    PUEDE_RUTA_OPTIMA:        false,
-    PUEDE_ALMACEN_ENTRADAS:   true,
-    PUEDE_ALMACEN_INVENTARIO: true,
-    PUEDE_ORDENES_COMPRA:     true,
-    PUEDE_VER_COMISIONES:     true,
-    PUEDE_CONFIG_COMISIONES:  true,
-    PUEDE_CARTERA_GLOBAL:     true,
-    PUEDE_MODULO_JURIDICO:    false
+    PUEDE_EDITAR_PRECIO:        false,
+    PUEDE_CANCELAR_PEDIDO:      true,
+    PUEDE_VER_CARTERA_GLOBAL:   true,
+    PUEDE_IMPORTAR_CATALOGO:    true,
+    PUEDE_EXPORTAR_BACKUP:      true,
+    PUEDE_REGISTRAR_REMISION:   true,
+    PUEDE_REGISTRAR_ABONO:      true,
+    PUEDE_VER_RH:               true,
+    PUEDE_EDITAR_NOMINA:        false,
+    PUEDE_VER_CLIENTES:         true,
+    PUEDE_EXPORTAR_CLIENTES:    true,
+    PUEDE_VER_COBRANZA:         true,
+    PUEDE_APROBAR_DEVOLUCIONES: true,
+    PUEDE_CREAR_COTIZACIONES:   true,
+    PUEDE_CREAR_CLIENTES:       true,
+    PUEDE_ACCESO_STOCK:         true,
+    PUEDE_CREAR_PEDIDOS:        true,
+    PUEDE_VER_PEDIDOS:          true,
+    PUEDE_RUTA_OPTIMA:          false,
+    PUEDE_ALMACEN_ENTRADAS:     true,
+    PUEDE_ALMACEN_INVENTARIO:   true,
+    PUEDE_ORDENES_COMPRA:       true,
+    PUEDE_VER_COMISIONES:       true,
+    PUEDE_CONFIG_COMISIONES:    true,
+    PUEDE_CARTERA_GLOBAL:       true,
+    PUEDE_MODULO_JURIDICO:      false,
+    PUEDE_CONFIG_INTERESES:     true,
+    PUEDE_REPORTES_CUSTOM:      true
   },
   ALMACENISTA: {
     PUEDE_EDITAR_PRECIO:      false,
@@ -242,7 +273,7 @@ function _html() {
   <div class="usuarios-body" style="display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-shrink:0">
       <div>
-        <div style="font-size:13px;font-weight:800;color:var(--c-text)">Usuarios y privilegios</div>
+        <div style="font-size:13px;font-weight:800;color:var(--text-primary)">Usuarios y privilegios</div>
         <div style="font-size:10.5px;color:#9CA3AF;margin-top:1px" id="u-subtitle">Cargando…</div>
       </div>
       <div style="flex:1"></div>
@@ -255,7 +286,7 @@ function _html() {
 
     <!-- Leyenda -->
     <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;padding:9px 14px;
-      background:var(--c-surface);border-radius:8px;border:1px solid var(--c-border);flex-shrink:0">
+      background:var(--surface);border-radius:8px;border:1px solid var(--border);flex-shrink:0">
       <span style="font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.06em">
         Privilegios:
       </span>
@@ -337,11 +368,11 @@ function _html() {
           ${Sesion.esSuperAdmin() ? '<option value="SUPER_ADMIN">SUPER_ADMIN</option>' : ""}
         </select>
       </div>
-      <div id="nu-preset-preview" style="font-size:10px;padding:8px 10px;background:var(--c-surface);
-        border-radius:6px;border:1px solid var(--c-border);margin-top:4px;color:#9CA3AF;line-height:1.7">
+      <div id="nu-preset-preview" style="font-size:10px;padding:8px 10px;background:var(--surface);
+        border-radius:6px;border:1px solid var(--border);margin-top:4px;color:#9CA3AF;line-height:1.7">
       </div>
-      <div style="font-size:10.5px;color:#9CA3AF;padding:8px 10px;background:var(--c-surface);
-        border-radius:6px;border:1px solid var(--c-border);margin-top:8px">
+      <div style="font-size:10.5px;color:#9CA3AF;padding:8px 10px;background:var(--surface);
+        border-radius:6px;border:1px solid var(--border);margin-top:8px">
         ⚠️ El usuario debe registrarse con este correo en Firebase Auth. El perfil se crea
         automáticamente en su primer login; los flags del preset se aplican desde el panel.
       </div>
@@ -365,8 +396,8 @@ function _html() {
         <label class="form-label">Correo electrónico</label>
         <input id="eu-email" type="email" class="form-input" placeholder="usuario@ejemplo.mx">
       </div>
-      <div style="font-size:10.5px;color:#9CA3AF;padding:8px 10px;background:var(--c-surface);
-        border-radius:6px;border:1px solid var(--c-border);margin-top:4px">
+      <div style="font-size:10.5px;color:#9CA3AF;padding:8px 10px;background:var(--surface);
+        border-radius:6px;border:1px solid var(--border);margin-top:4px">
         ℹ️ Cambiar el correo aquí solo actualiza el perfil de Firestore.
         El acceso de Firebase Auth permanece con el correo original.
       </div>
@@ -382,13 +413,13 @@ function _html() {
   <div id="modal-eliminar-usuario" class="modal-overlay hidden">
     <div class="modal" style="max-width:400px">
       <div class="modal-title" style="color:#DC2626">⚠️ Eliminar usuario</div>
-      <div id="del-info" style="font-size:12px;color:var(--c-text);margin-bottom:14px;line-height:1.6"></div>
+      <div id="del-info" style="font-size:12px;color:var(--text-primary);margin-bottom:14px;line-height:1.6"></div>
       <div style="background:#FEE2E2;border:1px solid #FECACA;border-radius:8px;padding:10px 14px;
         font-size:11px;color:#7F1D1D;margin-bottom:16px;line-height:1.6">
         Esta acción es <strong>permanente e irreversible</strong>. El documento se borrará de Firestore.<br>
         Para revocar el acceso de Firebase Auth deberás eliminarlo también desde la consola de Firebase.
       </div>
-      <div style="font-size:11.5px;color:var(--c-text);margin-bottom:6px">
+      <div style="font-size:11.5px;color:var(--text-primary);margin-bottom:6px">
         Escribe <strong id="del-confirm-hint" style="color:#DC2626"></strong> para confirmar:
       </div>
       <input id="del-confirm-input" type="text" class="form-input"
@@ -424,8 +455,8 @@ function _html() {
           ${Sesion.esSuperAdmin() ? '<option value="SUPER_ADMIN">SUPER_ADMIN</option>' : ""}
         </select>
       </div>
-      <div id="cr-preset-preview" style="font-size:10px;padding:8px 10px;background:var(--c-surface);
-        border-radius:6px;border:1px solid var(--c-border);margin-top:4px;color:#9CA3AF;line-height:1.7">
+      <div id="cr-preset-preview" style="font-size:10px;padding:8px 10px;background:var(--surface);
+        border-radius:6px;border:1px solid var(--border);margin-top:4px;color:#9CA3AF;line-height:1.7">
       </div>
       <label style="display:flex;align-items:center;gap:8px;font-size:11px;margin-top:10px;color:#9CA3AF;cursor:pointer">
         <input type="checkbox" id="cr-aplicar-preset" checked>
@@ -834,5 +865,5 @@ function _renderPresetPreview(el, rol) {
     const ok = preset[f.key];
     return `<span style="color:${ok ? '#16A34A' : '#DC2626'}">${ok ? "✓" : "✗"} ${f.icon} ${f.label}</span>`;
   });
-  el.innerHTML = `<b style="color:var(--c-text)">Preset ${rol}:</b> ` + lineas.join("&nbsp;&nbsp;");
+  el.innerHTML = `<b style="color:var(--text-primary)">Preset ${rol}:</b> ` + lineas.join("&nbsp;&nbsp;");
 }

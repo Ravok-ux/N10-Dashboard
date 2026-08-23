@@ -11,6 +11,7 @@ import {
   query, orderBy, where, getDocs, serverTimestamp, limit
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { crearNotificacion } from "./notificaciones.js";
+import { getClientes } from "./erp-cache.js";
 
 let _unsub = null;
 
@@ -104,9 +105,13 @@ function _html() {
           <label class="form-label">Folio de remisión / pedido</label>
           <input id="dev-folio-ref" class="form-input" placeholder="N10-XXXXX o N10-PED-XXXXX">
         </div>
-        <div class="form-group">
+        <div class="form-group" style="position:relative">
           <label class="form-label">Cliente</label>
-          <input id="dev-cliente" class="form-input" placeholder="Nombre del cliente">
+          <input id="dev-cliente" class="form-input" placeholder="Buscar cliente…"
+            autocomplete="off" oninput="DevolucionesUI._filtrarCliente(this.value)">
+          <div id="dev-cli-dd" style="display:none;position:absolute;top:100%;left:0;right:0;
+            background:var(--surface,#1F2937);border:1px solid var(--border);border-radius:6px;
+            max-height:140px;overflow-y:auto;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,.3)"></div>
         </div>
         <div class="form-group">
           <label class="form-label">Productos a devolver</label>
@@ -233,6 +238,31 @@ function _renderKPIs(devs) {
 }
 
 // ── Nueva solicitud ───────────────────────────────────────────
+// ── Autocomplete cliente en devolución ────────────────────────
+window.DevolucionesUI = {
+  async _filtrarCliente(q) {
+    const dd = document.getElementById("dev-cli-dd");
+    if (!dd) return;
+    const lista = await getClientes();
+    const filtrados = lista.filter(c =>
+      c.nombre.toLowerCase().includes(q.toLowerCase()) ||
+      c.clienteId.toLowerCase().includes(q.toLowerCase())
+    );
+    if (!q || !filtrados.length) { dd.style.display = "none"; return; }
+    dd.innerHTML = filtrados.slice(0, 15).map(c =>
+      `<div style="padding:7px 10px;cursor:pointer;font-size:12px;color:var(--text-primary);border-bottom:1px solid var(--border)"
+        onmousedown="event.preventDefault()"
+        onclick="document.getElementById('dev-cliente').value='${esc(c.nombre)}';document.getElementById('dev-cli-dd').style.display='none'">
+        <span style="font-weight:600">${esc(c.nombre)}</span>
+        ${c.clienteId ? `<span style="color:#9CA3AF;font-size:10px;margin-left:6px">${esc(c.clienteId)}</span>` : ""}
+      </div>`
+    ).join("");
+    dd.style.display = "block";
+    document.getElementById("dev-cliente").onblur = () =>
+      setTimeout(() => { dd.style.display = "none"; }, 150);
+  }
+};
+
 function _bindNueva() {
   document.getElementById("btn-nueva-dev")?.addEventListener("click", () => {
     document.getElementById("dev-modal")?.classList.remove("hidden");
