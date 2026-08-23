@@ -159,7 +159,7 @@ export const CrmModule = {
           <button class="modal-close" id="crm-conv-close">✕</button>
         </div>
         <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
-          <p style="font-size:13px;color:var(--text-muted);margin:0">
+          <p style="font-size:13px;color:var(--text-sec);margin:0">
             El prospecto pasará a la lista de clientes activos y comenzará a aparecer
             en el calendario de visitas del ingeniero asignado.
           </p>
@@ -198,12 +198,79 @@ export const CrmModule = {
 
 // ── Cargar ingenieros ─────────────────────────────────────────
 async function _cargarIngenieros() {
-  const snap = await getDocs(query(collection(db,"usuarios"), where("activo","==",true), orderBy("alias")));
-  _ingenieros = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  const [ingSnap, segSnap, prodSnap] = await Promise.all([
+    getDocs(query(collection(db,"usuarios"), where("activo","==",true), orderBy("alias"))),
+    getDocs(query(collection(db,"segmentos"), orderBy("nombre"))),
+    getDocs(query(collection(db,"productos"),  orderBy("nombre")))
+  ]);
+
+  _ingenieros = ingSnap.docs
+    .filter(d => ["INGENIERO","RECUPERADOR"].includes(d.data().rol))
+    .map(d => ({ uid: d.id, ...d.data() }));
+
   const opts = _ingenieros.map(u => `<option value="${esc(u.uid)}">${esc(u.alias||u.uid)}</option>`).join("");
   document.getElementById("crm-filtro-ing")?.insertAdjacentHTML("beforeend", opts);
   document.getElementById("crm-ing-asig")?.insertAdjacentHTML("beforeend", opts);
-  document.getElementById("crm-conv-ok")?._ingOpts; // placeholder, populated inline
+
+  // Segmentos dinámicos en "Convertir a cliente"
+  const segSel = document.getElementById("crm-conv-seg");
+  if (segSel && segSnap.docs.length) {
+    segSel.innerHTML = `<option value="">Sin segmento</option>` +
+      segSnap.docs.map(d => {
+        const s = d.data();
+        return `<option value="${esc(d.id)}">${esc(s.nombre)}</option>`;
+      }).join("");
+  }
+
+  // Autocomplete de productos en "Producto de interés"
+  const prodCache = prodSnap.docs.map(d => ({
+    nombre: d.data().nombre || "", codigo: d.data().codigo || ""
+  }));
+  _bindProductoAC(prodCache);
+}
+
+function _bindProductoAC(productos) {
+  const inp = document.getElementById("crm-producto");
+  if (!inp) return;
+
+  // Wrap input in a relative container and add dropdown
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:relative";
+  inp.parentNode.insertBefore(wrap, inp);
+  wrap.appendChild(inp);
+
+  const dd = document.createElement("div");
+  dd.id = "crm-prod-dd";
+  dd.style.cssText = `display:none;position:absolute;top:100%;left:0;right:0;
+    background:var(--surface);border:1px solid var(--border);border-radius:8px;
+    box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:300;max-height:200px;overflow-y:auto;margin-top:2px`;
+  wrap.appendChild(dd);
+
+  inp.addEventListener("input", () => {
+    const q = inp.value.toLowerCase();
+    if (q.length < 2) { dd.style.display = "none"; return; }
+    const matches = productos.filter(p =>
+      p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q)
+    ).slice(0, 10);
+    if (!matches.length) { dd.style.display = "none"; return; }
+    dd.innerHTML = matches.map(p =>
+      `<div data-nombre="${esc(p.nombre)}"
+        style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)"
+        onmouseover="this.style.background='var(--surface-2)'" onmouseout="this.style.background=''"
+        onmousedown="event.preventDefault()">
+        <span style="font-weight:600">${esc(p.nombre)}</span>
+        <span style="font-size:10px;color:#9CA3AF;margin-left:6px">${esc(p.codigo)}</span>
+      </div>`
+    ).join("");
+    dd.style.display = "block";
+    dd.querySelectorAll("div[data-nombre]").forEach(el => {
+      el.addEventListener("click", () => {
+        inp.value = el.dataset.nombre;
+        dd.style.display = "none";
+      });
+    });
+  });
+  inp.addEventListener("blur", () => setTimeout(() => { dd.style.display = "none"; }, 150));
 }
 
 // ── Bind UI ───────────────────────────────────────────────────
@@ -297,7 +364,7 @@ function _renderVista() {
 function _renderTabla(rows) {
   const v = document.getElementById("crm-view");
   if (!rows.length) {
-    v.innerHTML = `<div style="padding:48px;text-align:center;color:var(--text-muted)">Sin prospectos con estos filtros</div>`;
+    v.innerHTML = `<div style="padding:48px;text-align:center;color:var(--text-sec)">Sin prospectos con estos filtros</div>`;
     return;
   }
   v.innerHTML = `<div style="overflow-x:auto"><table class="data-table" id="crm-tabla">
@@ -310,13 +377,13 @@ function _renderTabla(rows) {
       return `<tr class="crm-row" data-id="${r.id}" style="cursor:pointer">
         <td>
           <div style="font-weight:700">${esc(r.nombre||"–")}</div>
-          <div style="font-size:11px;color:var(--text-muted)">${esc(r.giro||"")}</div>
+          <div style="font-size:11px;color:var(--text-sec)">${esc(r.giro||"")}</div>
         </td>
         <td style="font-size:12px">${esc(r.telefono||"–")}</td>
         <td style="font-size:12px">${esc(r.ingenieroAlias||"Sin asignar")}</td>
         <td><span class="badge" style="background:${e.bg};color:${e.color}">${e.label}</span></td>
-        <td style="font-size:11px;color:var(--text-muted);max-width:200px">${esc((r.notas||"").slice(0,80))}</td>
-        <td style="font-size:11px;color:var(--text-muted)">${fmtFecha(r._ts)}</td>
+        <td style="font-size:11px;color:var(--text-sec);max-width:200px">${esc((r.notas||"").slice(0,80))}</td>
+        <td style="font-size:11px;color:var(--text-sec)">${fmtFecha(r._ts)}</td>
         <td style="white-space:nowrap">
           <select class="sel-sm crm-cambiar-etapa" data-id="${r.id}" style="font-size:11px">
             ${ETAPAS.map(e2 => `<option value="${e2.id}" ${e2.id===r.etapa?"selected":""}>${e2.label}</option>`).join("")}
@@ -361,9 +428,9 @@ function _renderKanban(rows) {
         ${rows.filter(r=>r.etapa===e.id).map(r => `
           <div class="crm-card" data-id="${r.id}">
             <div style="font-weight:700;font-size:13px">${esc(r.nombre||"–")}</div>
-            <div style="font-size:11px;color:var(--text-muted)">${esc(r.giro||"")}</div>
+            <div style="font-size:11px;color:var(--text-sec)">${esc(r.giro||"")}</div>
             <div style="font-size:11px;margin-top:6px">👷 ${esc(r.ingenieroAlias||"Sin asignar")}</div>
-            <div style="font-size:10px;color:var(--text-muted);margin-top:4px">${fmtFecha(r._ts)}</div>
+            <div style="font-size:10px;color:var(--text-sec);margin-top:4px">${fmtFecha(r._ts)}</div>
           </div>`).join("")}
       </div>
     </div>`).join("")}</div>`;
@@ -395,16 +462,16 @@ function _abrirPanel(id) {
       <div><span>Registró</span><span>${esc(r.creadoPor||"–")}</span></div>
     </div>
     <div style="margin-top:16px">
-      <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px">NOTAS</div>
+      <div style="font-size:11px;font-weight:700;color:var(--text-sec);margin-bottom:6px">NOTAS</div>
       <div style="font-size:13px;white-space:pre-wrap">${esc(r.notas||"Sin notas")}</div>
     </div>
     <div style="margin-top:16px">
-      <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:8px">AGREGAR NOTA</div>
+      <div style="font-size:11px;font-weight:700;color:var(--text-sec);margin-bottom:8px">AGREGAR NOTA</div>
       <textarea class="form-input" id="crm-nota-txt" rows="2" placeholder="Seguimiento, comentarios…" style="width:100%;box-sizing:border-box"></textarea>
       <button class="btn-primary" id="crm-nota-ok" data-id="${r.id}" style="margin-top:8px;width:100%">Guardar nota</button>
     </div>
     <div style="margin-top:20px;display:flex;flex-direction:column;gap:8px">
-      <div style="font-size:11px;font-weight:700;color:var(--text-muted)">AVANZAR ETAPA</div>
+      <div style="font-size:11px;font-weight:700;color:var(--text-sec)">AVANZAR ETAPA</div>
       ${!esGanado && !esPerdido ? `
       <select class="form-input" id="crm-nueva-etapa">
         ${ETAPAS.map(e2 => `<option value="${e2.id}" ${e2.id===r.etapa?"selected":""}>${e2.label}</option>`).join("")}
