@@ -287,11 +287,32 @@ function _html() {
         </div>
       </div>
       <div style="margin-bottom:10px">
-        <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Zona / Ingeniero responsable</label>
-        <input id="cli-ubic-zona" type="text" placeholder="Alias del ingeniero responsable de esta ubicación"
+        <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Ingeniero responsable de esta ubicación</label>
+        <select id="cli-ubic-zona"
           style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
             font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
+          <option value="">— Sin asignar —</option>
+        </select>
       </div>
+
+      <!-- Flag cliente compartido -->
+      <div id="cli-ubic-compartido-wrap" style="border:1px solid var(--border);border-radius:8px;
+        padding:10px 12px;background:var(--surface-2);margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0">
+          <input type="checkbox" id="cli-ubic-compartido" style="width:15px;height:15px;cursor:pointer"
+            onchange="document.getElementById('cli-ubic-ings-extra-wrap').style.display=this.checked?'':'none'">
+          <span style="font-size:11px;font-weight:600;color:var(--text-primary)">
+            Este cliente opera en zonas de más de un ingeniero
+          </span>
+        </label>
+        <div id="cli-ubic-ings-extra-wrap" style="display:none;margin-top:8px">
+          <div style="font-size:10px;font-weight:600;color:#6B7280;margin-bottom:5px">
+            Ingenieros adicionales con acceso a este cliente:
+          </div>
+          <div id="cli-ubic-ings-extra-list" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+        </div>
+      </div>
+
       <div style="margin-bottom:10px">
         <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Dirección (se completa automáticamente)</label>
         <input id="cli-ubic-dir" type="text" readonly
@@ -392,6 +413,51 @@ function _bindUI() {
     },
 
     abrirDetalle(id) { _abrirDetalle(id); },
+    abrirEdicion(id) { _abrirFormCliente(id); },
+
+    async _selGeoResult(placeId, desc) {
+      document.getElementById("clf-geobus").value = desc;
+      document.getElementById("clf-geobus-results").style.display = "none";
+      try {
+        if (!window.google?.maps?.places) await _loadGMaps();
+        const svc = new google.maps.places.PlacesService(document.createElement("div"));
+        svc.getDetails({ placeId, fields: ["geometry","formatted_address","address_components"] }, (place, st) => {
+          if (st !== "OK" || !place?.geometry?.location) return;
+          const lat = place.geometry.location.lat();
+          const lng = place.geometry.location.lng();
+          const elLat = document.getElementById("clf-lat");
+          const elLng = document.getElementById("clf-lng");
+          if (elLat) elLat.value = lat.toFixed(7);
+          if (elLng) elLng.value = lng.toFixed(7);
+          // Rellenar campos de dirección si están vacíos
+          const comps = place.address_components || [];
+          const get = t => comps.find(c => c.types.includes(t))?.long_name || "";
+          const elCalle = document.getElementById("clf-calle");
+          const elCol   = document.getElementById("clf-colonia");
+          const elCiud  = document.getElementById("clf-ciudad");
+          const elEdo   = document.getElementById("clf-estado");
+          const elCp    = document.getElementById("clf-cp");
+          if (elCalle && !elCalle.value) elCalle.value = [get("route"), get("street_number")].filter(Boolean).join(" ");
+          if (elCol && !elCol.value)   elCol.value   = get("sublocality_level_1") || get("locality");
+          if (elCiud && !elCiud.value) elCiud.value  = get("locality") || get("administrative_area_level_2");
+          if (elEdo && !elEdo.value)   elEdo.value   = get("administrative_area_level_1");
+          if (elCp && !elCp.value)     elCp.value    = get("postal_code");
+          window.toast?.("Ubicación encontrada y coordenadas aplicadas.", "success");
+        });
+      } catch(e) { window.toast?.("Error buscando ubicación.", "error"); }
+    },
+
+    geolocalizarCliente() {
+      if (!navigator.geolocation) { window.toast?.("GPS no disponible.", "error"); return; }
+      navigator.geolocation.getCurrentPosition(pos => {
+        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+        const elLat = document.getElementById("clf-lat");
+        const elLng = document.getElementById("clf-lng");
+        if (elLat) elLat.value = lat.toFixed(7);
+        if (elLng) elLng.value = lng.toFixed(7);
+        window.toast?.("Coordenadas de tu ubicación actual aplicadas.", "success");
+      }, () => window.toast?.("No se pudo obtener la ubicación GPS.", "error"));
+    },
 
     cerrarDetalle() {
       document.getElementById("cli-modal").style.display = "none";
@@ -849,6 +915,11 @@ async function _abrirDetalle(id) {
             background:transparent;color:var(--text-sec);font-size:12px;cursor:pointer">
           Cerrar
         </button>
+        <button onclick="ClientesUI.abrirEdicion('${esc(c.id)}')"
+          style="padding:8px 18px;border:1px solid #1565C0;border-radius:6px;
+            background:transparent;color:#1565C0;font-size:12px;font-weight:700;cursor:pointer">
+          ✏️ Editar cliente
+        </button>
         <button id="cli-det-guardar" onclick="ClientesUI.guardarNota()"
           style="padding:8px 22px;border:none;border-radius:6px;
             background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
@@ -1099,7 +1170,8 @@ async function _abrirFormCliente(clienteId = null) {
   </select>`;
 
   const ESTADOS_LEGAL = ["Al corriente","En gestión","Incumplimiento","Demanda","Promesa de pago","Cancelado"];
-  const SEGMENTOS = ["Vivero","Ferretería","Agrícola","Comercial","Industrial","Otro"];
+  // Segmentos: los que ya existen en Firestore + opción para agregar nuevo
+  const SEGMENTOS = [...new Set(_clientes.map(x => x.segmento).filter(Boolean))].sort();
 
   body.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
@@ -1143,23 +1215,37 @@ async function _abrirFormCliente(clienteId = null) {
 
       <!-- Geolocalización -->
       ${_seccion("🌐 Geolocalización")}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="display:flex;gap:8px;margin-bottom:2px">
+        <input id="clf-geobus" type="text" placeholder="Busca una dirección para obtener coordenadas…"
+          style="${_inputStyle()}flex:1;margin-bottom:0">
+        <button type="button" onclick="ClientesUI.geolocalizarCliente()"
+          title="Usar mi ubicación GPS"
+          style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);
+            color:var(--text-primary);font-size:14px;cursor:pointer;white-space:nowrap;flex-shrink:0">
+          📍 Mi ubicación
+        </button>
+      </div>
+      <div id="clf-geobus-results" style="display:none;border:1px solid var(--border);border-radius:6px;
+        background:var(--surface);max-height:140px;overflow-y:auto;font-size:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
         ${_field("Latitud", `<input id="clf-lat" type="number" step="any" style="${_inputStyle()}" placeholder="18.9234" value="${esc(c.lat||'')}">`)}
         ${_field("Longitud", `<input id="clf-lng" type="number" step="any" style="${_inputStyle()}" placeholder="-99.2340" value="${esc(c.lng||'')}">`)}
-      </div>
-      <div style="font-size:11px;color:#6B7280;background:var(--surface-2);padding:8px 12px;border-radius:6px;border:1px solid var(--border)">
-        💡 Abre <a href="https://maps.google.com" target="_blank" style="color:#1565C0">Google Maps</a>,
-        haz clic derecho sobre el punto y copia las coordenadas (lat, lng).
       </div>
 
       <!-- Comercial -->
       ${_seccion("💼 Datos comerciales")}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        ${_field("Segmento / Tipo", `<select id="clf-segmento" style="${_inputStyle()}">
-          <option value="">— Seleccionar —</option>
-          ${SEGMENTOS.map(s => `<option value="${s}" ${c.segmento===s?"selected":""}>${s}</option>`).join("")}
-          ${c.segmento && !SEGMENTOS.includes(c.segmento) ? `<option value="${esc(c.segmento)}" selected>${esc(c.segmento)}</option>` : ""}
-        </select>`)}
+        ${_field("Segmento / Tipo", `
+          <select id="clf-segmento" style="${_inputStyle()}"
+            onchange="const o=document.getElementById('clf-segmento-nuevo');o.style.display=this.value==='__nuevo'?'':'none'">
+            <option value="">— Seleccionar —</option>
+            ${SEGMENTOS.map(s => `<option value="${esc(s)}" ${c.segmento===s?"selected":""}>${esc(s)}</option>`).join("")}
+            ${c.segmento && !SEGMENTOS.includes(c.segmento) ? `<option value="${esc(c.segmento)}" selected>${esc(c.segmento)}</option>` : ""}
+            <option value="__nuevo">➕ Agregar nuevo…</option>
+          </select>
+          <input id="clf-segmento-nuevo" type="text" placeholder="Nombre del nuevo segmento"
+            style="${_inputStyle()}margin-top:6px;display:none">
+        `)}
         ${_field("Ingeniero asignado", ingSelect)}
       </div>
       <div>
@@ -1237,6 +1323,45 @@ async function _abrirFormCliente(clienteId = null) {
   modal.style.display = "flex";
   document.body.style.overflow = "hidden";
   _openTrap("cli-form-modal", () => window.ClientesUI.cerrarFormCliente());
+
+  // Búsqueda de dirección con Places Autocomplete
+  _initGeoBuscador();
+}
+
+function _initGeoBuscador() {
+  const input = document.getElementById("clf-geobus");
+  const results = document.getElementById("clf-geobus-results");
+  if (!input || !results) return;
+
+  let timer;
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (!q) { results.style.display = "none"; return; }
+    timer = setTimeout(async () => {
+      if (!window.google?.maps?.places) {
+        try { await _loadGMaps(); } catch { return; }
+      }
+      const svc = new google.maps.places.AutocompleteService();
+      svc.getPlacePredictions({ input: q, language: "es" }, (preds, status) => {
+        if (status !== "OK" || !preds?.length) { results.style.display = "none"; return; }
+        results.innerHTML = preds.map(p =>
+          `<div data-pid="${esc(p.place_id)}" style="padding:8px 12px;cursor:pointer;
+            border-bottom:1px solid var(--border);color:var(--text-primary)"
+            onmouseenter="this.style.background='var(--surface-2)'"
+            onmouseleave="this.style.background=''"
+            onclick="ClientesUI._selGeoResult('${esc(p.place_id)}','${esc(p.description)}')">
+            📍 ${esc(p.description)}
+          </div>`
+        ).join("");
+        results.style.display = "block";
+      });
+    }, 350);
+  });
+  document.addEventListener("click", e => {
+    if (!results.contains(e.target) && e.target !== input)
+      results.style.display = "none";
+  }, { once: false });
 }
 
 function _inputStyle() {
@@ -1292,7 +1417,7 @@ async function _guardarFormCliente(clienteId) {
       zona:          v("clf-zona")   || null,
       lat:           parseFloat(v("clf-lat"))  || null,
       lng:           parseFloat(v("clf-lng"))  || null,
-      segmento:      v("clf-segmento")  || null,
+      segmento:      (v("clf-segmento")==="__nuevo" ? document.getElementById("clf-segmento-nuevo")?.value.trim() : v("clf-segmento")) || null,
       ingeniero:     v("clf-ingeniero") || null,
       diasVisita:    diasVisita || 0,
       compartido:    document.getElementById("clf-compartido")?.checked === true,
@@ -1435,13 +1560,38 @@ async function _abrirModalUbicacion(clienteDocId, ubicId) {
   }
 
   document.getElementById("cli-ubic-titulo").textContent = ubicId ? "Editar ubicación" : "Nueva ubicación";
-  document.getElementById("cli-ubic-tipo").value    = u.tipo    || "parcela";
+  document.getElementById("cli-ubic-tipo").value     = u.tipo    || "parcela";
   document.getElementById("cli-ubic-etiqueta").value = u.etiqueta || "";
-  document.getElementById("cli-ubic-zona").value    = u.zonaIngeniero || "";
-  document.getElementById("cli-ubic-dir").value     = u.direccionFormateada || "";
-  document.getElementById("cli-ubic-lat").value     = u.lat || "";
-  document.getElementById("cli-ubic-lng").value     = u.lng || "";
+  document.getElementById("cli-ubic-dir").value      = u.direccionFormateada || "";
+  document.getElementById("cli-ubic-lat").value      = u.lat || "";
+  document.getElementById("cli-ubic-lng").value      = u.lng || "";
   document.getElementById("cli-ubic-err").style.display = "none";
+
+  // Poblar select de ingenieros
+  const selZona = document.getElementById("cli-ubic-zona");
+  const ings = _ingenierosList.length
+    ? _ingenierosList
+    : [...new Set(_clientes.map(c => c.ingeniero).filter(Boolean))].sort();
+  selZona.innerHTML = `<option value="">— Sin asignar —</option>` +
+    ings.map(a => `<option value="${esc(a)}" ${(u.zonaIngeniero||"")==a?"selected":""}>${esc(a)}</option>`).join("");
+
+  // Poblar flag compartido + ingenieros extra
+  const clienteData = _clientes.find(x => x.id === clienteDocId) || {};
+  const chkComp = document.getElementById("cli-ubic-compartido");
+  const extWrap = document.getElementById("cli-ubic-ings-extra-wrap");
+  const extList = document.getElementById("cli-ubic-ings-extra-list");
+  chkComp.checked = clienteData.compartido || false;
+  extWrap.style.display = chkComp.checked ? "" : "none";
+  const ingPrincipal = clienteData.ingeniero || "";
+  extList.innerHTML = ings.filter(a => a !== ingPrincipal).map(alias => {
+    const checked = (clienteData.ingenierosCompartidos || []).includes(alias);
+    return `<label style="display:flex;align-items:center;gap:4px;padding:3px 9px;
+      border:1px solid var(--border);border-radius:20px;cursor:pointer;font-size:11px;
+      background:${checked?"#EFF6FF":"var(--surface)"};color:${checked?"#1565C0":"var(--text-primary)"}">
+      <input type="checkbox" class="cli-ubic-comp-chk" value="${esc(alias)}"
+        style="cursor:pointer" ${checked?"checked":""}> ${esc(alias)}
+    </label>`;
+  }).join("") || `<span style="font-size:11px;color:#9CA3AF">Sin ingenieros adicionales.</span>`;
 
   _ubicEdit.lat = u.lat || null;
   _ubicEdit.lng = u.lng || null;
@@ -1546,6 +1696,20 @@ async function _guardarUbicacion() {
 
     const alias = window.Sesion?.alias ?? "web";
     const rol   = window.Sesion?.rol   ?? "—";
+
+    // Actualizar estado compartido en el cliente padre
+    const compartido = document.getElementById("cli-ubic-compartido")?.checked || false;
+    const ingsExtra  = [...document.querySelectorAll(".cli-ubic-comp-chk:checked")].map(x => x.value);
+    await ud(d2(db, "clientes", clienteDocId), {
+      compartido,
+      ingenierosCompartidos: compartido ? ingsExtra : [],
+    }).catch(() => {});
+    // Actualizar en caché local
+    const cacheIdx = _clientes.findIndex(x => x.id === clienteDocId);
+    if (cacheIdx >= 0) {
+      _clientes[cacheIdx].compartido = compartido;
+      _clientes[cacheIdx].ingenierosCompartidos = compartido ? ingsExtra : [];
+    }
 
     if (ubicId) {
       // Edición — guardar historial de cambios
