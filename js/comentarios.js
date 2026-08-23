@@ -17,6 +17,7 @@ let _filtroTipo   = "TODOS";
 let _busqueda     = "";
 let _ultimoSnap   = null;
 let _ultimoSnapLog = null;
+let _clientesCache = []; // { id, nombre, clienteId }
 
 const TIPOS_LABEL = {
   TODOS:             "Todos",
@@ -40,6 +41,7 @@ export const ComentariosModule = {
     container.innerHTML = _html();
     _bindUI();
     _escuchar();
+    _cargarClientes();
     return () => this.destroy();
   },
   destroy() {
@@ -69,23 +71,23 @@ function _html() {
   <div style="display:flex;flex-direction:column;height:100%;overflow:hidden">
 
     <!-- Barra de herramientas -->
-    <div style="background:var(--c-surface);border-bottom:1px solid var(--c-border);
+    <div style="background:var(--surface);border-bottom:1px solid var(--border);
       padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0">
 
       <input id="com-busqueda" type="text" placeholder="🔍 Buscar cliente, alias o nota…"
         oninput="ComentariosUI.buscar(this.value)"
-        style="border:1px solid var(--c-border);border-radius:6px;padding:5px 10px;
-          font-size:12px;flex:1;min-width:160px;background:var(--c-surface2);color:var(--c-text)" />
+        style="border:1px solid var(--border);border-radius:6px;padding:5px 10px;
+          font-size:12px;flex:1;min-width:160px;background:var(--surface-2);color:var(--text-primary)" />
 
       <select id="com-alias" onchange="ComentariosUI.filtrarAlias(this.value)"
-        style="border:1px solid var(--c-border);border-radius:6px;padding:5px 8px;
-          font-size:12px;background:var(--c-surface2);color:var(--c-text)">
+        style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;
+          font-size:12px;background:var(--surface-2);color:var(--text-primary)">
         <option value="TODOS">Todos los usuarios</option>
       </select>
 
       <select id="com-tipo" onchange="ComentariosUI.filtrarTipo(this.value)"
-        style="border:1px solid var(--c-border);border-radius:6px;padding:5px 8px;
-          font-size:12px;background:var(--c-surface2);color:var(--c-text)">
+        style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;
+          font-size:12px;background:var(--surface-2);color:var(--text-primary)">
         ${Object.entries(TIPOS_LABEL).map(([k,v]) =>
           `<option value="${k}">${v}</option>`).join("")}
       </select>
@@ -103,27 +105,32 @@ function _html() {
 
       <!-- Panel de nuevo comentario (solo roles con permiso) -->
       ${_puedeEscribir() ? `
-      <div style="width:280px;flex-shrink:0;border-left:1px solid var(--c-border);
-        padding:16px;overflow-y:auto;background:var(--c-surface2)">
+      <div style="width:280px;flex-shrink:0;border-left:1px solid var(--border);
+        padding:16px;overflow-y:auto;background:var(--surface-2)">
 
-        <div style="font-size:11px;font-weight:700;color:var(--c-text);
+        <div style="font-size:11px;font-weight:700;color:var(--text-primary);
           letter-spacing:.05em;margin-bottom:12px">AGREGAR COMENTARIO</div>
 
-        <div style="margin-bottom:8px">
+        <div style="margin-bottom:8px;position:relative">
           <label style="font-size:11px;color:#9CA3AF;display:block;margin-bottom:4px">
-            Nombre / ID del cliente</label>
-          <input id="com-new-cliente" type="text" placeholder="Nombre del cliente…"
-            style="width:100%;border:1px solid var(--c-border);border-radius:6px;
-              padding:6px 8px;font-size:12px;background:var(--c-surface);color:var(--c-text);
+            Cliente</label>
+          <input id="com-new-cliente-search" type="text" placeholder="Buscar cliente por nombre o ID…"
+            autocomplete="off"
+            style="width:100%;border:1px solid var(--border);border-radius:6px;
+              padding:6px 8px;font-size:12px;background:var(--surface);color:var(--text-primary);
               box-sizing:border-box" />
+          <input id="com-new-cliente" type="hidden" value="" />
+          <div id="com-cli-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;
+            background:var(--surface);border:1px solid var(--border);border-radius:6px;
+            max-height:160px;overflow-y:auto;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
         </div>
 
         <div style="margin-bottom:8px">
           <label style="font-size:11px;color:#9CA3AF;display:block;margin-bottom:4px">
             Comentario / nota</label>
           <textarea id="com-new-texto" rows="5" placeholder="Escribe aquí el comentario o nota sobre el cliente…"
-            style="width:100%;border:1px solid var(--c-border);border-radius:6px;
-              padding:6px 8px;font-size:12px;background:var(--c-surface);color:var(--c-text);
+            style="width:100%;border:1px solid var(--border);border-radius:6px;
+              padding:6px 8px;font-size:12px;background:var(--surface);color:var(--text-primary);
               resize:vertical;box-sizing:border-box"></textarea>
         </div>
 
@@ -131,8 +138,8 @@ function _html() {
           <label style="font-size:11px;color:#9CA3AF;display:block;margin-bottom:4px">
             Categoría</label>
           <select id="com-new-categoria"
-            style="width:100%;border:1px solid var(--c-border);border-radius:6px;
-              padding:6px 8px;font-size:12px;background:var(--c-surface);color:var(--c-text)">
+            style="width:100%;border:1px solid var(--border);border-radius:6px;
+              padding:6px 8px;font-size:12px;background:var(--surface);color:var(--text-primary)">
             <option value="SEGUIMIENTO">Seguimiento</option>
             <option value="ACUERDO">Acuerdo</option>
             <option value="RIESGO">Riesgo</option>
@@ -198,6 +205,7 @@ function _bindUI() {
           timestamp:     serverTimestamp()
         });
         document.getElementById("com-new-cliente").value = "";
+        document.getElementById("com-new-cliente-search").value = "";
         document.getElementById("com-new-texto").value   = "";
         if (msgEl) { msgEl.textContent = "✓ Comentario guardado."; msgEl.style.color = "#16A34A"; }
         setTimeout(() => { if (msgEl) msgEl.textContent = ""; }, 3000);
@@ -207,6 +215,57 @@ function _bindUI() {
       }
     }
   };
+}
+
+// ── Carga base de clientes para autocompletado ────────────────
+async function _cargarClientes() {
+  try {
+    const snap = await getDocs(collection(db, "clientes"));
+    _clientesCache = snap.docs.map(d => ({
+      id:        d.id,
+      nombre:    d.data().nombre || "",
+      clienteId: d.data().clienteId || ""
+    })).filter(c => c.nombre).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    _bindClienteSearch();
+  } catch { _bindClienteSearch(); }
+}
+
+function _bindClienteSearch() {
+  const input = document.getElementById("com-new-cliente-search");
+  const hidden = document.getElementById("com-new-cliente");
+  const dropdown = document.getElementById("com-cli-dropdown");
+  if (!input || !hidden || !dropdown) return;
+
+  const show = (lista) => {
+    if (!lista.length) { dropdown.style.display = "none"; return; }
+    dropdown.innerHTML = lista.slice(0, 20).map(c =>
+      `<div data-id="${esc(c.id)}" data-nombre="${esc(c.nombre)}"
+        style="padding:7px 10px;cursor:pointer;font-size:12px;color:var(--text-primary);
+          border-bottom:1px solid var(--border)"
+        onmousedown="event.preventDefault()"
+        onclick="document.getElementById('com-new-cliente-search').value='${esc(c.nombre)}';
+          document.getElementById('com-new-cliente').value='${esc(c.nombre)}';
+          document.getElementById('com-cli-dropdown').style.display='none'">
+        <span style="font-weight:600">${esc(c.nombre)}</span>
+        ${c.clienteId ? `<span style="color:#9CA3AF;font-size:10px;margin-left:6px">${esc(c.clienteId)}</span>` : ""}
+      </div>`
+    ).join("");
+    dropdown.style.display = "block";
+  };
+
+  input.addEventListener("input", () => {
+    const q = input.value.trim().toLowerCase();
+    hidden.value = input.value.trim();
+    if (!q) { dropdown.style.display = "none"; return; }
+    show(_clientesCache.filter(c =>
+      c.nombre.toLowerCase().includes(q) || c.clienteId.toLowerCase().includes(q)
+    ));
+  });
+
+  input.addEventListener("blur", () => setTimeout(() => { dropdown.style.display = "none"; }, 150));
+  input.addEventListener("focus", () => {
+    if (input.value.trim()) input.dispatchEvent(new Event("input"));
+  });
 }
 
 // ── Listeners Firestore ───────────────────────────────────────
@@ -308,19 +367,19 @@ function _tarjeta(d) {
     : "";
 
   return `
-    <div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:10px;
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;
       padding:12px 16px;margin-bottom:8px;border-left:3px solid ${cfg.color}">
       <div style="display:flex;align-items:flex-start;gap:12px">
         <div style="font-size:20px;flex-shrink:0">${cfg.icon}</div>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px">
-            <span style="font-size:12px;font-weight:700;color:var(--c-text)">${cliente}</span>
+            <span style="font-size:12px;font-weight:700;color:var(--text-primary)">${cliente}</span>
             <span style="font-size:10px;color:#9CA3AF">·</span>
             <span style="font-size:11px;color:#6B7280">${cfg.label}</span>
             ${alertaBadge}
             ${categoria}
           </div>
-          <div style="font-size:12px;color:var(--c-text);margin-bottom:6px;line-height:1.4">${texto}</div>
+          <div style="font-size:12px;color:var(--text-primary);margin-bottom:6px;line-height:1.4">${texto}</div>
           <div style="font-size:10px;color:#9CA3AF">
             👤 ${alias} · 🕐 ${ts}
           </div>

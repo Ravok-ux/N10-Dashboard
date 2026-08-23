@@ -6,7 +6,7 @@ import { db } from "./firebase-config.js";
 import { esc } from "./app.js";
 import { Sesion } from "./auth.js";
 import {
-  collection, doc, onSnapshot, updateDoc, addDoc, getDoc,
+  collection, doc, onSnapshot, updateDoc, addDoc, getDoc, getDocs,
   query, orderBy, serverTimestamp, writeBatch, increment, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -57,9 +57,9 @@ function _html() {
 
     <!-- Header + filtros -->
     <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;
-      border-bottom:1px solid var(--c-border);flex-shrink:0;flex-wrap:wrap">
+      border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
       <div>
-        <div style="font-size:13px;font-weight:800;color:var(--c-text)">Órdenes de compra</div>
+        <div style="font-size:13px;font-weight:800;color:var(--text-primary)">Órdenes de compra</div>
         <div style="font-size:10.5px;color:#9CA3AF" id="oc-subtitle">Cargando…</div>
       </div>
       <div style="flex:1"></div>
@@ -68,7 +68,7 @@ function _html() {
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="oc-filter active" data-status=""
           style="font-size:11px;font-weight:700;border-radius:5px;padding:4px 10px;cursor:pointer;
-            border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text)">
+            border:1px solid var(--border);background:var(--surface);color:var(--text-primary)">
           Todas
         </button>
         ${statusOpts.map(s => `
@@ -89,14 +89,14 @@ function _html() {
 
     <!-- KPIs -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;flex-shrink:0;
-      border-bottom:1px solid var(--c-border)">
+      border-bottom:1px solid var(--border)">
       ${[
         ["Total OCs",    "oc-kpi-total",   "#9CA3AF"],
         ["Borradores",   "oc-kpi-bor",     "#FBBF24"],
         ["En tránsito",  "oc-kpi-env",     "#60A5FA"],
         ["Monto total",  "oc-kpi-monto",   "#4ADE80"]
       ].map(([label, id, color]) => `
-        <div style="padding:14px 20px;border-right:1px solid var(--c-border)">
+        <div style="padding:14px 20px;border-right:1px solid var(--border)">
           <div style="font-size:10px;color:#6B7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">${label}</div>
           <div id="${id}" style="font-size:20px;font-weight:800;color:${color}">–</div>
         </div>`).join("")}
@@ -116,7 +116,12 @@ function _html() {
       <div class="modal-title">Nueva orden de compra</div>
       <div class="form-group">
         <label class="form-label">Proveedor</label>
-        <input id="oc-proveedor" type="text" class="form-input" placeholder="Nombre del proveedor">
+        <input id="oc-proveedor-search" type="text" class="form-input" placeholder="Buscar o escribir proveedor…"
+          autocomplete="off" oninput="ComprasUI._filtrarProveedores(this.value)">
+        <input id="oc-proveedor" type="hidden" value="">
+        <div id="oc-prov-dropdown" style="display:none;position:absolute;left:0;right:0;
+          background:var(--surface,#1F2937);border:1px solid var(--border);border-radius:6px;
+          max-height:150px;overflow-y:auto;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,.3)"></div>
       </div>
       <div class="form-group">
         <label class="form-label">Notas / referencia</label>
@@ -177,11 +182,11 @@ function _escucharOC() {
       const sc = STATUS_COLOR[oc.status] || "#9CA3AF";
       return `
         <div onclick="ComprasUI.verDetalle('${oc.id}')"
-          style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:8px;
+          style="background:var(--surface);border:1px solid var(--border);border-radius:8px;
             padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .15s"
-          onmouseenter="this.style.borderColor='${sc}'" onmouseleave="this.style.borderColor='var(--c-border)'">
+          onmouseenter="this.style.borderColor='${sc}'" onmouseleave="this.style.borderColor='var(--border)'">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <div style="flex:1;font-size:13px;font-weight:700;color:var(--c-text)">${oc.folio || oc.id}</div>
+            <div style="flex:1;font-size:13px;font-weight:700;color:var(--text-primary)">${oc.folio || oc.id}</div>
             <div style="font-size:11px;font-weight:700;color:${sc};background:${sc}22;
               border-radius:4px;padding:2px 8px">${oc.status}</div>
           </div>
@@ -230,10 +235,10 @@ function _renderLista(el, visibles, filtroStatus) {
     const sc = STATUS_COLOR[oc.status] || "#9CA3AF";
     return `
       <div onclick="ComprasUI.verDetalle('${oc.id}')"
-        style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:8px;
+        style="background:var(--surface);border:1px solid var(--border);border-radius:8px;
           padding:12px 14px;margin-bottom:8px;cursor:pointer">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-          <div style="flex:1;font-size:13px;font-weight:700;color:var(--c-text)">${oc.folio || oc.id}</div>
+          <div style="flex:1;font-size:13px;font-weight:700;color:var(--text-primary)">${oc.folio || oc.id}</div>
           <div style="font-size:11px;font-weight:700;color:${sc};background:${sc}22;
             border-radius:4px;padding:2px 8px">${oc.status}</div>
         </div>
@@ -247,8 +252,39 @@ function _renderLista(el, visibles, filtroStatus) {
 function _bindAcciones() {
   window.ComprasUI = {
 
-    nuevaOC() {
+    async nuevaOC() {
       document.getElementById("modal-oc").classList.remove("hidden");
+      document.getElementById("oc-proveedor-search").value = "";
+      document.getElementById("oc-proveedor").value = "";
+      // Cargar proveedores únicos de OCs anteriores + colección proveedores
+      try {
+        const [snapOC, snapProv] = await Promise.all([
+          getDocs(collection(db, "ordenes_compra")),
+          getDocs(collection(db, "proveedores")).catch(() => ({ docs: [] }))
+        ]);
+        const deOC = [...new Set(snapOC.docs.map(d => d.data().proveedorNombre || d.data().proveedor).filter(Boolean))];
+        const deProv = snapProv.docs.map(d => d.data().nombre).filter(Boolean);
+        window._proveedoresList = [...new Set([...deProv, ...deOC])].sort();
+      } catch { window._proveedoresList = []; }
+    },
+
+    _filtrarProveedores(q) {
+      const search = document.getElementById("oc-proveedor-search");
+      const hidden = document.getElementById("oc-proveedor");
+      const dd = document.getElementById("oc-prov-dropdown");
+      hidden.value = search.value;
+      const lista = (window._proveedoresList || []).filter(p => p.toLowerCase().includes(q.toLowerCase()));
+      if (!q || !lista.length) { dd.style.display = "none"; return; }
+      dd.innerHTML = lista.slice(0, 15).map(p =>
+        `<div style="padding:7px 10px;cursor:pointer;font-size:12px;color:var(--text-primary,#F9FAFB);
+          border-bottom:1px solid var(--border)"
+          onmousedown="event.preventDefault()"
+          onclick="document.getElementById('oc-proveedor-search').value='${esc(p)}';
+            document.getElementById('oc-proveedor').value='${esc(p)}';
+            document.getElementById('oc-prov-dropdown').style.display='none'">${esc(p)}</div>`
+      ).join("");
+      dd.style.display = "block";
+      search.onblur = () => setTimeout(() => { dd.style.display = "none"; }, 150);
     },
 
     cerrarModal() {
@@ -312,7 +348,7 @@ function _bindAcciones() {
         ${items ? `
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:12px">
-            <thead><tr style="border-bottom:1px solid var(--c-border)">
+            <thead><tr style="border-bottom:1px solid var(--border)">
               <th style="padding:6px 8px;text-align:left;color:#6B7280;font-weight:600">Producto</th>
               <th style="padding:6px 8px;text-align:right;color:#6B7280;font-weight:600">Cant.</th>
               <th style="padding:6px 8px;text-align:right;color:#6B7280;font-weight:600">Precio unit.</th>
@@ -382,8 +418,8 @@ function _bindAcciones() {
       const items = oc.items || [];
 
       const filas = items.map((it, idx) => `
-        <tr style="border-bottom:1px solid var(--c-border)">
-          <td style="padding:8px 10px;font-size:12px;color:var(--c-text)">${esc(it.nombreProducto || it.nombre || "–")}</td>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px 10px;font-size:12px;color:var(--text-primary)">${esc(it.nombreProducto || it.nombre || "–")}</td>
           <td style="padding:8px 10px;text-align:center;font-size:12px;color:#9CA3AF">${it.cantidad} ${it.unidad || ""}</td>
           <td style="padding:8px 10px;text-align:center">
             <input type="number" min="0" step="any" data-idx="${idx}"
@@ -391,15 +427,15 @@ function _bindAcciones() {
               data-nombre="${esc(it.nombreProducto || it.nombre || '')}"
               data-costo="${it.precioUnitario || 0}"
               class="oc-rec-qty" value="${it.cantidad}"
-              style="width:80px;border:1px solid var(--c-border);border-radius:5px;
-                padding:4px 6px;font-size:12px;background:var(--c-surface);color:var(--c-text);
+              style="width:80px;border:1px solid var(--border);border-radius:5px;
+                padding:4px 6px;font-size:12px;background:var(--surface);color:var(--text-primary);
                 text-align:right">
           </td>
           <td style="padding:8px 10px;text-align:center">
             <textarea class="oc-rec-nota" data-idx="${idx}" rows="1"
               placeholder="Diferencia / merma…"
-              style="width:100%;border:1px solid var(--c-border);border-radius:5px;
-                padding:4px 6px;font-size:11px;background:var(--c-surface);color:var(--c-text);
+              style="width:100%;border:1px solid var(--border);border-radius:5px;
+                padding:4px 6px;font-size:11px;background:var(--surface);color:var(--text-primary);
                 resize:none"></textarea>
           </td>
         </tr>`).join("");
@@ -421,7 +457,7 @@ function _bindAcciones() {
           <div style="overflow-x:auto;max-height:320px;overflow-y:auto">
             <table style="width:100%;border-collapse:collapse;font-size:12px">
               <thead>
-                <tr style="background:var(--c-surface-2,#F9FAFB)">
+                <tr style="background:var(--surface-2)">
                   <th style="padding:8px 10px;text-align:left;color:#6B7280;font-weight:600">Producto</th>
                   <th style="padding:8px 10px;text-align:center;color:#6B7280;font-weight:600">OC Cant.</th>
                   <th style="padding:8px 10px;text-align:center;color:#6B7280;font-weight:600">Recibido</th>
