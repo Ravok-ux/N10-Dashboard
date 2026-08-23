@@ -37,72 +37,168 @@ export const PromocionesModule = (() => {
       ? '<button class="btn-primary" id="btnNuevaCampana">+ Nueva Campaña</button>'
       : '';
     container.innerHTML = `
-      <div class="view-header">
-        <h2>Motor de Promociones</h2>
-        ${btnNuevo}
+      <style>
+        #promo-tabs { display:flex; gap:4px; padding:4px; background:var(--surface-2);
+          border-radius:10px; width:fit-content; margin-bottom:16px; }
+        .promo-tab { padding:7px 18px; border-radius:7px; border:none; cursor:pointer;
+          font-size:12px; font-weight:600; color:var(--text-sec); background:transparent;
+          transition:background .15s, color .15s; }
+        .promo-tab.active { background:var(--surface); color:var(--text-primary);
+          box-shadow:0 1px 4px rgba(0,0,0,.12); }
+        #gridCampanas { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+        .promo-card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+          overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.06);
+          transition:box-shadow .15s, transform .15s; }
+        .promo-card:hover { box-shadow:0 4px 12px rgba(0,0,0,.12); transform:translateY(-1px); }
+        .promo-card-top { padding:14px 16px 0; }
+        .promo-card-title { font-size:14px; font-weight:800; color:var(--text-primary); margin-bottom:4px; }
+        .promo-card-tipo { font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px;
+          background:var(--surface-2); color:#60A5FA; border:1px solid var(--border);
+          display:inline-block; margin-bottom:6px; }
+        .promo-card-desc { font-size:11px; color:var(--text-sec); padding:0 16px;
+          overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:6px; }
+        .promo-card-dates { font-size:10px; color:#9CA3AF; padding:0 16px 10px;
+          border-bottom:1px solid var(--border); }
+        .promo-card-footer { display:flex; align-items:center; padding:10px 16px; gap:6px; }
+        .promo-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55);
+          z-index:1000; align-items:flex-start; justify-content:center; padding-top:40px;
+          overflow-y:auto; }
+        .promo-modal-overlay.open { display:flex; }
+        .promo-modal { background:var(--surface); border-radius:14px; padding:28px;
+          width:480px; max-width:94vw; border:1px solid var(--border);
+          margin-bottom:40px; }
+        .promo-modal-title { font-size:16px; font-weight:800; color:var(--text-primary);
+          margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; }
+        .pf-row { margin-bottom:14px; }
+        .pf-label { font-size:11px; font-weight:700; color:var(--text-sec);
+          text-transform:uppercase; letter-spacing:.05em; display:block; margin-bottom:5px; }
+        .pf-input { width:100%; padding:9px 12px; border-radius:8px;
+          border:1px solid var(--border); background:var(--surface-2);
+          color:var(--text-primary); font-size:13px; box-sizing:border-box; }
+        .pf-input:focus { outline:none; border-color:#3B82F6;
+          box-shadow:0 0 0 3px rgba(59,130,246,.15); }
+        .pf-2col { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        .promo-form-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
+      </style>
+
+      <!-- Cabecera -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:18px;font-weight:800;color:var(--text-primary)">Motor de Promociones</div>
+          <div style="font-size:11px;color:var(--text-sec);margin-top:2px">Campañas, puntos de lealtad e historial de canje</div>
+        </div>
+        ${btnNuevo ? btnNuevo.replace('class="btn-primary"',
+          'style="padding:9px 18px;border-radius:8px;border:none;background:#1565C0;color:#fff;font-size:13px;font-weight:700;cursor:pointer"') : ""}
       </div>
 
-      <div class="promo-tabs">
-        <button class="tab-btn active" data-tab="campanas">Campañas</button>
-        <button class="tab-btn" data-tab="puntos">Puntos por cliente</button>
-        <button class="tab-btn" data-tab="historial">Historial de canje</button>
+      <!-- Tabs pill -->
+      <div id="promo-tabs">
+        <button class="promo-tab active" data-tab="campanas">🎁 Campañas</button>
+        <button class="promo-tab" data-tab="puntos">⭐ Puntos por cliente</button>
+        <button class="promo-tab" data-tab="historial">📋 Historial de canje</button>
       </div>
 
       <div id="tabCampanas" class="tab-panel">
-        <div id="gridCampanas" class="cards-grid"></div>
+        <div id="gridCampanas"></div>
       </div>
 
       <div id="tabPuntos" class="tab-panel hidden">
-        <div class="filter-bar">
-          <input id="buscarCliente" class="input-search" type="text" placeholder="Buscar cliente…">
+        <div style="margin-bottom:12px">
+          <input id="buscarCliente" type="text" placeholder="Buscar cliente…"
+            style="width:100%;max-width:320px;padding:8px 12px;border-radius:8px;
+              border:1px solid var(--border);background:var(--surface);
+              color:var(--text-primary);font-size:12px;box-sizing:border-box">
         </div>
-        <div id="listaPuntos" class="tabla-wrapper">
-          <table class="tabla">
-            <thead><tr>
-              <th>Cliente</th><th>Puntos</th><th>Última actividad</th><th>Acciones</th>
-            </tr></thead>
+        <div style="overflow:auto;border-radius:10px;border:1px solid var(--border)">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead>
+              <tr style="border-bottom:2px solid var(--border)">
+                <th style="padding:9px 14px;text-align:left;font-weight:700;color:#9CA3AF;font-size:10px;text-transform:uppercase">Cliente</th>
+                <th style="padding:9px 14px;text-align:right;font-weight:700;color:#9CA3AF;font-size:10px;text-transform:uppercase">Puntos</th>
+                <th style="padding:9px 14px;text-align:left;font-weight:700;color:#9CA3AF;font-size:10px;text-transform:uppercase">Última actividad</th>
+                <th style="padding:9px 14px;text-align:center;font-weight:700;color:#9CA3AF;font-size:10px;text-transform:uppercase">Acciones</th>
+              </tr>
+            </thead>
             <tbody id="tbodyPuntos"></tbody>
           </table>
         </div>
       </div>
 
       <div id="tabHistorial" class="tab-panel hidden">
-        <div id="listaHistorial" class="tabla-wrapper">
-          <table class="tabla">
-            <thead><tr>
-              <th>Fecha</th><th>Cliente</th><th>Campaña</th><th>Puntos</th><th>Tipo</th>
-            </tr></thead>
+        <div style="overflow:auto;border-radius:10px;border:1px solid var(--border)">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead>
+              <tr style="border-bottom:2px solid var(--border)">
+                <th style="padding:9px 14px;text-align:left;font-weight:700;color:#9CA3AF;font-size:10px;text-transform:uppercase">Fecha</th>
+                <th style="padding:9px 14px;text-align:left;font-weight:700;color:#9CA3AF;font-size:10px;text-transform:uppercase">Cliente</th>
+                <th style="padding:9px 14px;text-align:left;font-weight:700;color:#9CA3AF;font-size:10px;text-transform:uppercase">Campaña</th>
+                <th style="padding:9px 14px;text-align:right;font-weight:700;color:#9CA3AF;font-size:10px;text-transform:uppercase">Puntos</th>
+                <th style="padding:9px 14px;text-align:center;font-weight:700;color:#9CA3AF;font-size:10px;text-transform:uppercase">Tipo</th>
+              </tr>
+            </thead>
             <tbody id="tbodyHistorial"></tbody>
           </table>
         </div>
       </div>
 
-      <!-- Panel lateral de campaña -->
-      <div id="panelCampana" class="side-panel hidden">
-        <div class="side-panel-header">
-          <h3 id="panelCampanaTitulo">Nueva campaña</h3>
-          <button id="cerrarPanelCampana" class="btn-icon">✕</button>
-        </div>
-        <form id="formCampana" class="side-panel-form" novalidate>
-          <label>Nombre <input name="nombre" class="input-text" required maxlength="80"></label>
-          <label>Descripción <textarea name="descripcion" class="input-text" rows="2" maxlength="300"></textarea></label>
-          <label>Tipo de promoción
-            <select name="tipo" id="selectTipoPromo" class="input-select">
-              ${Object.entries(TIPOS_PROMO).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}
-            </select>
-          </label>
-          <label>Fecha inicio <input name="fechaInicio" type="date" class="input-text" required></label>
-          <label>Fecha fin <input name="fechaFin" type="date" class="input-text" required></label>
-
-          <!-- Campos dinámicos por tipo -->
-          <div id="camposTipo"></div>
-
-          <label class="label-check"><input name="activa" type="checkbox" checked> Activa</label>
-          <div class="form-actions">
-            <button type="button" id="btnCancelarCampana" class="btn-secondary">Cancelar</button>
-            <button type="submit" class="btn-primary">Guardar</button>
+      <!-- Modal campaña (centrado) -->
+      <div id="modalCampanaOverlay" class="promo-modal-overlay">
+        <div class="promo-modal">
+          <div class="promo-modal-title">
+            <span id="panelCampanaTitulo">Nueva campaña</span>
+            <button id="cerrarPanelCampana"
+              style="background:none;border:none;font-size:18px;cursor:pointer;
+                color:var(--text-sec);padding:0;line-height:1">✕</button>
           </div>
-        </form>
+          <form id="formCampana" novalidate>
+            <div class="pf-row">
+              <label class="pf-label">Nombre *</label>
+              <input name="nombre" class="pf-input" required maxlength="80" placeholder="Ej: Campaña Temporada Maíz 2026">
+            </div>
+            <div class="pf-row">
+              <label class="pf-label">Descripción</label>
+              <textarea name="descripcion" class="pf-input" rows="2" maxlength="300"
+                style="resize:vertical" placeholder="Descripción breve de la campaña…"></textarea>
+            </div>
+            <div class="pf-row">
+              <label class="pf-label">Tipo de promoción</label>
+              <select name="tipo" id="selectTipoPromo" class="pf-input">
+                ${Object.entries(TIPOS_PROMO).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}
+              </select>
+            </div>
+            <div class="pf-2col pf-row">
+              <div>
+                <label class="pf-label">Fecha inicio *</label>
+                <input name="fechaInicio" type="date" class="pf-input" required>
+              </div>
+              <div>
+                <label class="pf-label">Fecha fin *</label>
+                <input name="fechaFin" type="date" class="pf-input" required>
+              </div>
+            </div>
+            <div id="camposTipo" class="pf-row" style="background:var(--surface-2);
+              border-radius:8px;padding:12px;border:1px solid var(--border)"></div>
+            <div class="pf-row">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;
+                font-size:13px;color:var(--text-primary)">
+                <input name="activa" type="checkbox" checked style="width:15px;height:15px">
+                Campaña activa
+              </label>
+            </div>
+            <div class="promo-form-actions">
+              <button type="button" id="btnCancelarCampana"
+                style="padding:9px 20px;border:1px solid var(--border);border-radius:8px;
+                  background:transparent;color:var(--text-sec);font-size:13px;cursor:pointer">
+                Cancelar
+              </button>
+              <button type="submit"
+                style="padding:9px 24px;border:none;border-radius:8px;
+                  background:#1565C0;color:#fff;font-size:13px;font-weight:700;cursor:pointer">
+                Guardar campaña
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
 
       <!-- Modal ajuste manual de puntos -->
@@ -140,9 +236,9 @@ export const PromocionesModule = (() => {
   // ── Tabs ──────────────────────────────────────────────────────────────
 
   function _bindTabs(container) {
-    container.querySelectorAll('.tab-btn').forEach(btn => {
+    container.querySelectorAll('.promo-tab').forEach(btn => {
       btn.addEventListener('click', () => {
-        container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        container.querySelectorAll('.promo-tab').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         container.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
         const panel = container.querySelector(`#tab${btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)}`);
@@ -243,22 +339,31 @@ export const PromocionesModule = (() => {
         const c = d.data();
         const finTs = c.fechaFinTs || 0;
         const vigente = c.activa && finTs > ahora;
-        const badge = vigente ? '<span class="badge-green">Activa</span>' : '<span class="badge-gray">Inactiva</span>';
         const tipoLabel = TIPOS_PROMO[c.tipo] || c.tipo || '—';
         const puedeEditar = _puedeConfig();
-        return `<div class="card" data-id="${esc(d.id)}">
-          <div class="card-header">
-            <span class="card-title">${esc(c.nombre)}</span>${badge}
+        return `<div class="promo-card" data-id="${esc(d.id)}">
+          <div class="promo-card-top">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px">
+              <div class="promo-card-title">${esc(c.nombre)}</div>
+              <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap;
+                background:${vigente ? '#16A34A22' : '#9CA3AF22'};color:${vigente ? '#22C55E' : '#9CA3AF'}">
+                ${vigente ? '● Activa' : '○ Inactiva'}
+              </span>
+            </div>
+            <span class="promo-card-tipo">${esc(tipoLabel)}</span>
           </div>
-          <p class="card-desc">${esc(tipoLabel)}</p>
-          <p class="card-desc" style="color:var(--color-on-surface-variant);font-size:.85em">${esc(c.descripcion || '')}</p>
-          <div class="card-meta">
-            <span>${_tsToDate(c.fechaInicioTs)} – ${_tsToDate(c.fechaFinTs)}</span>
+          <div class="promo-card-desc">${esc(c.descripcion || 'Sin descripción')}</div>
+          <div class="promo-card-dates">📅 ${_tsToDate(c.fechaInicioTs)} → ${_tsToDate(c.fechaFinTs)}</div>
+          <div class="promo-card-footer">
+            ${puedeEditar ? `<button class="btn-sm btn-edit" data-id="${esc(d.id)}"
+              style="flex:1;padding:7px;border-radius:7px;border:1px solid var(--border);
+                background:var(--surface-2);color:var(--text-sec);font-size:11px;cursor:pointer">
+              ✏️ Editar</button>
+              <button class="btn-sm btn-del" data-id="${esc(d.id)}"
+                style="padding:7px 10px;border-radius:7px;border:1px solid #FCA5A5;
+                  background:#FEF2F2;color:#EF4444;font-size:11px;cursor:pointer">
+                🗑️</button>` : ''}
           </div>
-          ${puedeEditar ? `<div class="card-actions">
-            <button class="btn-sm btn-edit" data-id="${esc(d.id)}">Editar</button>
-            <button class="btn-sm btn-del" data-id="${esc(d.id)}">Eliminar</button>
-          </div>` : ''}
         </div>`;
       }).join('');
 
@@ -280,6 +385,9 @@ export const PromocionesModule = (() => {
       _cerrarPanelCampana(container));
     container.querySelector('#btnCancelarCampana').addEventListener('click', () =>
       _cerrarPanelCampana(container));
+    container.querySelector('#modalCampanaOverlay').addEventListener('click', e => {
+      if (e.target === e.currentTarget) _cerrarPanelCampana(container);
+    });
 
     container.querySelector('#selectTipoPromo')?.addEventListener('change', e => {
       container.querySelector('#camposTipo').innerHTML = _renderCamposTipo(e.target.value);
@@ -292,7 +400,7 @@ export const PromocionesModule = (() => {
   }
 
   function _abrirPanelCampana(container, docSnap) {
-    const panel  = container.querySelector('#panelCampana');
+    const panel  = container.querySelector('#modalCampanaOverlay');
     const titulo = container.querySelector('#panelCampanaTitulo');
     const form   = container.querySelector('#formCampana');
     form.reset();
@@ -319,11 +427,11 @@ export const PromocionesModule = (() => {
     const sel = form.querySelector('[name="tipo"]');
     if (sel) sel.value = tipo;
     container.querySelector('#camposTipo').innerHTML = _renderCamposTipo(tipo, datos);
-    panel.classList.remove('hidden');
+    panel.classList.add('open');
   }
 
   function _cerrarPanelCampana(container) {
-    container.querySelector('#panelCampana').classList.add('hidden');
+    container.querySelector('#modalCampanaOverlay').classList.remove('open');
   }
 
   async function _guardarCampana(container, form) {
@@ -565,7 +673,7 @@ export const LealtadConfigModule = (() => {
   <div id="lc-tabla-wrap" style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:.9rem">
       <thead>
-        <tr style="background:var(--bg2)">
+        <tr style="background:var(--surface-2)">
           <th style="padding:.6rem .8rem;text-align:left;border-bottom:2px solid var(--border)">Tipo</th>
           <th style="padding:.6rem .8rem;text-align:left;border-bottom:2px solid var(--border)">Nombre</th>
           <th style="padding:.6rem .8rem;text-align:left;border-bottom:2px solid var(--border)">Pts / $1</th>
@@ -579,27 +687,27 @@ export const LealtadConfigModule = (() => {
   </div>
 </div>
 <div id="lc-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;justify-content:center;align-items:center">
-  <div style="background:var(--bg);border-radius:12px;padding:1.5rem;width:min(400px,95vw)">
+  <div style="background:var(--surface);border-radius:12px;padding:1.5rem;width:min(400px,95vw)">
     <h4 id="lc-modal-title" style="margin:0 0 1rem">Nueva regla de lealtad</h4>
     <label style="display:block;font-size:.82rem;font-weight:700;margin-bottom:.3rem">Tipo</label>
-    <select id="lc-tipo" style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);margin-bottom:.75rem">
+    <select id="lc-tipo" style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);margin-bottom:.75rem">
       <option value="producto">Producto específico</option>
       <option value="categoria">Categoría de productos</option>
     </select>
     <label style="display:block;font-size:.82rem;font-weight:700;margin-bottom:.3rem">ID de referencia (refId)</label>
     <input id="lc-refid" type="text" placeholder="ID del producto o nombre de categoría"
-      style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);box-sizing:border-box;margin-bottom:.75rem" />
+      style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);box-sizing:border-box;margin-bottom:.75rem" />
     <label style="display:block;font-size:.82rem;font-weight:700;margin-bottom:.3rem">Nombre descriptivo</label>
     <input id="lc-nombre" type="text" placeholder="Ej: Fertilizante Premium / Categoría Herbicidas"
-      style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);box-sizing:border-box;margin-bottom:.75rem" />
+      style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);box-sizing:border-box;margin-bottom:.75rem" />
     <label style="display:block;font-size:.82rem;font-weight:700;margin-bottom:.3rem">Puntos por cada $1</label>
     <input id="lc-puntos" type="number" min="0.01" step="0.01" value="2"
-      style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);box-sizing:border-box;margin-bottom:.75rem" />
+      style="width:100%;padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);box-sizing:border-box;margin-bottom:.75rem" />
     <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin-bottom:1rem">
       <input id="lc-activo" type="checkbox" checked /> Activo
     </label>
     <div style="display:flex;gap:.5rem;justify-content:flex-end">
-      <button id="lc-btn-cancelar" style="padding:.5rem 1rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer">Cancelar</button>
+      <button id="lc-btn-cancelar" style="padding:.5rem 1rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer">Cancelar</button>
       <button id="lc-btn-guardar" style="padding:.5rem 1rem;background:#7C3AED;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700">Guardar</button>
     </div>
   </div>

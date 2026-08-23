@@ -11,6 +11,27 @@ import {
   onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+const GMAPS_KEY = "AIzaSyCl9_ouMqIVy1RBwRqBzLU0cjGJUsLIUGE";
+let _gmapsLoaded = false;
+let _gmapsLoading = false;
+async function _loadGMaps() {
+  if (typeof google !== "undefined" && google.maps) { _gmapsLoaded = true; return; }
+  if (_gmapsLoaded) return;
+  if (_gmapsLoading) {
+    await new Promise(r => { const t = setInterval(() => { if (_gmapsLoaded) { clearInterval(t); r(); } }, 100); });
+    return;
+  }
+  _gmapsLoading = true;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&libraries=places&language=es`;
+    s.async = true; s.defer = true;
+    s.onload  = () => { _gmapsLoaded = true; resolve(); };
+    s.onerror = () => reject(new Error("Error cargando Google Maps"));
+    document.head.appendChild(s);
+  });
+}
+
 // ── Estado del módulo ──────────────────────────────────────────────────────────
 let _map = null;
 let _circles = {};          // id → google.maps.Circle
@@ -26,7 +47,7 @@ export const GeocercasModule = {
 
   mount(container) { this.render(container); },
 
-  render(container) {
+  async render(container) {
     container.innerHTML = `
       <div class="geo-shell">
         <div class="geo-header">
@@ -63,13 +84,13 @@ export const GeocercasModule = {
         .geo-card.activa { border-left:4px solid var(--accent,#3b82f6); }
         .geo-card.inactiva { opacity:.55; }
         .geo-card-name { font-weight:600; font-size:.9rem; }
-        .geo-card-meta { font-size:.78rem; color:var(--text-muted,#64748b); margin-top:3px; }
+        .geo-card-meta { font-size:.78rem; color:var(--text-sec); margin-top:3px; }
         .geo-card-actions { display:flex; gap:6px; margin-top:8px; }
         .geo-form   { padding:12px; border-top:1px solid var(--border,#e2e8f0); }
         .geo-form h3{ margin:0 0 10px; font-size:.95rem; }
         .geo-field  { margin-bottom:10px; }
         .geo-field label { display:block; font-size:.8rem; font-weight:600;
-                           margin-bottom:3px; color:var(--text-muted,#64748b); }
+                           margin-bottom:3px; color:var(--text-sec); }
         .geo-field input,.geo-field textarea,.geo-field select
                     { width:100%; padding:6px 8px; border:1px solid var(--border,#e2e8f0);
                       border-radius:6px; font-size:.88rem; box-sizing:border-box; }
@@ -81,7 +102,7 @@ export const GeocercasModule = {
         .btn-danger { background:#ef4444; color:#fff; border:none;
                       padding:5px 10px; border-radius:6px; cursor:pointer; font-size:.8rem; }
         .btn-sm     { padding:4px 10px; font-size:.78rem; }
-        .geo-radio-hint { font-size:.78rem; color:var(--text-muted,#64748b); margin-top:4px; }
+        .geo-radio-hint { font-size:.78rem; color:var(--text-sec); margin-top:4px; }
         @media(max-width:700px){
           .geo-body { flex-direction:column; }
           .geo-sidebar { width:100%; border-right:none; border-bottom:1px solid var(--border,#e2e8f0); max-height:260px; }
@@ -90,6 +111,14 @@ export const GeocercasModule = {
       </style>
     `;
 
+    try {
+      await _loadGMaps();
+    } catch(e) {
+      container.querySelector("#gMapCanvas").innerHTML =
+        `<div style="padding:40px;text-align:center;color:#EF4444">
+          ⚠️ Error cargando Google Maps. Verifica tu conexión e intenta de nuevo.</div>`;
+      return;
+    }
     _initMap(container.querySelector("#gMapCanvas"));
 
     document.getElementById("gBtnNueva").addEventListener("click", () => _abrirFormulario(null));
@@ -183,7 +212,7 @@ function _renderLista() {
   if (!lista) return;
   const todas = Object.values(_geocercas).sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
   if (todas.length === 0) {
-    lista.innerHTML = `<p style="color:var(--text-muted,#64748b);font-size:.85rem;padding:8px">
+    lista.innerHTML = `<p style="color:var(--text-sec);font-size:.85rem;padding:8px">
       Sin geocercas. Crea la primera con el botón superior.</p>`;
     return;
   }

@@ -48,44 +48,44 @@ export const MetasModule = {
         .met-header-actions { display:flex; gap:8px; align-items:center; }
         .met-select{ padding:6px 10px; border:1px solid var(--border,#e2e8f0); border-radius:6px; font-size:.88rem; }
         .met-kpis  { display:flex; gap:12px; padding:12px 16px; flex-wrap:wrap; }
-        .kpi-box   { background:var(--card-bg,#fff); border:1px solid var(--border,#e2e8f0);
+        .kpi-box   { background:var(--surface); border:1px solid var(--border,#e2e8f0);
                      border-radius:8px; padding:12px 18px; min-width:130px; }
-        .kpi-label { font-size:.75rem; color:var(--text-muted,#64748b); }
+        .kpi-label { font-size:.75rem; color:var(--text-sec); }
         .kpi-value { font-size:1.4rem; font-weight:700; margin-top:2px; }
         .met-cards { flex:1; overflow-y:auto; padding:0 16px 16px; display:grid;
                      grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; align-content:start; }
-        .met-card  { background:var(--card-bg,#fff); border:1px solid var(--border,#e2e8f0);
+        .met-card  { background:var(--surface); border:1px solid var(--border,#e2e8f0);
                      border-radius:10px; padding:14px; }
         .met-card-top { display:flex; justify-content:space-between; align-items:flex-start; }
         .met-alias { font-weight:700; font-size:.95rem; }
-        .met-periodo{ font-size:.76rem; color:var(--text-muted,#64748b); }
-        .met-tipo  { font-size:.73rem; background:var(--accent-soft,#eff6ff);
-                     color:var(--accent,#3b82f6); padding:2px 7px; border-radius:20px; font-weight:600; }
+        .met-periodo{ font-size:.76rem; color:var(--text-sec); }
+        .met-tipo  { font-size:.73rem; background:#EFF6FF;
+                     color:#1565C0; padding:2px 7px; border-radius:20px; font-weight:600; }
         .met-progress-wrap { margin-top:10px; }
         .met-progress-label{ display:flex; justify-content:space-between; font-size:.8rem; margin-bottom:4px; }
         .met-bar-bg { height:8px; background:var(--border,#e2e8f0); border-radius:4px; overflow:hidden; }
         .met-bar-fill{ height:100%; border-radius:4px; transition:width .4s;
-                       background:var(--accent,#3b82f6); }
+                       background:#1565C0; }
         .met-bar-fill.cumplida { background:#22c55e; }
         .met-bar-fill.alerta   { background:#f59e0b; }
         .met-sub-row{ display:flex; gap:10px; margin-top:8px; flex-wrap:wrap; }
-        .met-sub   { font-size:.78rem; color:var(--text-muted,#64748b); }
-        .met-sub span { font-weight:600; color:var(--text,#1e293b); }
+        .met-sub   { font-size:.78rem; color:var(--text-sec); }
+        .met-sub span { font-weight:600; color:var(--text-primary); }
         .met-actions{ display:flex; gap:6px; margin-top:10px; }
         .met-form-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4);
                             display:flex; align-items:center; justify-content:center; z-index:200; }
-        .met-form-modal { background:var(--card-bg,#fff); border-radius:12px; padding:20px;
+        .met-form-modal { background:var(--surface); border-radius:12px; padding:20px;
                           width:min(420px,95vw); max-height:90vh; overflow-y:auto; }
         .mf-title  { font-size:1rem; font-weight:700; margin:0 0 14px; }
         .mf-field  { margin-bottom:12px; }
         .mf-field label { display:block; font-size:.8rem; font-weight:600;
-                          margin-bottom:3px; color:var(--text-muted,#64748b); }
+                          margin-bottom:3px; color:var(--text-sec); }
         .mf-field input,.mf-field select { width:100%; padding:7px 9px;
           border:1px solid var(--border,#e2e8f0); border-radius:6px; font-size:.88rem; box-sizing:border-box; }
         .mf-row    { display:flex; gap:8px; }
         .mf-row .mf-field { flex:1; }
         .mf-actions{ display:flex; gap:8px; margin-top:14px; }
-        .btn-primary   { background:var(--accent,#3b82f6); color:#fff; border:none;
+        .btn-primary   { background:#1565C0; color:#fff; border:none;
                          padding:7px 14px; border-radius:6px; cursor:pointer; font-size:.88rem; }
         .btn-secondary { background:transparent; border:1px solid var(--border,#e2e8f0);
                          padding:7px 14px; border-radius:6px; cursor:pointer; font-size:.88rem; }
@@ -93,7 +93,7 @@ export const MetasModule = {
                          padding:5px 10px; border-radius:6px; cursor:pointer; font-size:.8rem; }
         .btn-sm        { padding:4px 10px; font-size:.78rem; }
         .empty-state   { text-align:center; padding:40px 16px;
-                         color:var(--text-muted,#64748b); font-size:.9rem; }
+                         color:var(--text-sec); font-size:.9rem; }
       </style>
     `;
 
@@ -105,7 +105,7 @@ export const MetasModule = {
     // Suscribirse a usuarios para lista de ingenieros
     _unsubUsuarios = onSnapshot(collection(db, "usuarios"), snap => {
       _ingenieros = snap.docs
-        .filter(d => d.data().activo !== false)
+        .filter(d => d.data().activo !== false && d.data().rol === "INGENIERO")
         .map(d => d.data().alias || d.id)
         .filter(Boolean)
         .sort();

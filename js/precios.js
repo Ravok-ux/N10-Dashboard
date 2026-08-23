@@ -6,7 +6,7 @@ import { db } from "./firebase-config.js";
 import { esc } from "./app.js";
 import { Sesion } from "./auth.js";
 import {
-  collection, query, orderBy, limit, onSnapshot, where
+  collection, query, orderBy, limit, onSnapshot, where, getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const fmtMXN = v => new Intl.NumberFormat("es-MX", { style:"currency", currency:"MXN" }).format(v || 0);
@@ -21,6 +21,7 @@ const _ROLES_PERMITIDOS = ["SUPER_ADMIN","GERENTE","ADMINISTRADOR"];
 let _unsubs = [];
 let _todos = [];
 let _busqueda = "";
+let _productosCache = [];  // [{id, nombre, codigo}]
 
 export const PreciosModule = {
   mount(container) {
@@ -35,6 +36,7 @@ export const PreciosModule = {
     }
     container.innerHTML = _html();
     document.getElementById("hp-tbody").innerHTML = window.skeleton?.(5, 5) ?? "";
+    _cargarProductos();
     _bindBusqueda();
     _escucharHistorial();
     return () => this.destroy();
@@ -59,26 +61,32 @@ function _html() {
 
     <!-- Header -->
     <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;
-      border-bottom:1px solid var(--c-border);flex-shrink:0;flex-wrap:wrap">
+      border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
       <div>
-        <div style="font-size:13px;font-weight:800;color:var(--c-text)">Historial de precios y costos</div>
+        <div style="font-size:13px;font-weight:800;color:var(--text-primary)">Historial de precios y costos</div>
         <div style="font-size:10.5px;color:#9CA3AF" id="hp-subtitle">Cargando…</div>
       </div>
       <div style="flex:1"></div>
-      <input id="hp-buscar" type="text" placeholder="Buscar producto…"
-        style="padding:6px 10px;border-radius:6px;border:1px solid var(--c-border);
-          background:var(--c-surface);color:var(--c-text);font-size:12px;width:220px">
+      <div style="position:relative;width:280px">
+        <input id="hp-buscar" type="text" placeholder="Buscar producto…" autocomplete="off"
+          style="width:100%;padding:6px 10px;border-radius:6px;border:1px solid var(--border);
+            background:var(--surface);color:var(--text-primary);font-size:12px;box-sizing:border-box">
+        <div id="hp-dd" style="display:none;position:absolute;top:100%;left:0;right:0;
+          background:var(--surface);border:1px solid var(--border);border-radius:6px;
+          box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:200;max-height:220px;overflow-y:auto;margin-top:2px">
+        </div>
+      </div>
     </div>
 
     <!-- KPIs -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;flex-shrink:0;
-      border-bottom:1px solid var(--c-border)">
+      border-bottom:1px solid var(--border)">
       ${[
         ["Cambios registrados","hp-kpi-total","#9CA3AF"],
         ["Productos afectados","hp-kpi-prods","#60A5FA"],
         ["Último cambio",      "hp-kpi-ultimo","#FBBF24"]
       ].map(([lbl,id,col]) => `
-        <div style="padding:14px 20px;border-right:1px solid var(--c-border)">
+        <div style="padding:14px 20px;border-right:1px solid var(--border)">
           <div style="font-size:10px;color:#6B7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">${lbl}</div>
           <div id="${id}" style="font-size:18px;font-weight:800;color:${col}">–</div>
         </div>`).join("")}
@@ -89,7 +97,7 @@ function _html() {
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px" id="hp-tabla">
           <thead>
-            <tr style="border-bottom:2px solid var(--c-border)">
+            <tr style="border-bottom:2px solid var(--border)">
               <th style="padding:8px;text-align:left;color:#6B7280;font-weight:600;white-space:nowrap">Producto</th>
               <th style="padding:8px;text-align:right;color:#6B7280;font-weight:600">Precio (cliente)</th>
               <th style="padding:8px;text-align:right;color:#6B7280;font-weight:600">Costo (nosotros)</th>
@@ -155,8 +163,8 @@ function _renderizar() {
       : "–";
     const margenColor = e.costoBase > 0 && e.precioBase > e.costoBase ? "#4ADE80" : "#EF4444";
     return `
-      <tr style="border-bottom:1px solid var(--c-border)">
-        <td style="padding:8px;color:var(--c-text);font-weight:600;max-width:240px;
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px;color:var(--text-primary);font-weight:600;max-width:240px;
           overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
           title="${esc(e.nombreProducto)}">${esc(e.nombreProducto || "–")}</td>
         <td style="padding:8px;text-align:right;font-weight:700;color:#4ADE80">${fmtMXN(e.precioBase)}</td>
@@ -168,15 +176,60 @@ function _renderizar() {
   }).join("");
 }
 
-// ── Búsqueda ──────────────────────────────────────────────────
+// ── Cargar productos para autocomplete ───────────────────────
+async function _cargarProductos() {
+  try {
+    const snap = await getDocs(query(collection(db, "productos"), orderBy("nombre")));
+    _productosCache = snap.docs.map(d => ({
+      id: d.id,
+      nombre: d.data().nombre || "",
+      codigo: d.data().codigo || ""
+    }));
+  } catch(e) { /* silencioso */ }
+}
+
+// ── Búsqueda con autocomplete ────────────────────────────────
 function _bindBusqueda() {
   const input = document.getElementById("hp-buscar");
-  if (!input) return;
-  let t;
+  const dd    = document.getElementById("hp-dd");
+  if (!input || !dd) return;
+
   input.addEventListener("input", () => {
-    clearTimeout(t);
-    t = setTimeout(() => { _busqueda = input.value.trim(); _renderizar(); }, 250);
+    const q = input.value.trim().toLowerCase();
+    _busqueda = input.value.trim();
+    _renderizar();
+
+    if (q.length < 2) { dd.style.display = "none"; return; }
+    const matches = _productosCache
+      .filter(p => p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q))
+      .slice(0, 12);
+    if (!matches.length) { dd.style.display = "none"; return; }
+
+    dd.innerHTML = matches.map(p =>
+      `<div data-nombre="${p.nombre.replace(/"/g,'&quot;')}"
+        style="padding:8px 12px;cursor:pointer;font-size:12px;
+          border-bottom:1px solid var(--border);color:var(--text-primary)"
+        onmouseover="this.style.background='var(--surface-2)'"
+        onmouseout="this.style.background=''"
+        onmousedown="event.preventDefault()">
+        <span style="font-weight:600">${p.nombre}</span>
+        <span style="font-size:10px;color:#9CA3AF;margin-left:6px">${p.codigo}</span>
+      </div>`
+    ).join("");
+    dd.style.display = "block";
+
+    dd.querySelectorAll("div[data-nombre]").forEach(el => {
+      el.addEventListener("click", () => {
+        input.value = el.dataset.nombre;
+        _busqueda = el.dataset.nombre;
+        dd.style.display = "none";
+        _renderizar();
+      });
+    });
   });
+
+  input.addEventListener("blur", () => setTimeout(() => { dd.style.display = "none"; }, 150));
+  document.addEventListener("keydown", e => { if (e.key === "Escape") dd.style.display = "none"; });
 }
 
 function _setText(id, val) {
