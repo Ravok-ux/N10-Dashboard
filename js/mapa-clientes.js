@@ -53,8 +53,8 @@ function colorEstado(e) {
   switch(e) {
     case "En juicio":       return "#DC2626";
     case "Promesa de pago": return "#EA580C";
-    case "Acuerdo firmado": return "#1A237E";
-    case "Irrecuperable":   return "#374151";
+    case "Acuerdo firmado": return "#818CF8";
+    case "Irrecuperable":   return "#9CA3AF";
     default:                return null; // usa color del ingeniero
   }
 }
@@ -203,7 +203,7 @@ function _construirUI(container) {
         ${ingenieros.map(a => {
           const c = colorDeIngeniero(a);
           return `<div class="mc-chip mc-chip-ing" data-ing="${a}"
-            style="border-color:${c};color:${c}">${a}</div>`;
+            style="--cc:${c};border-color:${c};color:${c}">${a}</div>`;
         }).join("")}
       </div>
 
@@ -211,9 +211,9 @@ function _construirUI(container) {
       <div id="mc-estado-chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">
         ${[["todos","Todos","#9CA3AF"],["En gestión","En gestión","#16A34A"],
            ["Promesa de pago","Promesa","#EA580C"],["En juicio","En juicio","#DC2626"],
-           ["Acuerdo firmado","Acuerdo","#1A237E"],["Irrecuperable","Irrec.","#374151"]]
+           ["Acuerdo firmado","Acuerdo","#818CF8"],["Irrecuperable","Irrec.","#9CA3AF"]]
           .map(([v,l,c]) => `<div class="mc-chip mc-chip-estado ${v==="todos"?"activo":""}"
-            data-estado="${v}" style="border-color:${c};color:${c}">${l}</div>`).join("")}
+            data-estado="${v}" style="--cc:${c};border-color:${c};color:${c}">${l}</div>`).join("")}
       </div>
 
       <div class="mc-section-title" style="margin-top:8px">🔥 Mapa de calor</div>
@@ -227,7 +227,7 @@ function _construirUI(container) {
             ${[["urgencia","Urgencia visita","#B71C1C"],["morosidad","Morosidad","#4A148C"],
                ["cobranza","Cobranza","#1B5E20"],["saldo","Saldo pendiente","#E65100"]]
               .map(([v,l,c]) => `<div class="mc-chip mc-chip-heat ${v===_calorCapa?"activo":""}"
-                data-heat="${v}" style="border-color:${c};color:${c}">${l}</div>`).join("")}
+                data-heat="${v}" style="--cc:${c};border-color:${c};color:${c}">${l}</div>`).join("")}
           </div>` : ""}
       </div>
     </div>`;
@@ -574,12 +574,12 @@ function _inyectarCSS() {
       transition:all .15s;user-select:none;white-space:nowrap;
     }
     .mc-chip.activo { color:#fff !important; }
-    .mc-chip-ing.activo    { background:currentColor; }
+    .mc-chip-ing.activo    { background:var(--cc); }
     .mc-chip-ing.mc-chip-todos { border-color:rgba(255,255,255,0.35); color:rgba(255,255,255,0.7); }
     .mc-chip-ing.mc-chip-todos.activo { background:rgba(255,255,255,0.18) !important; border-color:rgba(255,255,255,0.6) !important; color:#fff !important; }
-    .mc-chip-estado.activo { background:currentColor; }
+    .mc-chip-estado.activo { background:var(--cc); }
     .mc-chip-calor.activo  { background:#BE185D; border-color:#BE185D; color:#fff !important; }
-    .mc-chip-heat.activo   { color:#fff !important; background:currentColor; }
+    .mc-chip-heat.activo   { color:#fff !important; background:var(--cc); }
 
     #mc-buscador {
       position:absolute;top:12px;right:12px;z-index:1000;
