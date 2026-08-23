@@ -757,7 +757,7 @@ function _renderDetalle(docId) {
           ${_dfield("Impuesto",           esc(impuesto))}
           ${_dfield("Materia Prima",      p.materia_prima === true ? "Sí" : "No")}
           ${_dfield("Creado por",         esc(p.creadoPor || "–"))}
-          ${_dfield("Modificado por",     esc(p.modificadoPor || "–"))}
+          ${_dfield("Modificado por",     esc(p.modificadoPor || "–") + (p.modificadoEn?.toDate ? ` <span style="font-size:10px;color:#9CA3AF;font-weight:400">· ${p.modificadoEn.toDate().toLocaleString("es-MX",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</span>` : ""))}
         </div>
         ${p.descripcion ? `
           <div style="margin-top:20px">

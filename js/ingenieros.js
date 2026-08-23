@@ -86,7 +86,7 @@ function _html() {
       <button onclick="IngenierosUI.abrirAlta()"
         style="padding:6px 14px;border-radius:6px;border:none;background:#1B5E20;
           color:#fff;font-size:12px;font-weight:700;cursor:pointer">
-        + Nuevo ingeniero
+        + Nuevo staff
       </button>
     </div>
 

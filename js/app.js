@@ -420,7 +420,7 @@ function _navigate(viewId) {
 
   // Breadcrumb
   const bc = { dashboard:"Dashboard", mapa:"Mapa en vivo", mapa_clientes:"Mapa de Clientes", feed:"Feed en vivo",
-    ingenieros:"Ingenieros", pedidos:"Pedidos", remisiones:"Remisiones",
+    ingenieros:"Staff operativo", pedidos:"Pedidos", remisiones:"Remisiones",
     cobranza:"Cobranza", usuarios:"Usuarios y flags", reportes:"Reportes",
     comisiones:"Comisiones", compras:"Órdenes de compra", proveedores:"Proveedores", kardex:"Kardex",
     cartera:"Cartera vencida", visitas:"Visitas", precios:"Precios y costos", config:"Config. tickets",
@@ -545,7 +545,7 @@ function _initGlobalSearch() {
     { view:"dashboard",        icon:"📊", label:"Dashboard",               kw:"dashboard resumen dia ventas kpis" },
     { view:"pedidos",          icon:"📋", label:"Pedidos",                  kw:"pedidos ordenes folio borrador confirmado" },
     { view:"clientes",         icon:"🏢", label:"Clientes",                 kw:"clientes empresas semaforo credito" },
-    { view:"ingenieros",       icon:"👤", label:"Ingenieros",               kw:"ingenieros vendedores campo representantes" },
+    { view:"ingenieros",       icon:"👤", label:"Staff operativo",           kw:"ingenieros vendedores recuperadores campo representantes staff" },
     { view:"asignaciones",     icon:"🔄", label:"Asignaciones",             kw:"asignaciones traspaso reasignar clientes zonas rutas ingeniero" },
     { view:"remisiones",       icon:"📄", label:"Remisiones",               kw:"remisiones credito notas facturas" },
     { view:"cobranza",         icon:"💰", label:"Cobranza",                 kw:"cobranza cobros abonos pagos" },

@@ -28,80 +28,190 @@ export const SegmentoPrecioModule = (() => {
 
   function init(container) {
     container.innerHTML = `
-      <div class="view-header">
-        <h2>Precios por Segmento</h2>
-        <button class="btn-primary" id="btnNuevoSegmento">+ Nuevo segmento</button>
+      <style>
+        #seg-tabs { display:flex; gap:4px; padding:4px; background:var(--surface-2);
+          border-radius:10px; width:fit-content; margin-bottom:16px; }
+        .seg-tab { padding:7px 18px; border-radius:7px; border:none; cursor:pointer;
+          font-size:12px; font-weight:600; color:var(--text-sec); background:transparent;
+          transition:background .15s, color .15s; }
+        .seg-tab.active { background:var(--surface); color:var(--text-primary);
+          box-shadow:0 1px 4px rgba(0,0,0,.12); }
+        #seg-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
+        .seg-card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+          overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,.06);
+          transition:box-shadow .15s, transform .15s; }
+        .seg-card:hover { box-shadow:0 4px 12px rgba(0,0,0,.12); transform:translateY(-1px); }
+        .seg-card-accent { height:4px; }
+        .seg-card-body { padding:14px 16px; }
+        .seg-card-name { font-size:14px; font-weight:800; color:var(--text-primary); margin-bottom:3px; }
+        .seg-card-desc { font-size:11px; color:var(--text-sec); margin-bottom:10px; min-height:16px;
+          overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .seg-card-meta { display:flex; gap:10px; margin-bottom:12px; }
+        .seg-card-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; }
+        .seg-card-actions { display:flex; gap:6px; }
+        .seg-card-actions button { flex:1; padding:6px 0; border-radius:7px; font-size:11px;
+          font-weight:600; cursor:pointer; border:1px solid var(--border);
+          background:var(--surface-2); color:var(--text-sec); transition:background .12s; }
+        .seg-card-actions button:hover { background:var(--border); }
+        .seg-card-actions .btn-precios { background:#EFF6FF; color:#1E40AF;
+          border-color:#BFDBFE; }
+        [data-theme="dark"] .seg-card-actions .btn-precios { background:#1E3A5F;
+          color:#93C5FD; border-color:#1E40AF; }
+        .matriz-table { width:100%; border-collapse:collapse; font-size:12px; }
+        .matriz-table th { position:sticky; top:0; background:var(--surface);
+          padding:9px 12px; text-align:left; font-weight:700; color:#9CA3AF;
+          font-size:10px; text-transform:uppercase; letter-spacing:.06em;
+          border-bottom:2px solid var(--border); z-index:1; }
+        .matriz-table td { padding:7px 12px; border-bottom:1px solid var(--border); }
+        .matriz-table tr:hover td { background:var(--surface-2); }
+        .var-pos { color:#22C55E; font-size:10px; font-weight:700; }
+        .var-neg { color:#F87171; font-size:10px; font-weight:700; }
+        .seg-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55);
+          z-index:1000; align-items:center; justify-content:center; }
+        .seg-modal-overlay.open { display:flex; }
+        .seg-modal { background:var(--surface); border-radius:14px; padding:28px;
+          width:400px; max-width:94vw; border:1px solid var(--border); }
+        .seg-modal-title { font-size:15px; font-weight:800; color:var(--text-primary); margin-bottom:20px; }
+        .seg-form-row { margin-bottom:14px; }
+        .seg-form-label { font-size:11px; font-weight:700; color:var(--text-sec);
+          text-transform:uppercase; letter-spacing:.05em; display:block; margin-bottom:5px; }
+        .seg-form-input { width:100%; padding:9px 12px; border-radius:8px;
+          border:1px solid var(--border); background:var(--surface-2);
+          color:var(--text-primary); font-size:13px; box-sizing:border-box; }
+        .seg-form-input:focus { outline:none; border-color:#3B82F6;
+          box-shadow:0 0 0 3px rgba(59,130,246,.15); }
+        .seg-color-row { display:flex; align-items:center; gap:10px; }
+        .seg-color-preview { width:32px; height:32px; border-radius:8px; border:1px solid var(--border);
+          flex-shrink:0; transition:background .1s; }
+        .seg-form-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
+        .cli-seg-search { width:100%; padding:8px 12px; border-radius:8px;
+          border:1px solid var(--border); background:var(--surface-2);
+          color:var(--text-primary); font-size:12px; box-sizing:border-box; margin-bottom:12px; }
+      </style>
+
+      <!-- Cabecera -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:18px;font-weight:800;color:var(--text-primary)">Precios por Segmento</div>
+          <div style="font-size:11px;color:var(--text-sec);margin-top:2px">Catálogo de segmentos y precios diferenciados por cliente</div>
+        </div>
+        ${toolbarHTML("Seg")}
+        <button id="btnNuevoSegmento"
+          style="padding:9px 18px;border-radius:8px;border:none;background:#1565C0;
+            color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">
+          + Nuevo segmento
+        </button>
       </div>
 
-      ${toolbarHTML("Seg")}
-
-      <div class="promo-tabs">
-        <button class="tab-btn active" data-tab="segmentos">Segmentos</button>
-        <button class="tab-btn" data-tab="matriz">Matriz de precios</button>
-        <button class="tab-btn" data-tab="clientes">Clientes por segmento</button>
+      <!-- Tabs pill -->
+      <div id="seg-tabs">
+        <button class="seg-tab active" data-tab="segmentos">🏷️ Segmentos</button>
+        <button class="seg-tab" data-tab="matriz">💲 Matriz de precios</button>
+        <button class="seg-tab" data-tab="clientes">👥 Clientes</button>
       </div>
 
       <!-- Tab segmentos -->
       <div id="tabSegmentos" class="tab-panel">
-        <div id="gridSegmentos" class="cards-grid"></div>
+        <div id="gridSegmentos"></div>
       </div>
 
       <!-- Tab matriz de precios -->
       <div id="tabMatriz" class="tab-panel hidden">
-        <div class="filter-bar">
-          <label>Segmento
-            <select id="selectSegmentoMatriz" class="input-select">
-              <option value="">— selecciona —</option>
-            </select>
-          </label>
-          <button class="btn-primary" id="btnGuardarMatriz">Guardar cambios</button>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+          <select id="selectSegmentoMatriz"
+            style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);
+              background:var(--surface);color:var(--text-primary);font-size:12px;min-width:180px">
+            <option value="">— Seleccionar segmento —</option>
+          </select>
+          <button id="btnGuardarMatriz"
+            style="padding:8px 18px;border-radius:8px;border:none;background:#1565C0;
+              color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+            💾 Guardar cambios
+          </button>
         </div>
-        <div id="tablaMatrizWrapper" class="tabla-wrapper">
-          <table class="tabla" id="tablaMatriz">
+        <div style="overflow:auto;max-height:calc(100vh - 280px);border-radius:10px;
+          border:1px solid var(--border)">
+          <table class="matriz-table" id="tablaMatriz">
             <thead><tr>
-              <th>ID Pretoriano</th><th>Producto</th><th>Precio base</th>
-              <th>Precio segmento</th><th>Activo</th>
+              <th>ID</th><th>Producto</th><th>Precio base</th>
+              <th>Precio segmento</th><th>Variación</th><th>Activo</th>
             </tr></thead>
-            <tbody id="tbodyMatriz"></tbody>
+            <tbody id="tbodyMatriz">
+              <tr><td colspan="6" style="padding:30px;text-align:center;color:#9CA3AF">
+                Selecciona un segmento para ver la matriz de precios.</td></tr>
+            </tbody>
           </table>
         </div>
       </div>
 
       <!-- Tab clientes -->
       <div id="tabClientes" class="tab-panel hidden">
-        <div class="filter-bar">
-          <label>Segmento
-            <select id="selectSegmentoCliente" class="input-select">
-              <option value="">— selecciona —</option>
-            </select>
-          </label>
+        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+          <select id="selectSegmentoCliente"
+            style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);
+              background:var(--surface);color:var(--text-primary);font-size:12px;min-width:180px">
+            <option value="">— Seleccionar segmento —</option>
+          </select>
+          <input id="seg-cli-buscar" type="text" placeholder="Buscar cliente…" class="cli-seg-search"
+            style="flex:1;margin-bottom:0">
         </div>
-        <div id="listaClientesSegmento" class="tabla-wrapper">
-          <table class="tabla">
-            <thead><tr><th>Cliente</th><th>Alias vendedor</th><th>Segmento actual</th><th>Acciones</th></tr></thead>
-            <tbody id="tbodyClientesSegmento"></tbody>
+        <div style="overflow:auto;max-height:calc(100vh - 280px);border-radius:10px;
+          border:1px solid var(--border)">
+          <table class="matriz-table">
+            <thead><tr>
+              <th>Cliente</th><th>Vendedor</th><th>Segmento actual</th><th>Cambiar segmento</th>
+            </tr></thead>
+            <tbody id="tbodyClientesSegmento">
+              <tr><td colspan="4" style="padding:30px;text-align:center;color:#9CA3AF">
+                Selecciona un segmento.</td></tr>
+            </tbody>
           </table>
         </div>
       </div>
 
-      <!-- Panel lateral de segmento -->
-      <div id="panelSegmento" class="side-panel hidden">
-        <div class="side-panel-header">
-          <h3 id="panelSegmentoTitulo">Nuevo segmento</h3>
-          <button id="cerrarPanelSegmento" class="btn-icon">✕</button>
+      <!-- Modal segmento (centrado) -->
+      <div id="modalSegmentoOverlay" class="seg-modal-overlay">
+        <div class="seg-modal">
+          <div class="seg-modal-title" id="panelSegmentoTitulo">Nuevo segmento</div>
+          <form id="formSegmento" novalidate>
+            <div class="seg-form-row">
+              <label class="seg-form-label">Nombre *</label>
+              <input name="nombre" class="seg-form-input" required maxlength="60" placeholder="Ej: Distribuidor Premium">
+            </div>
+            <div class="seg-form-row">
+              <label class="seg-form-label">Descripción</label>
+              <textarea name="descripcion" class="seg-form-input" rows="2" maxlength="200"
+                placeholder="Descripción breve del segmento…" style="resize:vertical"></textarea>
+            </div>
+            <div class="seg-form-row">
+              <label class="seg-form-label">Color identificador</label>
+              <div class="seg-color-row">
+                <div class="seg-color-preview" id="segColorPreview" style="background:#3B82F6"></div>
+                <input name="color" type="color" value="#3B82F6"
+                  style="width:80px;height:36px;border-radius:8px;border:1px solid var(--border);cursor:pointer;padding:2px"
+                  oninput="document.getElementById('segColorPreview').style.background=this.value">
+                <span style="font-size:11px;color:var(--text-sec)">Aparece en cards y chips</span>
+              </div>
+            </div>
+            <div class="seg-form-row">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+                <input name="activo" type="checkbox" checked style="width:15px;height:15px"> Segmento activo
+              </label>
+            </div>
+            <div class="seg-form-actions">
+              <button type="button" id="btnCancelarSegmento"
+                style="padding:9px 20px;border:1px solid var(--border);border-radius:8px;
+                  background:transparent;color:var(--text-sec);font-size:13px;cursor:pointer">
+                Cancelar
+              </button>
+              <button type="submit"
+                style="padding:9px 24px;border:none;border-radius:8px;
+                  background:#1565C0;color:#fff;font-size:13px;font-weight:700;cursor:pointer">
+                Guardar
+              </button>
+            </div>
+          </form>
         </div>
-        <form id="formSegmento" class="side-panel-form" novalidate>
-          <label>Nombre <input name="nombre" class="input-text" required maxlength="60"></label>
-          <label>Descripción <textarea name="descripcion" class="input-text" rows="2" maxlength="200"></textarea></label>
-          <label>Color
-            <input name="color" type="color" value="#3B82F6">
-          </label>
-          <label class="label-check"><input name="activo" type="checkbox" checked> Activo</label>
-          <div class="form-actions">
-            <button type="button" id="btnCancelarSegmento" class="btn-secondary">Cancelar</button>
-            <button type="submit" class="btn-primary">Guardar</button>
-          </div>
-        </form>
       </div>
     `;
 
@@ -115,9 +225,9 @@ export const SegmentoPrecioModule = (() => {
   // ── Tabs ──────────────────────────────────────────────────────────────
 
   function _bindTabs(container) {
-    container.querySelectorAll('.tab-btn').forEach(btn => {
+    container.querySelectorAll('.seg-tab').forEach(btn => {
       btn.addEventListener('click', () => {
-        container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        container.querySelectorAll('.seg-tab').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         container.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
         const key = btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1);
@@ -141,25 +251,30 @@ export const SegmentoPrecioModule = (() => {
   function _renderGridSegmentos(container, docs) {
     const grid = container.querySelector('#gridSegmentos');
     if (!docs.length) {
-      grid.innerHTML = '<p class="empty-msg">Sin segmentos. Crea el primero.</p>';
+      grid.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-sec);
+        grid-column:1/-1;font-size:13px">Sin segmentos. Crea el primero con "+ Nuevo segmento".</div>`;
       return;
     }
     grid.innerHTML = docs.map(d => {
       const s = d.data();
-      const activo = s.activo !== false ? '<span class="badge-green">Activo</span>' : '<span class="badge-gray">Inactivo</span>';
       const color  = s.color || '#3B82F6';
-      return `<div class="card" data-id="${esc(d.id)}">
-        <div class="card-header">
-          <span class="color-dot" style="background:${esc(color)}"></span>
-          <span class="card-title">${esc(s.nombre)}</span>
-          ${activo}
-        </div>
-        <p class="card-desc">${esc(s.descripcion || '')}</p>
-        <div class="card-actions">
-          <button class="btn-sm btn-edit" data-id="${esc(d.id)}">Editar</button>
-          <button class="btn-sm btn-precios" data-id="${esc(d.id)}" title="Ver y editar precios de este segmento"
-            style="background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE">💲 Precios</button>
-          <button class="btn-sm btn-del" data-id="${esc(d.id)}">Eliminar</button>
+      const activo = s.activo !== false;
+      return `<div class="seg-card" data-id="${esc(d.id)}">
+        <div class="seg-card-accent" style="background:${esc(color)}"></div>
+        <div class="seg-card-body">
+          <div class="seg-card-name">${esc(s.nombre)}</div>
+          <div class="seg-card-desc">${esc(s.descripcion || 'Sin descripción')}</div>
+          <div class="seg-card-meta">
+            <span class="seg-card-badge" style="background:${activo ? color + '22' : '#9CA3AF22'};
+              color:${activo ? color : '#9CA3AF'}">
+              ${activo ? '● Activo' : '○ Inactivo'}
+            </span>
+          </div>
+          <div class="seg-card-actions">
+            <button class="btn-edit" data-id="${esc(d.id)}">✏️ Editar</button>
+            <button class="btn-precios seg-card-actions" data-id="${esc(d.id)}">💲 Precios</button>
+            <button class="btn-del" data-id="${esc(d.id)}">🗑️</button>
+          </div>
         </div>
       </div>`;
     }).join('');
@@ -168,13 +283,11 @@ export const SegmentoPrecioModule = (() => {
       btn.addEventListener('click', () => _abrirPanelSegmento(container, docs.find(d => d.id === btn.dataset.id))));
     grid.querySelectorAll('.btn-precios').forEach(btn =>
       btn.addEventListener('click', () => {
-        // Activar tab Matriz
-        container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        container.querySelectorAll('.seg-tab').forEach(b => b.classList.remove('active'));
         container.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
-        const tabBtn = [...container.querySelectorAll('.tab-btn')].find(b => b.dataset.tab === 'matriz');
+        const tabBtn = [...container.querySelectorAll('.seg-tab')].find(b => b.dataset.tab === 'matriz');
         if (tabBtn) tabBtn.classList.add('active');
         container.querySelector('#tabMatriz')?.classList.remove('hidden');
-        // Preseleccionar segmento
         const sel = container.querySelector('#selectSegmentoMatriz');
         if (sel) { sel.value = btn.dataset.id; sel.dispatchEvent(new Event('change')); }
       }));
@@ -198,20 +311,28 @@ export const SegmentoPrecioModule = (() => {
   function _bindSegmentos(container) {
     container.querySelector('#btnNuevoSegmento').addEventListener('click', () =>
       _abrirPanelSegmento(container, null));
-    container.querySelector('#cerrarPanelSegmento').addEventListener('click', () =>
-      container.querySelector('#panelSegmento').classList.add('hidden'));
     container.querySelector('#btnCancelarSegmento').addEventListener('click', () =>
-      container.querySelector('#panelSegmento').classList.add('hidden'));
+      container.querySelector('#modalSegmentoOverlay').classList.remove('open'));
+    container.querySelector('#modalSegmentoOverlay').addEventListener('click', e => {
+      if (e.target === e.currentTarget)
+        e.currentTarget.classList.remove('open');
+    });
     container.querySelector('#formSegmento').addEventListener('submit', async e => {
       e.preventDefault();
       await _guardarSegmento(container, e.target);
     });
+    container.querySelector('#seg-cli-buscar')?.addEventListener('input', e => {
+      const q = e.target.value.toLowerCase();
+      container.querySelectorAll('#tbodyClientesSegmento tr[data-nombre]').forEach(tr => {
+        tr.style.display = !q || tr.dataset.nombre.toLowerCase().includes(q) ? '' : 'none';
+      });
+    });
   }
 
   function _abrirPanelSegmento(container, docSnap) {
-    const panel  = container.querySelector('#panelSegmento');
-    const titulo = container.querySelector('#panelSegmentoTitulo');
-    const form   = container.querySelector('#formSegmento');
+    const overlay = container.querySelector('#modalSegmentoOverlay');
+    const titulo  = container.querySelector('#panelSegmentoTitulo');
+    const form    = container.querySelector('#formSegmento');
     form.reset();
     delete form.dataset.editId;
 
@@ -223,10 +344,13 @@ export const SegmentoPrecioModule = (() => {
       form.color.value       = s.color || '#3B82F6';
       form.activo.checked    = s.activo !== false;
       form.dataset.editId    = docSnap.id;
+      document.getElementById('segColorPreview').style.background = s.color || '#3B82F6';
     } else {
       titulo.textContent = 'Nuevo segmento';
+      form.color.value = '#3B82F6';
+      document.getElementById('segColorPreview').style.background = '#3B82F6';
     }
-    panel.classList.remove('hidden');
+    overlay.classList.add('open');
   }
 
   async function _guardarSegmento(container, form) {
@@ -248,7 +372,7 @@ export const SegmentoPrecioModule = (() => {
         datos.creadoEn = serverTimestamp();
         await addDoc(collection(db, 'segmentos'), datos);
       }
-      container.querySelector('#panelSegmento').classList.add('hidden');
+      container.querySelector('#modalSegmentoOverlay').classList.remove('open');
     } catch (err) {
       window.toast?.("Error al guardar: " + err.message, "error");
     }
@@ -310,15 +434,41 @@ export const SegmentoPrecioModule = (() => {
         const prev = preciosMap[p.idPretoriano] || {};
         const precio  = prev.precio ?? '';
         const activo  = prev.activo !== false;
+        const base    = p.precioBase ?? p.precio_base ?? null;
+        const varHtml = (precio !== '' && base != null && base > 0)
+          ? (() => {
+              const pct = ((parseFloat(precio) - base) / base * 100);
+              const cls = pct >= 0 ? 'var-pos' : 'var-neg';
+              return `<span class="${cls}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</span>`;
+            })()
+          : '<span style="color:#9CA3AF;font-size:10px">—</span>';
         return `<tr data-idpretoriano="${esc(String(p.idPretoriano))}"
                     data-docid="${esc(prev.docId || '')}"
-                    data-nombre="${esc(p.nombre)}">
-          <td>${esc(String(p.idPretoriano))}</td>
-          <td>${esc(p.nombre)}</td>
-          <td class="num">${esc(p.precioBase != null ? '$' + p.precioBase.toFixed(2) : '—')}</td>
-          <td><input type="number" class="input-precio" min="0" step="0.01"
-               value="${esc(String(precio))}" placeholder="Sin precio"></td>
-          <td><input type="checkbox" class="chk-activo" ${activo ? 'checked' : ''}></td>
+                    data-nombre="${esc(p.nombre)}"
+                    data-base="${esc(String(base ?? ''))}">
+          <td style="font-family:monospace;color:#9CA3AF;font-size:11px">${esc(String(p.idPretoriano))}</td>
+          <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+            font-weight:600;color:var(--text-primary)">${esc(p.nombre)}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;color:#9CA3AF">
+            ${base != null ? '$' + base.toFixed(2) : '—'}</td>
+          <td style="text-align:right"><input type="number" class="input-precio" min="0" step="0.01"
+               value="${esc(String(precio))}" placeholder="Sin precio"
+               style="width:110px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);
+                 background:var(--surface-2);color:var(--text-primary);font-size:12px;
+                 text-align:right;font-variant-numeric:tabular-nums"
+               oninput="(function(inp){
+                 const base=${base != null ? base : 0};
+                 const tr=inp.closest('tr');
+                 const v=parseFloat(inp.value);
+                 const el=tr.querySelector('.var-cell');
+                 if(el&&base>0&&!isNaN(v)){
+                   const pct=((v-base)/base*100);
+                   el.innerHTML='<span class=\\''+( pct>=0?'var-pos':'var-neg')+'\\'>'+(pct>=0?'+':'')+pct.toFixed(1)+'%</span>';
+                 } else if(el){el.innerHTML='<span style=\\"color:#9CA3AF;font-size:10px\\">—</span>';}
+               })(this)">
+          </td>
+          <td class="var-cell" style="text-align:center">${varHtml}</td>
+          <td style="text-align:center"><input type="checkbox" class="chk-activo" ${activo ? 'checked' : ''}></td>
         </tr>`;
       }).join('');
     } catch (err) {
@@ -395,10 +545,11 @@ export const SegmentoPrecioModule = (() => {
 
       tbody.innerHTML = snap.docs.map(d => {
         const c = d.data();
-        return `<tr>
-          <td>${esc(c.nombre || d.id)}</td>
-          <td>${esc(c.aliasVendedor || '—')}</td>
-          <td>${esc(c.segmentoId || '—')}</td>
+        return `<tr data-nombre="${esc((c.nombre || d.id).toLowerCase())}">
+          <td style="font-weight:600;color:var(--text-primary)">${esc(c.nombre || d.id)}</td>
+          <td style="color:#9CA3AF">${esc(c.aliasVendedor || '—')}</td>
+          <td><span style="font-size:10px;padding:2px 8px;border-radius:6px;
+            background:var(--surface-2);border:1px solid var(--border)">${esc(c.segmentoId || '—')}</span></td>
           <td>
             <select class="sel-segmento input-select-sm" data-cid="${esc(d.id)}">
               <option value="">Sin segmento</option>
