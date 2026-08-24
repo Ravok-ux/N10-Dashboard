@@ -9,6 +9,10 @@ firebase-debug.log
 # Cuenta de servicio Firebase — NUNCA debe estar en el repo
 serviceAccount*.json
 *serviceAccount*.json
+sa.json
+
+# Firebase hosting cache (auto-generado)
+.firebase/
 
 # Carpeta de backups locales
 backups/
