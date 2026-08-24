@@ -31,7 +31,7 @@ let _usuarios   = [];
 export const RhModule = {
   mount(container) {
     if (!_puedeVer()) {
-      container.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted)">
+      container.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-sec)">
         Acceso restringido a administradores y gerentes.</div>`;
       return;
     }
@@ -88,8 +88,12 @@ function _activarTab(tab) {
 
 // ── Cargar lista de usuarios ──────────────────────────────────
 async function _cargarUsuarios() {
-  const snap = await getDocs(query(collection(db, "usuarios"), where("activo", "==", true), orderBy("alias")));
-  _usuarios  = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  try {
+    const snap = await getDocs(query(collection(db, "usuarios"), where("activo", "==", true), orderBy("alias")));
+    _usuarios = snap.docs
+      .filter(d => ["INGENIERO","RECUPERADOR"].includes(d.data().rol))
+      .map(d => ({ uid: d.id, ...d.data() }));
+  } catch(e) { _usuarios = []; }
 }
 
 function _optUsuarios(extraOpt = "") {
@@ -246,7 +250,7 @@ function _renderAsistencia(rows) {
   const tbody = document.getElementById("asi-body");
   if (!tbody) return;
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text-muted)">Sin registros</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text-sec)">Sin registros</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(r => {
@@ -259,7 +263,7 @@ function _renderAsistencia(rows) {
       <td>${r.checkOut || "–"}</td>
       <td>${horas}</td>
       <td><span class="badge ${STATUS_CLS[r.status] || "badge-gray"}">${esc(r.status)}</span></td>
-      <td style="color:var(--text-muted);font-size:12px">${esc(r.notas || "")}</td>
+      <td style="color:var(--text-sec);font-size:12px">${esc(r.notas || "")}</td>
     </tr>`;
   }).join("");
 }
@@ -323,7 +327,7 @@ function _montarVacaciones() {
         </tr>
       </thead>
       <tbody id="vac-body">
-        <tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text-muted)">Cargando…</td></tr>
+        <tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text-sec)">Cargando…</td></tr>
       </tbody>
     </table>
 
@@ -392,7 +396,7 @@ function _renderVacaciones(rows) {
   const tbody = document.getElementById("vac-body");
   if (!tbody) return;
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text-muted)">Sin solicitudes</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text-sec)">Sin solicitudes</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(r => {
@@ -401,15 +405,15 @@ function _renderVacaciones(rows) {
     const accBtn = puedeApr && r.status === "PENDIENTE"
       ? `<button class="btn-sm btn-green" data-id="${r.id}" data-act="apr">✓</button>
          <button class="btn-sm btn-red"   data-id="${r.id}" data-act="rec" style="margin-left:4px">✗</button>`
-      : `<span style="font-size:11px;color:var(--text-muted)">${r.aprobadaPor || r.rechazadaPor || "—"}</span>`;
+      : `<span style="font-size:11px;color:var(--text-sec)">${r.aprobadaPor || r.rechazadaPor || "—"}</span>`;
     return `<tr>
       <td><b>${esc(r.alias || "–")}</b></td>
       <td>${fmtFecha(r.desdeTs)}</td>
       <td>${fmtFecha(r.hastaTs)}</td>
       <td style="text-align:center">${dias}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${esc(r.motivo || "–")}</td>
+      <td style="font-size:12px;color:var(--text-sec)">${esc(r.motivo || "–")}</td>
       <td><span class="badge ${ST[r.status] || "badge-gray"}">${esc(r.status)}</span></td>
-      <td style="font-size:11px;color:var(--text-muted)">${fmtFecha(r._ts)}</td>
+      <td style="font-size:11px;color:var(--text-sec)">${fmtFecha(r._ts)}</td>
       ${puedeApr ? `<td class="td-actions">${accBtn}</td>` : ""}
     </tr>`;
   }).join("");
@@ -509,7 +513,7 @@ function _montarAnticipos() {
         </tr>
       </thead>
       <tbody id="ant-body">
-        <tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-muted)">Cargando…</td></tr>
+        <tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-sec)">Cargando…</td></tr>
       </tbody>
     </table>
 
@@ -583,7 +587,7 @@ function _renderAnticipos(rows) {
   const tbody = document.getElementById("ant-body");
   if (!tbody) return;
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-muted)">Sin anticipos</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-sec)">Sin anticipos</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(r => {
@@ -592,13 +596,13 @@ function _renderAnticipos(rows) {
          <button class="btn-sm btn-red"   data-id="${r.id}" data-act="rec" style="margin-left:4px">✗ Rechazar</button>`
       : puedeApr && r.status === "APROBADO"
       ? `<button class="btn-sm btn-outline" data-id="${r.id}" data-act="desc">✓ Descontar de nómina</button>`
-      : `<span style="font-size:11px;color:var(--text-muted)">${r.aprobadoPor || r.rechazadoPor || "—"}</span>`;
+      : `<span style="font-size:11px;color:var(--text-sec)">${r.aprobadoPor || r.rechazadoPor || "—"}</span>`;
     return `<tr>
       <td><b>${esc(r.alias || "–")}</b></td>
       <td style="font-weight:700">${fmtMXN(r.monto)}</td>
       <td style="font-size:12px">${esc(r.motivo || "–")}</td>
       <td><span class="badge ${ST[r.status] || "badge-gray"}">${esc(r.status)}</span></td>
-      <td style="font-size:11px;color:var(--text-muted)">${fmtFecha(r._ts)}</td>
+      <td style="font-size:11px;color:var(--text-sec)">${fmtFecha(r._ts)}</td>
       ${puedeApr ? `<td class="td-actions">${accBtn}</td>` : ""}
     </tr>`;
   }).join("");
@@ -666,7 +670,7 @@ async function _descontarAnticipo(id) {
 function _montarNomina() {
   if (!_puedeAprobar()) {
     document.getElementById("rh-content").innerHTML =
-      `<div style="padding:32px;text-align:center;color:var(--text-muted)">Solo gerentes y administradores.</div>`;
+      `<div style="padding:32px;text-align:center;color:var(--text-sec)">Solo gerentes y administradores.</div>`;
     return;
   }
   const hoy    = new Date();
@@ -679,14 +683,14 @@ function _montarNomina() {
 
   document.getElementById("rh-content").innerHTML = `
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-      <span style="font-size:11px;color:var(--text-muted)">Semana:</span>
+      <span style="font-size:11px;color:var(--text-sec)">Semana:</span>
       <input type="date" class="sel-sm" id="nom-desde" value="${fmtIso(lunes)}">
-      <span style="font-size:11px;color:var(--text-muted)">–</span>
+      <span style="font-size:11px;color:var(--text-sec)">–</span>
       <input type="date" class="sel-sm" id="nom-hasta" value="${fmtIso(domingo)}">
       <button class="btn-primary" id="nom-calcular">Calcular nómina</button>
-      <button class="btn-outline" id="nom-xlsx">↓ Excel</button>
+      <button id="nom-xlsx" style="padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">⬇️ Excel</button>
     </div>
-    <div id="nom-semana-label" style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
+    <div id="nom-semana-label" style="font-size:12px;color:var(--text-sec);margin-bottom:16px">
       Semana: ${semanaLabel}
     </div>
 
@@ -703,7 +707,7 @@ function _montarNomina() {
           <th>ACCIÓN</th>
         </tr></thead>
         <tbody id="nom-body">
-          <tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text-muted)">
+          <tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text-sec)">
             Presiona "Calcular nómina" para generar el resumen</td></tr>
         </tbody>
       </table>
@@ -717,7 +721,7 @@ function _montarNomina() {
           <button class="modal-close" id="nom-sal-close">✕</button>
         </div>
         <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
-          <p style="font-size:12px;color:var(--text-muted);margin:0">
+          <p style="font-size:12px;color:var(--text-sec);margin:0">
             El salario semanal se guarda en el perfil del usuario y se usa para cálculos futuros.
           </p>
           <div class="form-group">
@@ -822,7 +826,7 @@ function _renderNomina(rows) {
   const tbody = document.getElementById("nom-body");
   if (!tbody) return;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text-muted)">Sin empleados</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text-sec)">Sin empleados</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(r => {

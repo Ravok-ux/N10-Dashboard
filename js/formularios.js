@@ -75,16 +75,16 @@ export const FormulariosModule = {
         .frm-title { margin:0; font-size:1.1rem; font-weight:700; white-space:nowrap; }
         .frm-tabs  { display:flex; background:var(--border,#e2e8f0); border-radius:8px; padding:2px; gap:2px; }
         .frm-tab   { background:none; border:none; padding:5px 14px; border-radius:6px;
-                     cursor:pointer; font-size:.85rem; color:var(--text-muted,#64748b); }
-        .frm-tab.active { background:var(--card-bg,#fff); color:var(--text,#1e293b); font-weight:600; }
+                     cursor:pointer; font-size:.85rem; color:var(--text-sec); }
+        .frm-tab.active { background:var(--surface); color:var(--text-primary); font-weight:600; }
         .frm-contenido { flex:1; overflow-y:auto; padding:16px; min-height:0;
                          display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
                          gap:12px; align-content:start; }
-        .frm-card  { background:var(--card-bg,#fff); border:1px solid var(--border,#e2e8f0);
+        .frm-card  { background:var(--surface); border:1px solid var(--border,#e2e8f0);
                      border-radius:10px; padding:14px; display:flex; flex-direction:column; gap:8px; }
         .frm-card.inactivo { opacity:.6; }
         .frm-card-name { font-weight:700; font-size:.95rem; }
-        .frm-card-meta { font-size:.78rem; color:var(--text-muted,#64748b); }
+        .frm-card-meta { font-size:.78rem; color:var(--text-sec); }
         .frm-card-campos { font-size:.78rem; }
         .frm-campo-chip{ display:inline-block; background:var(--accent-soft,#eff6ff);
                          color:var(--accent,#3b82f6); border-radius:20px; padding:1px 8px;
@@ -93,24 +93,24 @@ export const FormulariosModule = {
         .frm-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45);
                              display:flex; align-items:flex-start; justify-content:center;
                              overflow-y:auto; z-index:200; padding:20px 0; }
-        .frm-modal { background:var(--card-bg,#fff); border-radius:12px; padding:20px;
+        .frm-modal { background:var(--surface); border-radius:12px; padding:20px;
                      width:min(560px,95vw); }
         .frm-m-title { font-size:1rem; font-weight:700; margin:0 0 14px; }
         .frm-field { margin-bottom:10px; }
         .frm-field label { display:block; font-size:.8rem; font-weight:600;
-                           margin-bottom:3px; color:var(--text-muted,#64748b); }
+                           margin-bottom:3px; color:var(--text-sec); }
         .frm-field input,.frm-field select,.frm-field textarea
                    { width:100%; padding:7px 9px; border:1px solid var(--border,#e2e8f0);
                      border-radius:6px; font-size:.88rem; box-sizing:border-box; }
         .frm-campos-lista { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
         .frm-campo-item { background:var(--surface,#f8fafc); border:1px solid var(--border,#e2e8f0);
                           border-radius:8px; padding:8px 10px; display:flex; align-items:center; gap:8px; }
-        .frm-campo-drag { cursor:grab; color:var(--text-muted,#94a3b8); font-size:1rem; }
+        .frm-campo-drag { cursor:grab; color:var(--text-sec); font-size:1rem; }
         .frm-campo-info { flex:1; font-size:.85rem; }
-        .frm-campo-tipo { font-size:.72rem; color:var(--text-muted,#64748b); }
+        .frm-campo-tipo { font-size:.72rem; color:var(--text-sec); }
         .frm-m-actions { display:flex; gap:8px; margin-top:14px; }
         .frm-resp-panel{ position:fixed; right:0; top:0; bottom:0; width:min(480px,100vw);
-                         background:var(--card-bg,#fff); border-left:1px solid var(--border,#e2e8f0);
+                         background:var(--surface); border-left:1px solid var(--border,#e2e8f0);
                          display:flex; flex-direction:column; z-index:100; box-shadow:-4px 0 16px rgba(0,0,0,.1); }
         .frm-resp-header{ display:flex; align-items:center; justify-content:space-between;
                           padding:12px 14px; border-bottom:1px solid var(--border,#e2e8f0);
@@ -118,11 +118,11 @@ export const FormulariosModule = {
         .frm-resp-body { flex:1; overflow-y:auto; padding:12px; }
         .frm-resp-card { background:var(--surface,#f8fafc); border:1px solid var(--border,#e2e8f0);
                          border-radius:8px; padding:10px 12px; margin-bottom:8px; }
-        .frm-resp-meta { font-size:.76rem; color:var(--text-muted,#64748b); margin-bottom:6px; }
+        .frm-resp-meta { font-size:.76rem; color:var(--text-sec); margin-bottom:6px; }
         .frm-resp-row  { display:flex; gap:8px; font-size:.82rem; padding:3px 0;
                          border-bottom:1px solid var(--border,#e2e8f0); }
         .frm-resp-row:last-child { border:none; }
-        .frm-resp-label { font-weight:600; min-width:120px; color:var(--text-muted,#64748b); }
+        .frm-resp-label { font-weight:600; min-width:120px; color:var(--text-sec); }
         .btn-primary   { background:var(--accent,#3b82f6); color:#fff; border:none;
                          padding:7px 14px; border-radius:6px; cursor:pointer; font-size:.88rem; }
         .btn-secondary { background:transparent; border:1px solid var(--border,#e2e8f0);
@@ -133,7 +133,7 @@ export const FormulariosModule = {
                          padding:5px 10px; border-radius:6px; cursor:pointer; font-size:.8rem; }
         .btn-sm        { padding:4px 10px; font-size:.78rem; }
         .empty-state   { grid-column:1/-1; text-align:center; padding:40px 16px;
-                         color:var(--text-muted,#64748b); font-size:.9rem; }
+                         color:var(--text-sec); font-size:.9rem; }
         .frm-add-campo { display:flex; gap:6px; margin-bottom:8px; }
         .frm-add-campo select { flex:1; }
       </style>
@@ -274,7 +274,7 @@ window._frmVerRespuestas = async id => {
   const body   = document.getElementById("frmRespBody");
 
   titulo.textContent = `Respuestas: ${form?.titulo || id}`;
-  body.innerHTML = `<div style="padding:12px;color:var(--text-muted,#64748b)">Cargando…</div>`;
+  body.innerHTML = `<div style="padding:12px;color:var(--text-sec)">Cargando…</div>`;
   panel.style.display = "flex";
 
   try {
@@ -394,7 +394,7 @@ function _renderCamposModal() {
   const lista = document.getElementById("fmCamposLista");
   if (!lista) return;
   if (_camposEnEdicion.length === 0) {
-    lista.innerHTML = `<div style="font-size:.82rem;color:var(--text-muted,#64748b);padding:6px 0">Sin campos. Agrega al menos uno.</div>`;
+    lista.innerHTML = `<div style="font-size:.82rem;color:var(--text-sec);padding:6px 0">Sin campos. Agrega al menos uno.</div>`;
     return;
   }
   lista.innerHTML = _camposEnEdicion.map((c, i) => `

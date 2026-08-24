@@ -81,27 +81,27 @@ function _html() {
 <style>
 .asi-wrap { padding:1rem; }
 .asi-header { display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem; }
-.asi-tab { background:none;border:1px solid var(--border);border-radius:6px;padding:.4rem .8rem;cursor:pointer;font-size:.85rem;color:var(--text); }
-.asi-tab:hover { background:var(--bg2); }
+.asi-tab { background:none;border:1px solid var(--border);border-radius:6px;padding:.4rem .8rem;cursor:pointer;font-size:.85rem;color:var(--text-primary); }
+.asi-tab:hover { background:var(--surface-2); }
 .asi-tab-active { background:#2563EB;color:#fff;border-color:#2563EB;font-weight:700; }
 .asi-tabla { width:100%;border-collapse:collapse;font-size:.88rem; }
-.asi-tabla th { background:var(--bg2);padding:.6rem .8rem;text-align:left;font-weight:600;border-bottom:2px solid var(--border);white-space:nowrap; }
+.asi-tabla th { background:var(--surface-2);padding:.6rem .8rem;text-align:left;font-weight:600;border-bottom:2px solid var(--border);white-space:nowrap; }
 .asi-tabla td { padding:.55rem .8rem;border-bottom:1px solid var(--border); }
-.asi-tabla tr:hover td { background:var(--bg2); }
+.asi-tabla tr:hover td { background:var(--surface-2); }
 .asi-badge-ok  { background:#D1FAE5;color:#065F46;border-radius:4px;padding:.15rem .4rem;font-size:.75rem;font-weight:700; }
 .asi-badge-ret { background:#FEF3C7;color:#92400E;border-radius:4px;padding:.15rem .4rem;font-size:.75rem;font-weight:700; }
 .asi-badge-aus { background:#FEE2E2;color:#991B1B;border-radius:4px;padding:.15rem .4rem;font-size:.75rem;font-weight:700; }
 .asi-label { display:block;font-size:.82rem;font-weight:700;margin-bottom:.3rem; }
 .asi-hor-panel { display:grid;grid-template-columns:350px 1fr;gap:1rem; }
 @media(max-width:700px) { .asi-hor-panel { grid-template-columns:1fr; } }
-.asi-hor-form, .asi-hor-lista { background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1.25rem; }
+.asi-hor-form, .asi-hor-lista { background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:1.25rem; }
 .asi-hor-form h3, .asi-hor-lista h3 { margin:0 0 1rem;font-size:1rem; }
 .hor-item { display:flex;justify-content:space-between;align-items:center;padding:.6rem 0;border-bottom:1px solid var(--border);font-size:.88rem; }
 .hor-item:last-child { border-bottom:none; }
 </style>`;
 }
 
-const estiloInput = "padding:.4rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.88rem";
+const estiloInput = "padding:.4rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);font-size:.88rem";
 
 // ─── Eventos ─────────────────────────────────────────────────────────────────
 

@@ -91,7 +91,7 @@ function _montarAsistencia() {
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
       <input type="date" class="sel-sm" id="masi-desde"
         value="${new Date(Date.now() - 29*86400000).toISOString().slice(0,10)}">
-      <span style="font-size:12px;color:var(--text2)">–</span>
+      <span style="font-size:12px;color:var(--text-sec)">–</span>
       <input type="date" class="sel-sm" id="masi-hasta"
         value="${new Date().toISOString().slice(0,10)}">
       <button class="btn-outline" id="masi-buscar">Buscar</button>
@@ -156,7 +156,7 @@ function _escucharAsistencia() {
     const tbody = document.getElementById("masi-body");
     if (!tbody) return;
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text2)">
+      tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-sec)">
         Sin registros en el período</td></tr>`;
       return;
     }
@@ -170,7 +170,7 @@ function _escucharAsistencia() {
         <td>${fmtHora(r.checkOut)}</td>
         <td style="text-align:center">${hrs}</td>
         <td>${STATUS_BADGE[r.status] || esc(r.status)}</td>
-        <td style="font-size:11px;color:var(--text2)">${esc(r.notas || "")}</td>
+        <td style="font-size:11px;color:var(--text-sec)">${esc(r.notas || "")}</td>
       </tr>`;
     }).join("");
   }, err => console.error("[MiRH-Asistencia]", err));
@@ -248,7 +248,7 @@ function _montarVacaciones() {
     const tbody = document.getElementById("mvac-body");
     if (!tbody) return;
     if (snap.empty) {
-      tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text2)">
+      tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-sec)">
         Sin solicitudes de vacaciones</td></tr>`;
       return;
     }
@@ -258,9 +258,9 @@ function _montarVacaciones() {
         <td>${esc(v.desde)}</td>
         <td>${esc(v.hasta)}</td>
         <td style="text-align:center;font-weight:700">${v.diasSolicitados || "—"}</td>
-        <td style="font-size:12px;color:var(--text2)">${esc(v.motivo || "")}</td>
+        <td style="font-size:12px;color:var(--text-sec)">${esc(v.motivo || "")}</td>
         <td>${STATUS_BADGE[v.status] || esc(v.status)}</td>
-        <td style="font-size:11px;color:var(--text2)">${fmtFecha(v.solicitadaEn)}</td>
+        <td style="font-size:11px;color:var(--text-sec)">${fmtFecha(v.solicitadaEn)}</td>
       </tr>`;
     }).join("");
   }, err => console.error("[MiRH-Vac]", err));
@@ -364,7 +364,7 @@ function _montarAnticipos() {
     const tbody = document.getElementById("mant-body");
     if (!tbody) return;
     if (snap.empty) {
-      tbody.innerHTML = `<tr><td colspan="4" style="padding:32px;text-align:center;color:var(--text2)">
+      tbody.innerHTML = `<tr><td colspan="4" style="padding:32px;text-align:center;color:var(--text-sec)">
         Sin anticipos registrados</td></tr>`;
       return;
     }
@@ -372,9 +372,9 @@ function _montarAnticipos() {
       const a = d.data();
       return `<tr>
         <td style="font-weight:700;font-variant-numeric:tabular-nums">${fmtMXN(a.monto)}</td>
-        <td style="font-size:12px;color:var(--text2)">${esc(a.motivo || "")}</td>
+        <td style="font-size:12px;color:var(--text-sec)">${esc(a.motivo || "")}</td>
         <td>${STATUS_BADGE[a.status] || esc(a.status)}</td>
-        <td style="font-size:11px;color:var(--text2)">${fmtFecha(a.solicitadoEn)}</td>
+        <td style="font-size:11px;color:var(--text-sec)">${fmtFecha(a.solicitadoEn)}</td>
       </tr>`;
     }).join("");
   }, err => console.error("[MiRH-Ant]", err));
@@ -442,7 +442,7 @@ function _montarNomina() {
     const tbody = document.getElementById("mnom-body");
     if (!tbody) return;
     if (snap.empty) {
-      tbody.innerHTML = `<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--text2)">
+      tbody.innerHTML = `<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--text-sec)">
         Sin recibos de nómina registrados</td></tr>`;
       return;
     }
@@ -456,7 +456,7 @@ function _montarNomina() {
         <td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:#16A34A">
           ${fmtMXN(n.netoPagado)}</td>
         <td>${STATUS_BADGE[n.status] || esc(n.status || "")}</td>
-        <td style="font-size:11px;color:var(--text2)">${fmtFecha(n.pagoEn)}</td>
+        <td style="font-size:11px;color:var(--text-sec)">${fmtFecha(n.pagoEn)}</td>
       </tr>`;
     }).join("");
   }, err => console.error("[MiRH-Nom]", err));

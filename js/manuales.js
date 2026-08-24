@@ -15,12 +15,12 @@ import {
 const _storage = getStorage(app);
 
 const CATEGORIAS = [
-  { id: "todos",       label: "Todos"                },
-  { id: "flujo",       label: "Diagramas de flujo"   },
-  { id: "politica",    label: "Políticas operativas"  },
-  { id: "proceso",     label: "Procedimientos"        },
-  { id: "formato",     label: "Formatos y plantillas" },
-  { id: "otro",        label: "Otros"                 },
+  { id: "todos",       label: "Todos",                color: "var(--green-dark)" },
+  { id: "flujo",       label: "Diagramas de flujo",   color: "#2563EB" },
+  { id: "politica",    label: "Políticas operativas",  color: "#7C3AED" },
+  { id: "proceso",     label: "Procedimientos",        color: "#D97706" },
+  { id: "formato",     label: "Formatos y plantillas", color: "#0E7490" },
+  { id: "otro",        label: "Otros",                 color: "#6B7280" },
 ];
 
 const _e = s => s.replace(/[&<>"']/g, c =>
@@ -88,10 +88,10 @@ function _renderShell(c) {
 function _renderChips(el) {
   el.innerHTML = CATEGORIAS.map(cat => `
     <button data-cat="${cat.id}"
-      style="border-radius:20px;padding:6px 14px;font-size:13px;font-weight:500;
-             cursor:pointer;border:1.5px solid var(--md-primary,#1B5E20);
-             background:${_cat === cat.id ? "var(--md-primary,#1B5E20)" : "transparent"};
-             color:${_cat === cat.id ? "#fff" : "var(--md-primary,#1B5E20)"}">
+      style="border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;
+             cursor:pointer;border:1.5px solid ${cat.color};transition:.12s;
+             background:${_cat === cat.id ? cat.color : "transparent"};
+             color:${_cat === cat.id ? "#fff" : cat.color}">
       ${_e(cat.label)}
     </button>`).join("");
 
@@ -247,7 +247,7 @@ function _abrirEditor(m) {
       <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Categoría *</label>
       <select id="man-cat"
         style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;
-               border:1.5px solid #ccc;font-size:14px;margin-bottom:14px;background:#fff">
+               border:1.5px solid #ccc;font-size:14px;margin-bottom:14px;background:var(--surface)">
         ${opsCat}
       </select>
 
@@ -267,7 +267,15 @@ function _abrirEditor(m) {
       </div>
 
       <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Contenido</label>
-      <div id="man-tipo-hint" style="font-size:12px;color:#888;margin-bottom:6px"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+        <div id="man-tipo-hint" style="font-size:12px;color:#888"></div>
+        <button id="btn-asistente-mermaid" type="button"
+          style="font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;cursor:pointer;
+                 background:rgba(27,94,32,.1);color:var(--md-primary,#1B5E20);border:1.5px solid var(--md-primary,#1B5E20);
+                 display:none;white-space:nowrap">
+          🧩 Asistente visual
+        </button>
+      </div>
       <textarea id="man-contenido" rows="10"
         style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;
                border:1.5px solid #ccc;font-size:13px;font-family:monospace;resize:vertical;
@@ -298,16 +306,26 @@ function _abrirEditor(m) {
   overlay.querySelector("#man-ed-cerrar").addEventListener("click", cerrar);
   overlay.addEventListener("click", e => { if (e.target === overlay) cerrar(); });
 
-  // Hint dinámico según tipo
-  const hint = overlay.querySelector("#man-tipo-hint");
+  // Hint dinámico según tipo + mostrar/ocultar botón asistente
+  const hint    = overlay.querySelector("#man-tipo-hint");
+  const btnAsis = overlay.querySelector("#btn-asistente-mermaid");
   const actualizarHint = () => {
     const tipo = overlay.querySelector("input[name='man-tipo']:checked")?.value;
-    hint.textContent = tipo === "mermaid"
-      ? "Escribe código Mermaid (flowchart LR, sequenceDiagram, etc.)"
-      : "Escribe texto plano o Markdown";
+    if (tipo === "mermaid") {
+      hint.textContent = "Escribe código Mermaid (flowchart LR, sequenceDiagram, etc.)";
+      btnAsis.style.display = "";
+    } else {
+      hint.textContent = "Escribe texto plano o Markdown";
+      btnAsis.style.display = "none";
+    }
   };
   actualizarHint();
   overlay.querySelectorAll("input[name='man-tipo']").forEach(r => r.addEventListener("change", actualizarHint));
+
+  btnAsis.addEventListener("click", () => {
+    const ta = overlay.querySelector("#man-contenido");
+    _abrirAsistenteMermaid(ta);
+  });
 
   overlay.querySelector("#man-ed-guardar").addEventListener("click", () => _guardar(m, overlay, cerrar));
 }
@@ -363,6 +381,444 @@ async function _guardar(m, overlay, cerrar) {
     btnG.disabled = false;
     btnG.textContent = m ? "Guardar cambios" : "Crear manual";
   }
+}
+
+// ── Asistente visual Mermaid ──────────────────────────────────
+function _abrirAsistenteMermaid(targetTextarea) {
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1100;display:flex;align-items:center;justify-content:center;padding:16px";
+
+  ov.innerHTML = `
+    <div style="background:var(--md-surface,#fff);border-radius:16px;max-width:620px;width:100%;
+                max-height:92vh;overflow-y:auto;padding:26px 22px 22px;position:relative">
+      <button id="asis-cerrar"
+        style="position:absolute;top:12px;right:14px;border:none;background:transparent;
+               font-size:22px;cursor:pointer;color:#666;line-height:1">✕</button>
+      <h3 style="margin:0 0 4px;font-size:17px;font-weight:800">🧩 Asistente Mermaid</h3>
+      <p style="margin:0 0 16px;font-size:13px;color:#666">Construye tu diagrama paso a paso sin saber código.</p>
+
+      <!-- Tipo de diagrama -->
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Tipo de diagrama</label>
+      <div id="asis-tipos" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px">
+        ${[
+          { id:"flowchart", icon:"🔀", label:"Flujo de proceso" },
+          { id:"sequence",  icon:"🔄", label:"Secuencia / pasos" },
+          { id:"pie",       icon:"🥧", label:"Distribución (pie)" },
+          { id:"gantt",     icon:"📅", label:"Cronograma (Gantt)" },
+        ].map(t => `
+          <button data-tipo="${t.id}"
+            style="border:1.5px solid #ccc;border-radius:8px;padding:8px 14px;cursor:pointer;
+                   background:transparent;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">
+            ${t.icon} ${t.label}
+          </button>`).join("")}
+      </div>
+
+      <!-- Zona de construcción (se reemplaza según tipo) -->
+      <div id="asis-zona"></div>
+
+      <!-- Preview -->
+      <details style="margin-top:14px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--md-primary,#1B5E20);margin-bottom:6px">
+          👁 Ver código generado
+        </summary>
+        <pre id="asis-preview" style="background:#f4f4f4;border-radius:8px;padding:10px;font-size:12px;
+             overflow-x:auto;white-space:pre-wrap;margin:6px 0 0"></pre>
+      </details>
+
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button id="asis-insertar"
+          style="flex:1;background:var(--md-primary,#1B5E20);color:#fff;border:none;border-radius:8px;
+                 padding:12px;font-size:14px;font-weight:700;cursor:pointer">
+          ✅ Insertar en el editor
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(ov);
+  ov.querySelector("#asis-cerrar").addEventListener("click", () => ov.remove());
+  ov.addEventListener("click", e => { if (e.target === ov) ov.remove(); });
+
+  let tipoActual = "flowchart";
+  let generarCodigo = () => "";
+
+  const zona    = ov.querySelector("#asis-zona");
+  const preview = ov.querySelector("#asis-preview");
+
+  const actualizarPreview = () => {
+    preview.textContent = generarCodigo();
+  };
+
+  // ── Render según tipo ──
+  function renderFlowchart() {
+    zona.innerHTML = `
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Dirección</label>
+      <select id="fc-dir" style="padding:8px;border-radius:6px;border:1.5px solid #ccc;margin-bottom:14px;font-size:13px">
+        <option value="LR">Izquierda → Derecha</option>
+        <option value="TD">Arriba → Abajo</option>
+        <option value="RL">Derecha → Izquierda</option>
+      </select>
+
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Pasos / nodos</label>
+      <div id="fc-nodos" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+      <button id="fc-agregar" type="button"
+        style="font-size:13px;padding:6px 14px;border-radius:6px;border:1.5px dashed #aaa;
+               background:transparent;cursor:pointer;color:#555">+ Agregar paso</button>
+
+      <div style="margin-top:14px">
+        <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Conexiones</label>
+        <div id="fc-conexiones" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+        <button id="fc-add-conexion" type="button"
+          style="font-size:13px;padding:6px 14px;border-radius:6px;border:1.5px dashed #aaa;
+                 background:transparent;cursor:pointer;color:#555">+ Agregar conexión</button>
+      </div>`;
+
+    let nodos = [
+      { id:"A", texto:"Inicio", forma:"stadium" },
+      { id:"B", texto:"Paso 1", forma:"rect" },
+      { id:"C", texto:"Fin",    forma:"stadium" },
+    ];
+    let conexiones = [
+      { de:"A", a:"B", etiqueta:"" },
+      { de:"B", a:"C", etiqueta:"" },
+    ];
+
+    const FORMAS = [
+      { v:"rect",     l:"Rectángulo [ ]" },
+      { v:"stadium",  l:"Cápsula ([ ])" },
+      { v:"diamond",  l:"Rombo { }" },
+      { v:"cylinder", l:"Cilindro [( )]" },
+      { v:"circle",   l:"Círculo (( ))" },
+    ];
+
+    const nodoSintaxis = n => {
+      const t = _e(n.texto).replace(/"/g,"'");
+      if (n.forma === "stadium")  return `${n.id}(["${t}"])`;
+      if (n.forma === "diamond")  return `${n.id}{"${t}"}`;
+      if (n.forma === "cylinder") return `${n.id}[("${t}")]`;
+      if (n.forma === "circle")   return `${n.id}(("${t}"))`;
+      return `${n.id}["${t}"]`;
+    };
+
+    const renderNodos = () => {
+      const cont = zona.querySelector("#fc-nodos");
+      cont.innerHTML = nodos.map((n, i) => `
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <input value="${_e(n.id)}" data-ni="${i}" data-campo="id" maxlength="4"
+            style="width:48px;padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:13px;font-family:monospace">
+          <input value="${_e(n.texto)}" data-ni="${i}" data-campo="texto" placeholder="Texto del nodo"
+            style="flex:1;min-width:120px;padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:13px">
+          <select data-ni="${i}" data-campo="forma"
+            style="padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:12px">
+            ${FORMAS.map(f => `<option value="${f.v}" ${n.forma === f.v ? "selected":""}>${f.l}</option>`).join("")}
+          </select>
+          <button data-ni-del="${i}" type="button"
+            style="border:none;background:transparent;cursor:pointer;color:#e53935;font-size:16px;padding:0 4px">✕</button>
+        </div>`).join("");
+
+      cont.querySelectorAll("input[data-ni],select[data-ni]").forEach(el => {
+        el.addEventListener("input", () => {
+          const i = +el.dataset.ni;
+          nodos[i][el.dataset.campo] = el.value;
+          actualizarPreview();
+        });
+      });
+      cont.querySelectorAll("[data-ni-del]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          nodos.splice(+btn.dataset.niDel, 1);
+          renderNodos(); actualizarPreview();
+        });
+      });
+    };
+
+    const renderConexiones = () => {
+      const cont = zona.querySelector("#fc-conexiones");
+      cont.innerHTML = conexiones.map((c, i) => `
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <input value="${_e(c.de)}" data-ci="${i}" data-campo="de" placeholder="De"
+            style="width:56px;padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:13px;font-family:monospace">
+          <span style="color:#888;font-size:13px">→</span>
+          <input value="${_e(c.a)}" data-ci="${i}" data-campo="a" placeholder="A"
+            style="width:56px;padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:13px;font-family:monospace">
+          <input value="${_e(c.etiqueta)}" data-ci="${i}" data-campo="etiqueta" placeholder="Etiqueta (opcional)"
+            style="flex:1;min-width:100px;padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:13px">
+          <button data-ci-del="${i}" type="button"
+            style="border:none;background:transparent;cursor:pointer;color:#e53935;font-size:16px;padding:0 4px">✕</button>
+        </div>`).join("");
+
+      cont.querySelectorAll("input[data-ci]").forEach(el => {
+        el.addEventListener("input", () => {
+          const i = +el.dataset.ci;
+          conexiones[i][el.dataset.campo] = el.value;
+          actualizarPreview();
+        });
+      });
+      cont.querySelectorAll("[data-ci-del]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          conexiones.splice(+btn.dataset.ciDel, 1);
+          renderConexiones(); actualizarPreview();
+        });
+      });
+    };
+
+    zona.querySelector("#fc-agregar").addEventListener("click", () => {
+      const letra = String.fromCharCode(65 + nodos.length % 26);
+      nodos.push({ id: letra + (nodos.length > 25 ? Math.floor(nodos.length/26) : ""), texto:"Nuevo paso", forma:"rect" });
+      renderNodos(); actualizarPreview();
+    });
+    zona.querySelector("#fc-add-conexion").addEventListener("click", () => {
+      conexiones.push({ de:"", a:"", etiqueta:"" });
+      renderConexiones(); actualizarPreview();
+    });
+    zona.querySelector("#fc-dir").addEventListener("change", actualizarPreview);
+
+    renderNodos();
+    renderConexiones();
+
+    generarCodigo = () => {
+      const dir = zona.querySelector("#fc-dir")?.value ?? "LR";
+      const lines = [`flowchart ${dir}`];
+      nodos.forEach(n => lines.push("    " + nodoSintaxis(n)));
+      conexiones.forEach(c => {
+        if (!c.de || !c.a) return;
+        lines.push(c.etiqueta
+          ? `    ${c.de} -- ${c.etiqueta} --> ${c.a}`
+          : `    ${c.de} --> ${c.a}`);
+      });
+      return lines.join("\n");
+    };
+    actualizarPreview();
+  }
+
+  function renderSequence() {
+    zona.innerHTML = `
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Pasos de la secuencia</label>
+      <div id="seq-pasos" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+      <button id="seq-agregar" type="button"
+        style="font-size:13px;padding:6px 14px;border-radius:6px;border:1.5px dashed #aaa;
+               background:transparent;cursor:pointer;color:#555">+ Agregar paso</button>`;
+
+    let pasos = [
+      { de:"Usuario", a:"Sistema", msg:"Envía solicitud", tipo:"->>" },
+      { de:"Sistema", a:"Usuario", msg:"Retorna respuesta", tipo:"-->>" },
+    ];
+    const TIPOS = [
+      { v:"->>",  l:"Sólida →" },
+      { v:"-->>", l:"Punteada -->" },
+      { v:"->",   l:"Sin punta →" },
+      { v:"-->" ,  l:"Punteada sin punta" },
+    ];
+
+    const renderPasos = () => {
+      const cont = zona.querySelector("#seq-pasos");
+      cont.innerHTML = pasos.map((p, i) => `
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <input value="${_e(p.de)}" data-pi="${i}" data-campo="de" placeholder="De"
+            style="width:90px;padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:13px">
+          <select data-pi="${i}" data-campo="tipo"
+            style="padding:6px 6px;border-radius:6px;border:1.5px solid #ccc;font-size:12px">
+            ${TIPOS.map(t => `<option value="${t.v}" ${p.tipo===t.v?"selected":""}>${t.l}</option>`).join("")}
+          </select>
+          <input value="${_e(p.a)}" data-pi="${i}" data-campo="a" placeholder="A"
+            style="width:90px;padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:13px">
+          <input value="${_e(p.msg)}" data-pi="${i}" data-campo="msg" placeholder="Mensaje"
+            style="flex:1;min-width:120px;padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:13px">
+          <button data-pi-del="${i}" type="button"
+            style="border:none;background:transparent;cursor:pointer;color:#e53935;font-size:16px;padding:0 4px">✕</button>
+        </div>`).join("");
+
+      cont.querySelectorAll("input[data-pi],select[data-pi]").forEach(el => {
+        el.addEventListener("input", () => {
+          pasos[+el.dataset.pi][el.dataset.campo] = el.value;
+          actualizarPreview();
+        });
+      });
+      cont.querySelectorAll("[data-pi-del]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          pasos.splice(+btn.dataset.piDel, 1);
+          renderPasos(); actualizarPreview();
+        });
+      });
+    };
+
+    zona.querySelector("#seq-agregar").addEventListener("click", () => {
+      pasos.push({ de:"A", a:"B", msg:"Mensaje", tipo:"->>" });
+      renderPasos(); actualizarPreview();
+    });
+    renderPasos();
+
+    generarCodigo = () => {
+      const lines = ["sequenceDiagram"];
+      pasos.forEach(p => lines.push(`    ${p.de}${p.tipo}${p.a}: ${p.msg}`));
+      return lines.join("\n");
+    };
+    actualizarPreview();
+  }
+
+  function renderPie() {
+    zona.innerHTML = `
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Título</label>
+      <input id="pie-titulo" placeholder="Distribución de..." value="Distribución"
+        style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1.5px solid #ccc;font-size:13px;margin-bottom:12px">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Secciones</label>
+      <div id="pie-secciones" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+      <button id="pie-agregar" type="button"
+        style="font-size:13px;padding:6px 14px;border-radius:6px;border:1.5px dashed #aaa;
+               background:transparent;cursor:pointer;color:#555">+ Agregar sección</button>`;
+
+    let secs = [
+      { label:"Sección A", valor:40 },
+      { label:"Sección B", valor:35 },
+      { label:"Sección C", valor:25 },
+    ];
+
+    const renderSecs = () => {
+      const cont = zona.querySelector("#pie-secciones");
+      cont.innerHTML = secs.map((s, i) => `
+        <div style="display:flex;gap:6px;align-items:center">
+          <input value="${_e(s.label)}" data-si="${i}" data-campo="label" placeholder="Nombre"
+            style="flex:1;padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:13px">
+          <input type="number" value="${s.valor}" data-si="${i}" data-campo="valor" placeholder="%"
+            style="width:70px;padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:13px">
+          <button data-si-del="${i}" type="button"
+            style="border:none;background:transparent;cursor:pointer;color:#e53935;font-size:16px;padding:0 4px">✕</button>
+        </div>`).join("");
+      cont.querySelectorAll("input[data-si]").forEach(el => {
+        el.addEventListener("input", () => {
+          secs[+el.dataset.si][el.dataset.campo] = el.dataset.campo === "valor" ? +el.value : el.value;
+          actualizarPreview();
+        });
+      });
+      cont.querySelectorAll("[data-si-del]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          secs.splice(+btn.dataset.siDel, 1);
+          renderSecs(); actualizarPreview();
+        });
+      });
+    };
+
+    zona.querySelector("#pie-titulo").addEventListener("input", actualizarPreview);
+    zona.querySelector("#pie-agregar").addEventListener("click", () => {
+      secs.push({ label:"Nueva sección", valor:10 });
+      renderSecs(); actualizarPreview();
+    });
+    renderSecs();
+
+    generarCodigo = () => {
+      const titulo = zona.querySelector("#pie-titulo")?.value ?? "Distribución";
+      const lines = [`pie title ${titulo}`];
+      secs.forEach(s => lines.push(`    "${s.label}" : ${s.valor}`));
+      return lines.join("\n");
+    };
+    actualizarPreview();
+  }
+
+  function renderGantt() {
+    zona.innerHTML = `
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Título del proyecto</label>
+      <input id="gantt-titulo" value="Proyecto"
+        style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1.5px solid #ccc;font-size:13px;margin-bottom:12px">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px">Tareas</label>
+      <div id="gantt-tareas" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+      <button id="gantt-agregar" type="button"
+        style="font-size:13px;padding:6px 14px;border-radius:6px;border:1.5px dashed #aaa;
+               background:transparent;cursor:pointer;color:#555">+ Agregar tarea</button>`;
+
+    let tareas = [
+      { nombre:"Planeación", inicio:"2026-01-01", duracion:"7d", estado:"done" },
+      { nombre:"Ejecución",  inicio:"2026-01-08", duracion:"14d", estado:"active" },
+      { nombre:"Cierre",     inicio:"2026-01-22", duracion:"5d", estado:"" },
+    ];
+    const ESTADOS = [
+      { v:"",       l:"Normal" },
+      { v:"done",   l:"Completada" },
+      { v:"active", l:"En curso" },
+      { v:"crit",   l:"Crítica" },
+    ];
+
+    const renderTareas = () => {
+      const cont = zona.querySelector("#gantt-tareas");
+      cont.innerHTML = tareas.map((t, i) => `
+        <div style="display:grid;grid-template-columns:1fr 120px 80px auto auto;gap:6px;align-items:center">
+          <input value="${_e(t.nombre)}" data-ti="${i}" data-campo="nombre" placeholder="Nombre"
+            style="padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:13px">
+          <input value="${_e(t.inicio)}" data-ti="${i}" data-campo="inicio" placeholder="YYYY-MM-DD"
+            style="padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:12px">
+          <input value="${_e(t.duracion)}" data-ti="${i}" data-campo="duracion" placeholder="7d"
+            style="padding:6px 8px;border-radius:6px;border:1.5px solid #ccc;font-size:13px">
+          <select data-ti="${i}" data-campo="estado"
+            style="padding:6px 4px;border-radius:6px;border:1.5px solid #ccc;font-size:12px">
+            ${ESTADOS.map(e => `<option value="${e.v}" ${t.estado===e.v?"selected":""}>${e.l}</option>`).join("")}
+          </select>
+          <button data-ti-del="${i}" type="button"
+            style="border:none;background:transparent;cursor:pointer;color:#e53935;font-size:16px;padding:0 4px">✕</button>
+        </div>`).join("");
+
+      cont.querySelectorAll("input[data-ti],select[data-ti]").forEach(el => {
+        el.addEventListener("input", () => {
+          tareas[+el.dataset.ti][el.dataset.campo] = el.value;
+          actualizarPreview();
+        });
+      });
+      cont.querySelectorAll("[data-ti-del]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          tareas.splice(+btn.dataset.tiDel, 1);
+          renderTareas(); actualizarPreview();
+        });
+      });
+    };
+
+    zona.querySelector("#gantt-titulo").addEventListener("input", actualizarPreview);
+    zona.querySelector("#gantt-agregar").addEventListener("click", () => {
+      tareas.push({ nombre:"Nueva tarea", inicio:"2026-02-01", duracion:"7d", estado:"" });
+      renderTareas(); actualizarPreview();
+    });
+    renderTareas();
+
+    generarCodigo = () => {
+      const titulo = zona.querySelector("#gantt-titulo")?.value ?? "Proyecto";
+      const lines = [
+        `gantt`,
+        `    title ${titulo}`,
+        `    dateFormat YYYY-MM-DD`,
+        `    section Actividades`,
+      ];
+      tareas.forEach(t => {
+        const estado = t.estado ? t.estado + ", " : "";
+        lines.push(`    ${t.nombre} : ${estado}${t.inicio}, ${t.duracion}`);
+      });
+      return lines.join("\n");
+    };
+    actualizarPreview();
+  }
+
+  // Selección de tipo
+  const renderTipo = (tipo) => {
+    tipoActual = tipo;
+    ov.querySelectorAll("[data-tipo]").forEach(btn => {
+      btn.style.background  = btn.dataset.tipo === tipo ? "rgba(27,94,32,.12)" : "transparent";
+      btn.style.borderColor = btn.dataset.tipo === tipo ? "var(--md-primary,#1B5E20)" : "#ccc";
+      btn.style.color       = btn.dataset.tipo === tipo ? "var(--md-primary,#1B5E20)" : "inherit";
+    });
+    if (tipo === "flowchart") renderFlowchart();
+    else if (tipo === "sequence") renderSequence();
+    else if (tipo === "pie") renderPie();
+    else if (tipo === "gantt") renderGantt();
+  };
+
+  ov.querySelectorAll("[data-tipo]").forEach(btn => {
+    btn.addEventListener("click", () => renderTipo(btn.dataset.tipo));
+  });
+
+  renderTipo("flowchart");
+
+  ov.querySelector("#asis-insertar").addEventListener("click", () => {
+    const codigo = generarCodigo();
+    if (targetTextarea) {
+      targetTextarea.value = codigo;
+      targetTextarea.dispatchEvent(new Event("input"));
+    }
+    ov.remove();
+  });
 }
 
 async function _confirmarEliminar(m) {

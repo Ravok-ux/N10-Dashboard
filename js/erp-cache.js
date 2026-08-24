@@ -21,7 +21,7 @@ export async function getClientes() {
 export async function getIngenieros() {
   if (_ingenieros) return _ingenieros;
   try {
-    const snap = await getDocs(query(collection(db, "usuarios"), where("rol", "==", "INGENIERO")));
+    const snap = await getDocs(query(collection(db, "usuarios"), where("rol", "in", ["INGENIERO","RECUPERADOR"])));
     _ingenieros = snap.docs
       .filter(d => d.data().activo !== false)
       .map(d => d.data().alias || d.id)

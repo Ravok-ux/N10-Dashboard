@@ -12,6 +12,7 @@ import {
   onSnapshot, addDoc, updateDoc, getDocs,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getIngenieros } from "./erp-cache.js";
 
 const fmtMXN   = v => Number(v || 0).toLocaleString("es-MX", { style:"currency", currency:"MXN" });
 const fmtFecha = ts => ts
@@ -27,7 +28,8 @@ const SEMAFORO_COLOR = {
 
 let _unsub     = null;
 let _clientes  = [];
-let _panelId   = null; // clienteId actualmente abierto en el panel
+let _panelId   = null;
+let _ings      = []; // aliases de ingenieros para el filtro
 
 export const JuridicoModule = {
   mount(container) {
@@ -36,6 +38,9 @@ export const JuridicoModule = {
       <div class="mod-topbar">
         <h2 class="mod-title">⚖️ Módulo Jurídico</h2>
         <div class="mod-actions">
+          <select class="sel-sm" id="jur-filtro-ing">
+            <option value="">Todos los ingenieros</option>
+          </select>
           <select class="sel-sm" id="jur-filtro-semaforo">
             <option value="">Todos</option>
             <option value="ROJO">🔴 Crítico</option>
@@ -81,7 +86,7 @@ export const JuridicoModule = {
             <th>ACCIONES</th>
           </tr></thead>
           <tbody id="jur-tbody">
-            <tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text2)">Cargando…</td></tr>
+            <tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-sec)">Cargando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -98,6 +103,12 @@ export const JuridicoModule = {
 
     _iniciar();
     _bindUI();
+    getIngenieros().then(ings => {
+      _ings = ings;
+      const sel = document.getElementById("jur-filtro-ing");
+      if (sel) sel.innerHTML = `<option value="">Todos los ingenieros</option>` +
+        ings.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+    });
   },
   destroy() {
     _unsub?.();
@@ -127,19 +138,27 @@ function _iniciar() {
 
 // ── Render ──────────────────────────────────────────────────────
 
+function _semaforo(c) {
+  if (c.semaforoColor) return c.semaforoColor;
+  const d = c.diasMaxVencidos || 0;
+  return d >= 90 ? "ROJO" : "NARANJA";
+}
+
 function _render() {
+  const filtroIng  = document.getElementById("jur-filtro-ing")?.value  || "";
   const filtroSem  = document.getElementById("jur-filtro-semaforo")?.value || "";
   const filtroBusc = (document.getElementById("jur-buscar")?.value || "").toLowerCase().trim();
 
   const lista = _clientes.filter(c => {
-    if (filtroSem && c.semaforoColor !== filtroSem) return false;
+    if (filtroIng  && (c.ingenieroAlias || "") !== filtroIng) return false;
+    if (filtroSem  && _semaforo(c) !== filtroSem) return false;
     if (filtroBusc && !(c.nombre || "").toLowerCase().includes(filtroBusc)) return false;
     return true;
   });
 
   // KPIs
-  const criticos = lista.filter(c => c.semaforoColor === "ROJO").length;
-  const naranjas = lista.filter(c => c.semaforoColor === "NARANJA").length;
+  const criticos = lista.filter(c => _semaforo(c) === "ROJO").length;
+  const naranjas = lista.filter(c => _semaforo(c) === "NARANJA").length;
   const saldoTotal = lista.reduce((s, c) => s + (c.saldoPendiente || 0), 0);
   const diasProm = lista.length
     ? Math.round(lista.reduce((s, c) => s + (c.diasMaxVencidos || 0), 0) / lista.length)
@@ -154,18 +173,19 @@ function _render() {
   if (!tbody) return;
 
   if (!lista.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text2)">
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-sec)">
       Sin cuentas en seguimiento jurídico</td></tr>`;
     return;
   }
 
   tbody.innerHTML = lista.map(c => {
-    const color  = SEMAFORO_COLOR[c.semaforoColor] || "var(--text2)";
-    const label  = c.semaforoColor === "ROJO" ? "🔴 Crítico" : c.semaforoColor === "NARANJA" ? "🟠 Seguimiento" : "⚪ Revisión";
+    const sem    = _semaforo(c);
+    const color  = SEMAFORO_COLOR[sem] || "var(--text-sec)";
+    const label  = sem === "ROJO" ? "🔴 Crítico" : sem === "NARANJA" ? "🟠 Seguimiento" : "⚪ Revisión";
     return `<tr data-cid="${esc(c.id)}">
       <td>
         <div style="font-weight:700">${esc(c.nombre || "—")}</div>
-        <div style="font-size:11px;color:var(--text2)">${esc(c.email || c.rfc || "")}</div>
+        <div style="font-size:11px;color:var(--text-sec)">${esc(c.email || c.rfc || "")}</div>
       </td>
       <td style="font-size:12px">${esc(c.ingenieroAlias || "Sin asignar")}</td>
       <td style="font-weight:700;color:${color};text-align:right;font-variant-numeric:tabular-nums">
@@ -199,7 +219,7 @@ async function _abrirPanel(clienteId) {
   const body   = document.getElementById("jur-panel-body");
 
   titulo.textContent = c.nombre || "Cliente";
-  body.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text2)">Cargando notas…</div>`;
+  body.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-sec)">Cargando notas…</div>`;
   panel.classList.remove("hidden");
 
   // Cargar notas jurídicas
@@ -212,19 +232,19 @@ async function _abrirPanel(clienteId) {
   );
   const notas = notasSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-  const color = SEMAFORO_COLOR[c.semaforoColor] || "var(--text2)";
+  const color = SEMAFORO_COLOR[c.semaforoColor] || "var(--text-sec)";
 
   body.innerHTML = `
     <!-- Resumen cliente -->
     <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:16px">
       <div style="font-size:13px;font-weight:700;margin-bottom:4px">${esc(c.nombre)}</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${esc(c.ingenieroAlias || "Sin ingeniero")}</div>
+      <div style="font-size:12px;color:var(--text-sec);margin-bottom:8px">${esc(c.ingenieroAlias || "Sin ingeniero")}</div>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
-        <div><div style="font-size:11px;color:var(--text2)">Saldo</div>
+        <div><div style="font-size:11px;color:var(--text-sec)">Saldo</div>
           <div style="font-weight:700;color:${color}">${fmtMXN(c.saldoPendiente || 0)}</div></div>
-        <div><div style="font-size:11px;color:var(--text2)">Días vencidos</div>
+        <div><div style="font-size:11px;color:var(--text-sec)">Días vencidos</div>
           <div style="font-weight:700;color:${color}">${c.diasMaxVencidos || 0}d</div></div>
-        <div><div style="font-size:11px;color:var(--text2)">Últ. pago</div>
+        <div><div style="font-size:11px;color:var(--text-sec)">Últ. pago</div>
           <div style="font-weight:700">${fmtFecha(c.ultimoPago)}</div></div>
       </div>
     </div>
@@ -236,21 +256,21 @@ async function _abrirPanel(clienteId) {
     </div>
 
     <!-- Historial de notas -->
-    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">
+    <div style="font-size:12px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">
       Historial jurídico (${notas.length})
     </div>
     <div id="jur-notas-lista">
       ${notas.length === 0
-        ? `<div style="text-align:center;padding:24px;color:var(--text2);font-size:13px">Sin notas registradas</div>`
+        ? `<div style="text-align:center;padding:24px;color:var(--text-sec);font-size:13px">Sin notas registradas</div>`
         : notas.map(n => `
           <div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
               <span style="font-size:11px;font-weight:700;color:${_tipoColor(n.tipo)}">${esc(_tipoLabel(n.tipo))}</span>
-              <span style="font-size:10px;color:var(--text2)">${esc(n.autor || "—")} · ${fmtFecha(n.creadaEn?.toMillis?.() ?? n.creadaEn)}</span>
+              <span style="font-size:10px;color:var(--text-sec)">${esc(n.autor || "—")} · ${fmtFecha(n.creadaEn?.toMillis?.() ?? n.creadaEn)}</span>
             </div>
-            <div style="font-size:12px;color:var(--text);line-height:1.5">${esc(n.texto || "")}</div>
-            ${n.fechaCompromiso ? `<div style="font-size:11px;color:var(--text2);margin-top:4px">📅 Compromiso: ${fmtFecha(n.fechaCompromiso)}</div>` : ""}
-            ${n.montoCompromiso ? `<div style="font-size:11px;color:var(--text2)">💰 Monto: ${fmtMXN(n.montoCompromiso)}</div>` : ""}
+            <div style="font-size:12px;color:var(--text-primary);line-height:1.5">${esc(n.texto || "")}</div>
+            ${n.fechaCompromiso ? `<div style="font-size:11px;color:var(--text-sec);margin-top:4px">📅 Compromiso: ${fmtFecha(n.fechaCompromiso)}</div>` : ""}
+            ${n.montoCompromiso ? `<div style="font-size:11px;color:var(--text-sec)">💰 Monto: ${fmtMXN(n.montoCompromiso)}</div>` : ""}
           </div>`).join("")
       }
     </div>
@@ -328,6 +348,7 @@ function _bindUI() {
     document.getElementById("jur-panel")?.classList.add("hidden");
     _panelId = null;
   });
+  document.getElementById("jur-filtro-ing")?.addEventListener("change", _render);
   document.getElementById("jur-filtro-semaforo")?.addEventListener("change", _render);
   let _buscTimer;
   document.getElementById("jur-buscar")?.addEventListener("input", () => {

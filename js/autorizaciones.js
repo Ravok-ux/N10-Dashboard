@@ -73,7 +73,7 @@ export const AutorizacionesModule = {
         .aut-badge  { background:#ef4444; color:#fff; border-radius:20px; padding:2px 10px;
                       font-size:.8rem; font-weight:700; }
         .aut-body   { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:24px; }
-        .aut-section-title { font-size:.85rem; font-weight:700; color:var(--text-muted,#64748b);
+        .aut-section-title { font-size:.85rem; font-weight:700; color:var(--text-sec);
                              text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px; }
         .aut-card   { background:var(--card-bg,#fff); border:1px solid var(--border,#e2e8f0);
                       border-radius:10px; padding:14px; display:flex; flex-direction:column; gap:8px; }
@@ -83,7 +83,7 @@ export const AutorizacionesModule = {
         .aut-card-top { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:4px; }
         .aut-folio  { font-weight:700; font-size:.95rem; }
         .aut-total  { font-size:1rem; font-weight:700; color:var(--accent,#3b82f6); }
-        .aut-meta   { font-size:.8rem; color:var(--text-muted,#64748b); }
+        .aut-meta   { font-size:.8rem; color:var(--text-sec); }
         .aut-items  { font-size:.8rem; border-top:1px solid var(--border,#e2e8f0); padding-top:8px; }
         .aut-items-title { font-weight:600; margin-bottom:4px; }
         .aut-item-row { display:flex; justify-content:space-between; padding:2px 0; }
@@ -92,7 +92,7 @@ export const AutorizacionesModule = {
         .aut-pill.pend { background:#fef3c7; color:#92400e; }
         .aut-pill.ok   { background:#dcfce7; color:#166534; }
         .aut-pill.rec  { background:#fee2e2; color:#991b1b; }
-        .aut-resolucion { font-size:.8rem; color:var(--text-muted,#64748b); border-top:1px solid var(--border,#e2e8f0); padding-top:8px; }
+        .aut-resolucion { font-size:.8rem; color:var(--text-sec); border-top:1px solid var(--border,#e2e8f0); padding-top:8px; }
         .aut-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4);
                              display:flex; align-items:center; justify-content:center; z-index:300; }
         .aut-modal  { background:var(--card-bg,#fff); border-radius:10px; padding:20px;
@@ -107,7 +107,7 @@ export const AutorizacionesModule = {
         .btn-success  { background:#22c55e; color:#fff; border:none;
                         padding:7px 14px; border-radius:6px; cursor:pointer; font-size:.88rem; }
         .btn-sm       { padding:5px 11px; font-size:.8rem; }
-        .empty-state  { padding:20px; text-align:center; color:var(--text-muted,#64748b);
+        .empty-state  { padding:20px; text-align:center; color:var(--text-sec);
                         font-size:.88rem; }
       </style>
     `;
@@ -192,7 +192,7 @@ function _renderPendientes() {
       ${p.notas ? `<div class="aut-meta">📝 ${esc(p.notas)}</div>` : ""}
       <div id="aut-items-${esc(p.id)}" class="aut-items">
         <div class="aut-items-title">Productos</div>
-        <div class="aut-items-loading" style="color:var(--text-muted,#64748b);font-size:.78rem">Cargando…</div>
+        <div class="aut-items-loading" style="color:var(--text-sec);font-size:.78rem">Cargando…</div>
       </div>
       <div class="aut-actions">
         <button class="btn-success btn-sm" onclick="_autAprobar('${esc(p.id)}')">✓ Aprobar</button>
@@ -263,7 +263,7 @@ async function _cargarItems(pedidoId, containerId) {
   } catch (e) {
     console.error('_cargarItems error:', e);
     const el = document.getElementById(containerId);
-    if (el) el.innerHTML = '<div style="color:var(--text-muted,#64748b);font-size:.78rem">Sin detalle disponible</div>';
+    if (el) el.innerHTML = '<div style="color:var(--text-sec);font-size:.78rem">Sin detalle disponible</div>';
   }
 }
 

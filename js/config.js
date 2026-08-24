@@ -163,10 +163,11 @@ const _css = `
   gap: 20px;
 }
 .cfg-card {
-  background: var(--surface-2, #fff);
-  border: 0.5px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 20px 24px;
+  box-shadow: var(--shadow);
 }
 .cfg-card-head {
   display: flex;
@@ -175,16 +176,16 @@ const _css = `
   margin-bottom: 20px;
 }
 .cfg-card-icon { font-size: 22px; line-height: 1; margin-top: 2px; }
-.cfg-card-title { font-size: 15px; font-weight: 500; color: var(--text-primary); }
-.cfg-card-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.cfg-card-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.cfg-card-sub { font-size: 12px; color: var(--text-sec); margin-top: 2px; }
 .cfg-fields { display: flex; flex-direction: column; gap: 14px; }
-.cfg-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; margin-bottom: -8px; }
+.cfg-label { font-size: 12px; color: var(--text-sec); font-weight: 600; margin-bottom: -8px; }
 .cfg-input, .cfg-textarea {
   width: 100%;
   box-sizing: border-box;
-  background: var(--surface-1, #f9f9f9);
-  border: 0.5px solid var(--border-strong);
-  border-radius: var(--radius, 8px);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 8px 12px;
   font-size: 14px;
   color: var(--text-primary);
@@ -193,8 +194,8 @@ const _css = `
 }
 .cfg-input:focus, .cfg-textarea:focus {
   outline: none;
-  border-color: var(--border-accent);
-  box-shadow: 0 0 0 2px var(--bg-accent);
+  border-color: var(--green-mid);
+  box-shadow: 0 0 0 2px var(--green-bg);
 }
 .cfg-actions {
   display: flex;
@@ -208,34 +209,34 @@ const _css = `
   padding: 6px 12px;
   border-radius: var(--radius, 8px);
 }
-.cfg-status.ok { background: var(--bg-success); color: var(--text-success); }
-.cfg-status.err { background: var(--bg-danger); color: var(--text-danger); }
+.cfg-status.ok  { background: var(--green-bg); color: #16A34A; }
+.cfg-status.err { background: #FEE2E2; color: #DC2626; }
 .cfg-status.hidden { display: none; }
 .cfg-btn-primary {
-  background: var(--fill-accent);
-  color: var(--on-accent);
+  background: var(--green-dark);
+  color: #fff;
   border: none;
-  border-radius: var(--radius, 8px);
+  border-radius: var(--radius);
   padding: 9px 20px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
 }
-.cfg-btn-primary:hover { background: var(--fill-accent-hover); }
+.cfg-btn-primary:hover { background: var(--green-mid); }
 .cfg-btn-secondary {
   background: transparent;
-  color: var(--text-secondary);
-  border: 0.5px solid var(--border-strong);
-  border-radius: var(--radius, 8px);
+  color: var(--text-sec);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 9px 20px;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
   margin-left: auto;
 }
-.cfg-btn-secondary:hover { background: var(--surface-1); }
+.cfg-btn-secondary:hover { background: var(--surface-2); }
 .cfg-preview-card {
-  background: var(--surface-1, #f3f3f3);
-  border: 0.5px solid var(--border);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 20px 24px;
 }
@@ -277,7 +278,7 @@ const _css = `
 .ctrl-slider::before {
   content: ""; position: absolute;
   width: 16px; height: 16px; border-radius: 50%;
-  left: 3px; top: 3px; background: #fff; transition: transform .2s;
+  left: 3px; top: 3px; background:var(--surface); transition: transform .2s;
 }
 .ctrl-toggle input:checked + .ctrl-slider { background: #16A34A; }
 .ctrl-toggle input:checked + .ctrl-slider::before { transform: translateX(18px); }

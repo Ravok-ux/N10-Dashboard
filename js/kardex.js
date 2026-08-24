@@ -33,6 +33,7 @@ let _filtroTipo   = "";
 let _filtroProd   = "";
 let _movimientos  = [];
 let _alertasUnsub = null;
+let _productosCache = [];
 
 export const KardexModule = {
   mount(container) {
@@ -43,6 +44,7 @@ export const KardexModule = {
     }
     container.innerHTML = _html();
     document.getElementById("kx-tbody").innerHTML = window.skeleton?.(5, 5) ?? "";
+    _cargarProductos();
     _bindUI();
     _escuchar();
     _escucharAlertas();
@@ -70,11 +72,16 @@ function _html() {
       </div>
       <div style="flex:1"></div>
 
-      <!-- Búsqueda por producto -->
-      <input id="kx-buscar" type="text" placeholder="Buscar producto…"
-        oninput="KardexUI.buscar(this.value)"
-        style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;
-          font-size:12px;background:var(--surface);color:var(--text-primary);width:200px">
+      <!-- Búsqueda por producto con autocomplete -->
+      <div style="position:relative;width:220px">
+        <input id="kx-buscar" type="text" placeholder="Buscar producto…" autocomplete="off"
+          style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 10px;
+            font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
+        <div id="kx-dd" style="display:none;position:absolute;top:100%;left:0;right:0;
+          background:var(--surface);border:1px solid var(--border);border-radius:6px;
+          box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:200;max-height:200px;overflow-y:auto;margin-top:2px">
+        </div>
+      </div>
 
       <!-- Filtro tipo -->
       <select id="kx-tipo" onchange="KardexUI.setTipo(this.value)"
@@ -247,8 +254,57 @@ function _renderTabla() {
   }).join("");
 }
 
+// ── Cargar productos para autocomplete ───────────────────────
+async function _cargarProductos() {
+  try {
+    const snap = await getDocs(query(collection(db, "productos"), orderBy("nombre")));
+    _productosCache = snap.docs.map(d => ({
+      id: d.id,
+      nombre: d.data().nombre || "",
+      codigo: d.data().codigo || ""
+    }));
+  } catch(e) { /* silencioso */ }
+}
+
 // ── Acciones UI ───────────────────────────────────────────────
 function _bindUI() {
+  const input = document.getElementById("kx-buscar");
+  const dd    = document.getElementById("kx-dd");
+  if (input && dd) {
+    input.addEventListener("input", () => {
+      const q = input.value.trim().toLowerCase();
+      _filtroProd = input.value.trim();
+      _renderTabla();
+      if (q.length < 2) { dd.style.display = "none"; return; }
+      const matches = _productosCache
+        .filter(p => p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q))
+        .slice(0, 12);
+      if (!matches.length) { dd.style.display = "none"; return; }
+      dd.innerHTML = matches.map(p =>
+        `<div data-nombre="${p.nombre.replace(/"/g,'&quot;')}"
+          style="padding:7px 12px;cursor:pointer;font-size:12px;
+            border-bottom:1px solid var(--border);color:var(--text-primary)"
+          onmouseover="this.style.background='var(--surface-2)'"
+          onmouseout="this.style.background=''"
+          onmousedown="event.preventDefault()">
+          <span style="font-weight:600">${p.nombre}</span>
+          <span style="font-size:10px;color:#9CA3AF;margin-left:6px">${p.codigo}</span>
+        </div>`
+      ).join("");
+      dd.style.display = "block";
+      dd.querySelectorAll("div[data-nombre]").forEach(el => {
+        el.addEventListener("click", () => {
+          input.value = el.dataset.nombre;
+          _filtroProd = el.dataset.nombre;
+          dd.style.display = "none";
+          _renderTabla();
+        });
+      });
+    });
+    input.addEventListener("blur", () => setTimeout(() => { dd.style.display = "none"; }, 150));
+    input.addEventListener("keydown", e => { if (e.key === "Escape") { dd.style.display = "none"; input.value = ""; _filtroProd = ""; _renderTabla(); } });
+  }
+
   window.KardexUI = {
     setTipo(t)   { _filtroTipo = t; _renderTabla(); },
     buscar(q)    { _filtroProd = q.trim(); _renderTabla(); },

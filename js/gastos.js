@@ -82,13 +82,13 @@ function _html() {
 .gastos-wrap { padding: 1rem; }
 .gastos-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; margin-bottom:1rem; }
 .gastos-filtros { display:flex; gap:.5rem; flex-wrap:wrap; }
-.gastos-filtros select, .gastos-filtros input { padding:.4rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:.9rem; }
+.gastos-filtros select, .gastos-filtros input { padding:.4rem .6rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text-primary); font-size:.9rem; }
 .gastos-resumen { font-size:.85rem; color:var(--muted); margin-bottom:.75rem; }
 .tabla-scroll { overflow-x:auto; }
 .tabla-gastos { width:100%; border-collapse:collapse; font-size:.9rem; }
-.tabla-gastos th { background:var(--bg2); padding:.6rem .8rem; text-align:left; font-weight:600; border-bottom:2px solid var(--border); white-space:nowrap; }
+.tabla-gastos th { background:var(--surface-2); padding:.6rem .8rem; text-align:left; font-weight:600; border-bottom:2px solid var(--border); white-space:nowrap; }
 .tabla-gastos td { padding:.55rem .8rem; border-bottom:1px solid var(--border); vertical-align:top; }
-.tabla-gastos tr:hover td { background:var(--bg2); }
+.tabla-gastos tr:hover td { background:var(--surface-2); }
 .monto-cell { font-weight:700; color:#1D4ED8; white-space:nowrap; }
 .badge { display:inline-block; padding:.2rem .5rem; border-radius:4px; font-size:.75rem; font-weight:700; }
 .badge-warning { background:#FEF3C7; color:#92400E; }
@@ -98,7 +98,7 @@ function _html() {
 .btn-rechazar { background:#DC2626; color:#fff; border:none; border-radius:5px; padding:.3rem .7rem; cursor:pointer; font-size:.8rem; margin-left:.3rem; }
 .btn-aprobar:hover { background:#15803D; }
 .btn-rechazar:hover { background:#B91C1C; }
-.comentario-input { width:100%; padding:.3rem; border:1px solid var(--border); border-radius:4px; background:var(--bg); color:var(--text); font-size:.8rem; margin-bottom:.3rem; }
+.comentario-input { width:100%; padding:.3rem; border:1px solid var(--border); border-radius:4px; background:var(--surface); color:var(--text-primary); font-size:.8rem; margin-bottom:.3rem; }
 </style>`;
 }
 

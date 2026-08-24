@@ -49,10 +49,10 @@ export const LogisticaModule = {
       </div>
 
       <!-- Tabs vista -->
-      <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--c-border,#e2e8f0)">
+      <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border)">
         <button class="log-tab active" data-tab="dia" style="padding:8px 20px;background:none;border:none;cursor:pointer;font-weight:700;font-size:13px;border-bottom:2px solid var(--primary);margin-bottom:-2px;color:var(--primary)">📋 Día</button>
-        <button class="log-tab" data-tab="semana" style="padding:8px 20px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-muted,#6B7280)">📅 Semana</button>
-        <button class="log-tab" data-tab="atrasados" style="padding:8px 20px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-muted,#6B7280)">⚠️ Atrasados</button>
+        <button class="log-tab" data-tab="semana" style="padding:8px 20px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-sec)">📅 Semana</button>
+        <button class="log-tab" data-tab="atrasados" style="padding:8px 20px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-sec)">⚠️ Atrasados</button>
       </div>
 
       <!-- Vista día -->
@@ -102,7 +102,7 @@ export const LogisticaModule = {
             <th>NOTAS</th><th>ACCIONES</th>
           </tr></thead>
           <tbody id="log-body">
-            <tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text-muted)">
+            <tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text-sec)">
               Selecciona una fecha y presiona Buscar</td></tr>
           </tbody>
         </table>
@@ -132,7 +132,7 @@ export const LogisticaModule = {
               <th>ÚLTIMA VISITA</th><th>PRÓXIMA VISITA</th><th>DÍAS RESTANTES</th>
             </tr></thead>
             <tbody id="log-clientes-body">
-              <tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-muted)">Cargando…</td></tr>
+              <tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-sec)">Cargando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -163,7 +163,9 @@ export const LogisticaModule = {
 
 async function _cargarIngenieros() {
   const snap = await getDocs(query(collection(db,"usuarios"), where("activo","==",true), orderBy("alias")));
-  _ingenieros = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  _ingenieros = snap.docs
+    .filter(d => ["INGENIERO","RECUPERADOR"].includes(d.data().rol))
+    .map(d => ({ uid: d.id, ...d.data() }));
   const opts = _ingenieros.map(u => `<option value="${esc(u.uid)}">${esc(u.alias||u.uid)}</option>`).join("");
   ["log-filtro-ing","log-clientes-ing"].forEach(id => {
     document.getElementById(id)?.insertAdjacentHTML("beforeend", opts);
@@ -185,7 +187,7 @@ function _bindUI() {
       document.querySelectorAll(".log-tab").forEach(b => {
         b.classList.remove("active");
         b.style.borderBottom = "none";
-        b.style.color = "var(--text-muted,#6B7280)";
+        b.style.color = "var(--text-sec)";
         b.style.fontWeight = "400";
       });
       btn.classList.add("active");
@@ -249,7 +251,7 @@ function _renderVisitas(rows) {
   const tbody = document.getElementById("log-body");
   if (!tbody) return;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text-muted)">
+    tbody.innerHTML = `<tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text-sec)">
       Sin visitas programadas para esta fecha</td></tr>`;
     return;
   }
@@ -259,13 +261,13 @@ function _renderVisitas(rows) {
       <td style="font-weight:600">${esc(r.ingenieroAlias||"–")}</td>
       <td>
         <div style="font-weight:700">${esc(r.clienteNombre||"–")}</div>
-        <div style="font-size:11px;color:var(--text-muted)">${esc(r.clienteDireccion||"")}</div>
+        <div style="font-size:11px;color:var(--text-sec)">${esc(r.clienteDireccion||"")}</div>
       </td>
       <td><span class="badge badge-gray" style="font-size:10px">${esc(FREQ_LABEL[r.frecuencia]||r.frecuencia||"–")}</span></td>
-      <td style="font-size:11px;color:var(--text-muted)">${fmtFecha(r.ultimaVisita)}</td>
+      <td style="font-size:11px;color:var(--text-sec)">${fmtFecha(r.ultimaVisita)}</td>
       <td>${STATUS_BADGE[r.status] || `<span class="badge badge-gray">${esc(r.status)}</span>`}</td>
-      <td style="font-size:11px;color:var(--text-muted)">${r.checkInTs ? fmtHora(r.checkInTs) : "–"}</td>
-      <td style="font-size:11px;max-width:160px;color:var(--text-muted)">${esc(r.notas||"")}</td>
+      <td style="font-size:11px;color:var(--text-sec)">${r.checkInTs ? fmtHora(r.checkInTs) : "–"}</td>
+      <td style="font-size:11px;max-width:160px;color:var(--text-sec)">${esc(r.notas||"")}</td>
       <td style="white-space:nowrap">
         ${isPend ? `
           <button class="btn-sm btn-green" data-id="${r.id}" data-act="comp">✓ Completar</button>
@@ -325,7 +327,7 @@ function _renderClientesFrecuencia(rows) {
   const tbody = document.getElementById("log-clientes-body");
   if (!tbody) return;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-muted)">
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-sec)">
       Sin clientes con frecuencia asignada</td></tr>`;
     return;
   }
@@ -343,7 +345,7 @@ function _renderClientesFrecuencia(rows) {
       <td style="font-weight:700">${esc(r.nombre||"–")}</td>
       <td style="font-size:12px">${esc(r.ingenieroAlias||"Sin asignar")}</td>
       <td><span class="badge badge-gray" style="font-size:10px">${esc(FREQ_LABEL[r.frecuenciaVisita]||r.frecuenciaVisita)}</span></td>
-      <td style="font-size:11px;color:var(--text-muted)">${ultima ? fmtFecha(ultima) : "Nunca"}</td>
+      <td style="font-size:11px;color:var(--text-sec)">${ultima ? fmtFecha(ultima) : "Nunca"}</td>
       <td style="font-size:11px">${fmtFecha(proxTs)}</td>
       <td style="font-weight:700;color:${colorDias}">
         ${atrasado ? `⚠️ ${Math.abs(faltan)} días atrasado` : hoy ? "📍 HOY" : `${faltan} días`}
@@ -439,7 +441,7 @@ const _DIA_LABEL = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 async function _cargarVistaSemana() {
   const wrap = document.getElementById("log-semana-grid");
   if (!wrap) return;
-  wrap.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted)">Cargando semana…</div>`;
+  wrap.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-sec)">Cargando semana…</div>`;
 
   try {
     const dias   = _diasSemana();
@@ -486,17 +488,17 @@ async function _cargarVistaSemana() {
           const ings = [...data.ings].slice(0,3).join(", ") + (data.ings.size > 3 ? ` +${data.ings.size-3}` : "");
           return `
             <div data-fecha="${esc(iso)}" class="log-sem-dia"
-              style="border:1px solid ${esHoy ? "var(--primary)" : "var(--c-border,#e2e8f0)"};
+              style="border:1px solid ${esHoy ? "var(--primary)" : "var(--border)"};
                      border-radius:10px;padding:10px 8px;cursor:pointer;
                      background:${esHoy ? "var(--primary-light,#EFF6FF)" : "var(--card-bg,#fff)"};
                      transition:box-shadow .15s"
               onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.12)'"
               onmouseout="this.style.boxShadow='none'">
-              <div style="font-size:11px;font-weight:700;color:${esHoy?"var(--primary)":"var(--text-muted,#6B7280)"};text-transform:uppercase;letter-spacing:.04em">${_DIA_LABEL[i]}</div>
-              <div style="font-size:20px;font-weight:800;margin:2px 0;color:${esHoy?"var(--primary)":"var(--c-text,#111)"}">${dia.getDate()}</div>
+              <div style="font-size:11px;font-weight:700;color:${esHoy?"var(--primary)":"var(--text-sec)"};text-transform:uppercase;letter-spacing:.04em">${_DIA_LABEL[i]}</div>
+              <div style="font-size:20px;font-weight:800;margin:2px 0;color:${esHoy?"var(--primary)":"var(--text-primary)"}">${dia.getDate()}</div>
               ${data.total ? `
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">${data.total} visita${data.total!==1?"s":""}</div>
-                <div style="height:4px;border-radius:2px;background:var(--c-border,#e2e8f0);margin-bottom:4px;overflow:hidden">
+                <div style="font-size:11px;color:var(--text-sec);margin-bottom:4px">${data.total} visita${data.total!==1?"s":""}</div>
+                <div style="height:4px;border-radius:2px;background:var(--border);margin-bottom:4px;overflow:hidden">
                   <div style="height:100%;width:${barW}%;background:#16A34A;border-radius:2px;transition:width .3s"></div>
                 </div>
                 <div style="font-size:10px;display:flex;gap:4px;flex-wrap:wrap">
@@ -504,8 +506,8 @@ async function _cargarVistaSemana() {
                   ${data.pend ? `<span style="color:#D97706">⏳${data.pend}</span>` : ""}
                   ${data.omit ? `<span style="color:#9CA3AF">–${data.omit}</span>` : ""}
                 </div>
-                ${ings ? `<div style="font-size:9px;color:var(--text-muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ings)}</div>` : ""}
-              ` : `<div style="font-size:11px;color:var(--text-muted)">Sin visitas</div>`}
+                ${ings ? `<div style="font-size:9px;color:var(--text-sec);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ings)}</div>` : ""}
+              ` : `<div style="font-size:11px;color:var(--text-sec)">Sin visitas</div>`}
             </div>`;
         }).join("")}
       </div>
@@ -558,7 +560,7 @@ async function _cargarVistaSemanaDesde(ref) {
 async function _cargarAtrasados() {
   const wrap = document.getElementById("log-atrasados-content");
   if (!wrap) return;
-  wrap.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-muted)">Calculando clientes atrasados…</div>`;
+  wrap.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-sec)">Calculando clientes atrasados…</div>`;
 
   try {
     const ahora = Date.now();
@@ -583,7 +585,7 @@ async function _cargarAtrasados() {
 
     if (!atrasados.length) {
       wrap.innerHTML = `
-        <div style="padding:48px;text-align:center;color:var(--text-muted)">
+        <div style="padding:48px;text-align:center;color:var(--text-sec)">
           <div style="font-size:32px;margin-bottom:8px">✅</div>
           <div style="font-weight:700;font-size:15px">Ningún cliente atrasado</div>
           <div style="font-size:12px;margin-top:4px">Todos los clientes tienen sus visitas al día</div>
@@ -601,7 +603,7 @@ async function _cargarAtrasados() {
         <td style="font-weight:700">${esc(c.nombre||"–")}</td>
         <td style="font-size:12px">${esc(c.ingenieroAlias||"Sin asignar")}</td>
         <td><span class="badge badge-gray" style="font-size:10px">${esc(FREQ_LABEL[c.frecuenciaVisita]||c.frecuenciaVisita)}</span></td>
-        <td style="font-size:11px;color:var(--text-muted)">${c.ultimaVisita ? fmtFecha(c.ultimaVisita) : "Nunca"}</td>
+        <td style="font-size:11px;color:var(--text-sec)">${c.ultimaVisita ? fmtFecha(c.ultimaVisita) : "Nunca"}</td>
         <td style="font-weight:800;color:${color(c.retraso)}">⚠️ ${c.retraso} día${c.retraso!==1?"s":""}</td>
       </tr>`;
 

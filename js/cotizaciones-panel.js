@@ -38,15 +38,55 @@ export const CotizacionesPanelModule = (() => {
     } catch (_) {}
 
     container.innerHTML = `
-      <div class="view-header">
-        <h2>Cotizaciones</h2>
+      <style>
+        .cot-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:16px; }
+        .cot-kpi { background:var(--surface); border:1px solid var(--border); border-radius:10px;
+          padding:12px 14px; display:flex; flex-direction:column; gap:4px; }
+        .cot-kpi-num { font-size:22px; font-weight:800; color:var(--text-primary); font-variant-numeric:tabular-nums; }
+        .cot-kpi-lbl { font-size:10px; font-weight:600; color:#9CA3AF; text-transform:uppercase; letter-spacing:.05em; }
+        .cot-kpi-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:4px; }
+        .cot-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+        #tablaCotizaciones tbody tr:hover { background:var(--surface); cursor:pointer; }
+        #tablaCotizaciones tbody tr { transition:background .1s; }
+        .cot-folio { font-weight:700; font-size:11.5px; color:var(--text-primary); font-family:monospace; }
+        .cot-monto { font-variant-numeric:tabular-nums; font-weight:600; text-align:right; }
+        .cot-vence-warn { color:#B91C1C; font-weight:700; }
+      </style>
+
+      <div class="view-header" style="margin-bottom:12px">
+        <div>
+          <h2 style="margin:0">Cotizaciones</h2>
+          <div style="font-size:11px;color:#9CA3AF;margin-top:2px" id="cotSubtitulo">Cargando…</div>
+        </div>
         <div style="display:flex;gap:8px;align-items:center">
-          <select id="filtroCotStatus" class="input-select" style="width:160px">
-            <option value="">Todos</option>
-            ${Object.entries(STATUS_LABELS).map(([k,v]) => `<option value="${k}">${v.label}</option>`).join('')}
-          </select>
           <button class="btn-secondary" id="btnConfigVigencia">⚙ Vigencia: ${_vigenciaDias}d</button>
         </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="cot-kpi-grid" id="cotKpis">
+        <div class="cot-kpi"><div class="cot-kpi-num" id="kpi-total">—</div><div class="cot-kpi-lbl">Total</div></div>
+        <div class="cot-kpi"><div class="cot-kpi-num" style="color:#D97706" id="kpi-enviadas">—</div><div class="cot-kpi-lbl"><span class="cot-kpi-dot" style="background:#D97706"></span>Enviadas</div></div>
+        <div class="cot-kpi"><div class="cot-kpi-num" style="color:#16A34A" id="kpi-aprobadas">—</div><div class="cot-kpi-lbl"><span class="cot-kpi-dot" style="background:#16A34A"></span>Aprobadas</div></div>
+        <div class="cot-kpi"><div class="cot-kpi-num" style="color:#DC2626" id="kpi-rechazadas">—</div><div class="cot-kpi-lbl"><span class="cot-kpi-dot" style="background:#DC2626"></span>Rechazadas</div></div>
+        <div class="cot-kpi"><div class="cot-kpi-num" style="color:#7C3AED" id="kpi-convertidas">—</div><div class="cot-kpi-lbl"><span class="cot-kpi-dot" style="background:#7C3AED"></span>Convertidas</div></div>
+      </div>
+
+      <!-- Filtro -->
+      <div class="cot-toolbar">
+        <span style="font-size:11px;font-weight:700;color:#6B7280">Filtrar:</span>
+        ${Object.entries(STATUS_LABELS).map(([k,v]) =>
+          `<button class="cot-filtro-btn" data-status="${k}"
+            style="padding:4px 10px;border-radius:20px;border:1px solid var(--border);
+              background:transparent;font-size:11px;font-weight:600;color:#6B7280;cursor:pointer">
+            ${v.label}
+          </button>`).join('')}
+        <button class="cot-filtro-btn" data-status="" style="padding:4px 10px;border-radius:20px;
+          border:1px solid var(--border);background:var(--surface);font-size:11px;
+          font-weight:700;color:var(--text-primary);cursor:pointer">Todos</button>
+        <input id="cotBusqueda" type="search" placeholder="Buscar folio / cliente…"
+          style="margin-left:auto;padding:5px 10px;border:1px solid var(--border);border-radius:7px;
+            background:var(--surface);color:var(--text-primary);font-size:11.5px;min-width:180px">
       </div>
 
       <div class="tabla-wrapper">
@@ -55,7 +95,7 @@ export const CotizacionesPanelModule = (() => {
             <th>Folio</th>
             <th>Cliente</th>
             <th>Ingeniero</th>
-            <th>Total</th>
+            <th style="text-align:right">Total</th>
             <th>Creada</th>
             <th>Vence</th>
             <th>Estado</th>
@@ -104,24 +144,38 @@ export const CotizacionesPanelModule = (() => {
 
     _unsub = onSnapshot(q, snap => {
       const tbody = container.querySelector('#tbodyCot');
-      if (snap.empty) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center">Sin cotizaciones.</td></tr>'; return; }
+      if (snap.empty) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:#9CA3AF">Sin cotizaciones.</td></tr>'; return; }
       const ahora = Date.now();
+
+      // KPIs
+      const counts = { ENVIADA: 0, APROBADA: 0, RECHAZADA: 0, CONVERTIDA: 0 };
+      snap.docs.forEach(d => { const s = d.data().status; if (counts[s] !== undefined) counts[s]++; });
+      const setKpi = (id, val) => { const el = container.querySelector(id); if (el) el.textContent = val; };
+      setKpi('#kpi-total', snap.size);
+      setKpi('#kpi-enviadas', counts.ENVIADA);
+      setKpi('#kpi-aprobadas', counts.APROBADA);
+      setKpi('#kpi-rechazadas', counts.RECHAZADA);
+      setKpi('#kpi-convertidas', counts.CONVERTIDA);
+      const sub = container.querySelector('#cotSubtitulo');
+      if (sub) sub.textContent = `${snap.size} cotizaciones · ${counts.APROBADA} aprobadas · ${counts.CONVERTIDA} convertidas en pedido`;
+
       tbody.innerHTML = snap.docs.map(d => {
         const c = d.data();
         const statusInfo = STATUS_LABELS[c.status] || { label: c.status, cls: 'badge-gray' };
         const expirada = c.venceEn > 0 && c.venceEn < ahora && c.status !== 'EXPIRADA' && c.status !== 'CONVERTIDA';
-        const venceColor = expirada ? 'color:#B71C1C' : '';
         return `<tr>
-          <td><strong>${esc(c.folio)}</strong></td>
+          <td><span class="cot-folio">${esc(c.folio)}</span></td>
           <td>${esc(c.clienteNombre)}</td>
-          <td>${esc(c.ingenieroAlias)}</td>
-          <td class="num">${fmtMoneda(c.total, c.moneda)}${c.moneda === 'USD' ? ` <small style="color:var(--muted)">(TC ${c.tipoCambio?.toFixed(2) || '?'})</small>` : ''}</td>
-          <td>${fmtFecha(c.creadaEn)}</td>
-          <td style="${venceColor}">${fmtFecha(c.venceEn)}</td>
+          <td style="color:#9CA3AF;font-size:11px">${esc(c.ingenieroAlias)}</td>
+          <td class="cot-monto">${fmtMoneda(c.total, c.moneda)}${c.moneda === 'USD' ? ` <small style="color:#9CA3AF">TC ${c.tipoCambio?.toFixed(2) || '?'}</small>` : ''}</td>
+          <td style="font-size:11px;color:#9CA3AF">${fmtFecha(c.creadaEn)}</td>
+          <td class="${expirada ? 'cot-vence-warn' : ''}" style="font-size:11px">${fmtFecha(c.venceEn)}${expirada ? ' ⚠️' : ''}</td>
           <td><span class="${statusInfo.cls}">${statusInfo.label}</span></td>
           <td>
-            <button class="btn-sm btn-ver-cot" data-id="${esc(d.id)}">Ver</button>
-            ${_puedeConvertir(c) ? `<button class="btn-sm btn-convertir" data-id="${esc(d.id)}" style="background:var(--color-primary);color:#fff">→ Pedido</button>` : ''}
+            <div style="display:flex;gap:4px">
+              <button class="btn-sm btn-ver-cot" data-id="${esc(d.id)}">Ver</button>
+              ${_puedeConvertir(c) ? `<button class="btn-sm btn-convertir" data-id="${esc(d.id)}" style="background:var(--color-primary);color:#fff">→ Pedido</button>` : ''}
+            </div>
           </td>
         </tr>`;
       }).join('');
@@ -290,8 +344,27 @@ export const CotizacionesPanelModule = (() => {
       } catch (err) { window.toast?.('Error: ' + err.message, 'error'); }
     });
 
-    container.querySelector('#filtroCotStatus').addEventListener('change', e =>
-      _escuchar(container, e.target.value));
+    // Filtro por botones de estado
+    let _filtroActivo = '';
+    container.querySelectorAll('.cot-filtro-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _filtroActivo = btn.dataset.status;
+        container.querySelectorAll('.cot-filtro-btn').forEach(b => {
+          b.style.background = b === btn ? 'var(--surface)' : 'transparent';
+          b.style.color = b === btn ? 'var(--text-primary)' : '#6B7280';
+          b.style.borderColor = b === btn ? 'var(--color-primary,#3B82F6)' : 'var(--border)';
+        });
+        _escuchar(container, _filtroActivo);
+      });
+    });
+
+    // Búsqueda local
+    container.querySelector('#cotBusqueda').addEventListener('input', e => {
+      const q = e.target.value.toLowerCase();
+      container.querySelectorAll('#tbodyCot tr').forEach(tr => {
+        tr.style.display = !q || tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    });
   }
 
   function destroy() {

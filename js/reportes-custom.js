@@ -192,22 +192,22 @@ function _html() {
 .rc-wrap { padding:1rem; }
 .rc-header { margin-bottom:1rem; }
 .rc-tabs { display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem;border-bottom:2px solid var(--border);padding-bottom:.75rem; }
-.rc-tab { background:none;border:1px solid var(--border);border-radius:6px;padding:.4rem .8rem;cursor:pointer;font-size:.85rem;color:var(--text); }
-.rc-tab:hover { background:var(--bg2); }
+.rc-tab { background:none;border:1px solid var(--border);border-radius:6px;padding:.4rem .8rem;cursor:pointer;font-size:.85rem;color:var(--text-primary); }
+.rc-tab:hover { background:var(--surface-2); }
 .rc-tab-active { background:#2563EB;color:#fff;border-color:#2563EB;font-weight:700; }
-.rc-config { background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-start; }
+.rc-config { background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:1rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-start; }
 .rc-config-section { min-width:200px; }
 .rc-label { display:block;font-size:.82rem;font-weight:700;margin-bottom:.35rem; }
-.rc-campo-check { display:flex;align-items:center;gap:.3rem;font-size:.82rem;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:.25rem .5rem;cursor:pointer; }
+.rc-campo-check { display:flex;align-items:center;gap:.3rem;font-size:.82rem;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:.25rem .5rem;cursor:pointer; }
 .rc-tabla { width:100%;border-collapse:collapse;font-size:.88rem; }
-.rc-tabla th { background:var(--bg2);padding:.6rem .8rem;text-align:left;font-weight:600;border-bottom:2px solid var(--border);white-space:nowrap; }
+.rc-tabla th { background:var(--surface-2);padding:.6rem .8rem;text-align:left;font-weight:600;border-bottom:2px solid var(--border);white-space:nowrap; }
 .rc-tabla td { padding:.5rem .8rem;border-bottom:1px solid var(--border); }
-.rc-tabla tr:hover td { background:var(--bg2); }
+.rc-tabla tr:hover td { background:var(--surface-2); }
 </style>`;
 }
 
-const estiloSelect = "padding:.4rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.88rem";
-const estiloInput  = "padding:.4rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.88rem;width:150px";
+const estiloSelect = "padding:.4rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);font-size:.88rem";
+const estiloInput  = "padding:.4rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);font-size:.88rem;width:150px";
 
 // ─── Eventos ─────────────────────────────────────────────────────────────────
 

@@ -71,8 +71,8 @@ function _html() {
     <div id="vis-panel-calendario">
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
         <input id="vis-search" type="text" placeholder="🔍 Buscar cliente o ingeniero…"
-          style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px">
-        <select id="vis-filter-freq" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px">
+          style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text-primary);font-size:13px">
+        <select id="vis-filter-freq" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text-primary);font-size:13px">
           <option value="TODOS">Todas las frecuencias</option>
           <option value="VENCE_HOY">⚠️ Visita hoy o vencida</option>
           <option value="ESTA_SEMANA">📅 Esta semana</option>
@@ -82,7 +82,7 @@ function _html() {
       <div style="overflow-x:auto">
         <table id="vis-tabla-cal" style="width:100%;border-collapse:collapse;font-size:13px">
           <thead>
-            <tr style="background:var(--bg2);text-align:left">
+            <tr style="background:var(--surface-2);text-align:left">
               <th style="padding:8px 10px">Cliente</th>
               <th style="padding:8px 10px">Ingeniero</th>
               <th style="padding:8px 10px;text-align:center">Frecuencia</th>
@@ -109,7 +109,7 @@ function _html() {
 
 function _tabStyle(active) {
   return `padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:${active?"700":"400"};
-    color:${active?"var(--accent)":"var(--text2)"};border-bottom:${active?"2px solid var(--accent)":"2px solid transparent"};margin-bottom:-2px`;
+    color:${active?"var(--accent)":"var(--text-sec)"};border-bottom:${active?"2px solid var(--accent)":"2px solid transparent"};margin-bottom:-2px`;
 }
 
 // ── Escuchas ──────────────────────────────────────────────────
@@ -163,7 +163,7 @@ function _renderCalendario() {
   });
 
   if (lista.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text2)">Sin clientes que mostrar</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-sec)">Sin clientes que mostrar</td></tr>`;
     return;
   }
 
@@ -173,7 +173,7 @@ function _renderCalendario() {
     const dias = pv ? Math.ceil((pv - new Date()) / 86400000) : null;
 
     let estadoChip = "";
-    if (dias === null)      estadoChip = `<span style="color:var(--text2);font-size:11px">Sin programar</span>`;
+    if (dias === null)      estadoChip = `<span style="color:var(--text-sec);font-size:11px">Sin programar</span>`;
     else if (dias < 0)      estadoChip = `<span style="padding:2px 8px;background:#FEE2E2;color:#991B1B;border-radius:12px;font-size:11px">⚠️ Vencida hace ${-dias}d</span>`;
     else if (dias === 0)    estadoChip = `<span style="padding:2px 8px;background:#FEF9C3;color:#854D0E;border-radius:12px;font-size:11px">🔔 Hoy</span>`;
     else if (dias <= 3)     estadoChip = `<span style="padding:2px 8px;background:#FFEDD5;color:#9A3412;border-radius:12px;font-size:11px">📅 En ${dias}d</span>`;
@@ -181,9 +181,9 @@ function _renderCalendario() {
 
     return `<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:9px 10px;font-weight:600">${esc(c.nombre || c.id)}</td>
-      <td style="padding:9px 10px;color:var(--text2)">${esc(c.vendedor || "—")}</td>
+      <td style="padding:9px 10px;color:var(--text-sec)">${esc(c.vendedor || "—")}</td>
       <td style="padding:9px 10px;text-align:center;font-size:12px">${esc(c.frecuenciaVisitaLabel || c.frecuenciaVisita || "—")}</td>
-      <td style="padding:9px 10px;text-align:center;font-size:12px;color:var(--text2)">${uv ? uv.toLocaleDateString("es-MX",{day:"numeric",month:"short"}) : "Nunca"}</td>
+      <td style="padding:9px 10px;text-align:center;font-size:12px;color:var(--text-sec)">${uv ? uv.toLocaleDateString("es-MX",{day:"numeric",month:"short"}) : "Nunca"}</td>
       <td style="padding:9px 10px;text-align:center;font-size:12px">${pv ? fmtDtLong(pv) : "—"}</td>
       <td style="padding:9px 10px;text-align:center">${estadoChip}</td>
     </tr>`;
@@ -197,7 +197,7 @@ function _renderSolicitudes() {
   const puedeAut = _puedeAutorizar();
 
   if (_solicitudes.length === 0) {
-    el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--text2)">Sin solicitudes de visita atemporal</div>`;
+    el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--text-sec)">Sin solicitudes de visita atemporal</div>`;
     return;
   }
 
@@ -207,11 +207,11 @@ function _renderSolicitudes() {
       <button onclick="VisitasUI.aprobar('${s.id}')" style="padding:4px 10px;background:#DCFCE7;color:#166534;border:none;border-radius:4px;cursor:pointer;font-size:12px">✓ Aprobar</button>
       <button onclick="VisitasUI.rechazar('${s.id}')" style="padding:4px 10px;background:#FEE2E2;color:#991B1B;border:none;border-radius:4px;cursor:pointer;font-size:12px">✕ Rechazar</button>` : "";
 
-    return `<div style="background:var(--bg2);border-radius:8px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+    return `<div style="background:var(--surface-2);border-radius:8px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
       <div>
         <div style="font-weight:600;margin-bottom:2px">${esc(s.clienteNombre || "—")}</div>
-        <div style="font-size:12px;color:var(--text2)">Solicitado por <b>${esc(s.solicitadoPor||"—")}</b> · ${fmtDtLong(s.creadaEn)}</div>
-        ${s.motivo ? `<div style="font-size:12px;margin-top:4px;color:var(--text2)">Motivo: ${esc(s.motivo)}</div>` : ""}
+        <div style="font-size:12px;color:var(--text-sec)">Solicitado por <b>${esc(s.solicitadoPor||"—")}</b> · ${fmtDtLong(s.creadaEn)}</div>
+        ${s.motivo ? `<div style="font-size:12px;margin-top:4px;color:var(--text-sec)">Motivo: ${esc(s.motivo)}</div>` : ""}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span style="padding:3px 10px;background:${statusColor};border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap">${s.status}</span>
@@ -245,7 +245,7 @@ function _cambiarTab(tab, container) {
   container.querySelectorAll(".vis-tab").forEach(b => {
     const active = b.dataset.tab === tab;
     b.style.fontWeight   = active ? "700" : "400";
-    b.style.color        = active ? "var(--accent)" : "var(--text2)";
+    b.style.color        = active ? "var(--accent)" : "var(--text-sec)";
     b.style.borderBottom = active ? "2px solid var(--accent)" : "2px solid transparent";
   });
   document.getElementById("vis-panel-calendario").style.display  = tab === "calendario"   ? "" : "none";

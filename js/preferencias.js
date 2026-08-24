@@ -27,6 +27,7 @@ const COLORES = [
   { val: "#B91C1C", label: "Rojo" },
   { val: "#7C3AED", label: "Violeta" },
   { val: "#D97706", label: "Ámbar" },
+  { val: "#FF1695", label: "Rosa" },
   { val: "#374151", label: "Grafito" },
 ];
 

@@ -200,7 +200,10 @@ function _bindBusqueda() {
     _renderizar();
 
     if (q.length < 2) { dd.style.display = "none"; return; }
-    const matches = _productosCache
+    const source = _productosCache.length > 0 ? _productosCache
+      : [...new Set(_todos.map(e => e.nombreProducto).filter(Boolean))].sort()
+          .map(n => ({ nombre: n, codigo: "" }));
+    const matches = source
       .filter(p => p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q))
       .slice(0, 12);
     if (!matches.length) { dd.style.display = "none"; return; }

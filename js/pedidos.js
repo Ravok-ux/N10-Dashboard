@@ -726,7 +726,7 @@ function _renderFormPedido(body) {
             Tipo de venta
           </div>
           <select id="pd-tipo" style="${_pdinputStyle()}">
-            ${["Contado","Crédito","Consignación","Muestra"].map(t =>
+            ${["Contado","Crédito"].map(t =>
               `<option>${t}</option>`).join("")}
           </select>
         </div>

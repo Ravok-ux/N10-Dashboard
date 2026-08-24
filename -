@@ -1,0 +1,45 @@
+{"users": [
+{
+  "localId": "KpMVQnHz1BMjXU2ACnFZ3Xx67Ft2",
+  "email": "sismassistemasdos@gmail.com",
+  "emailVerified": false,
+  "passwordHash": "Fh3Pv70XRHQuvmqEOnVMXgTkgyw2BolKsNKqjZH0ebJBdBAfGLBJtTOgjVYTBgEKONs2qpNh3X0arp6+Ciydhg==",
+  "salt": "bWB8OkEz5DQj4w==",
+  "lastSignedInAt": "1787177495233",
+  "createdAt": "1786727491907",
+  "disabled": false,
+  "providerUserInfo": []
+},
+{
+  "localId": "QeypCZzIdDasJrC5f4NZKgCi6CR2",
+  "email": "sismas-proyectos1@outlook.com",
+  "emailVerified": true,
+  "passwordHash": "wyBji60cELRU+9LuC+UkW0I5u8cBoWapptn9r/QOw97HGCfaiy2wycdKxRMtabsj7rLJUjHhn1ybifMhZ0XR+g==",
+  "salt": "v5Lhu3x5QarzRA==",
+  "lastSignedInAt": "1787260977960",
+  "createdAt": "1786727350910",
+  "disabled": false,
+  "providerUserInfo": []
+},
+{
+  "localId": "dgH7aQCWsnXDeeRpXO4VTfxIm493",
+  "email": "josanceb2@gmail.com",
+  "emailVerified": false,
+  "passwordHash": "tAabuzX5daefzWmonK+OEzTPiEn1Iqpe3o/M94L63LywcwjdxbbUTZpcDr42FK92jhCMMoxSAoTrm3rkvz546w==",
+  "salt": "lJebjhQ3m4mGEw==",
+  "lastSignedInAt": "1786737144469",
+  "createdAt": "1786735619510",
+  "disabled": false,
+  "providerUserInfo": []
+},
+{
+  "localId": "kuM9l1ooF2cD3eNZoY190fb5pg02",
+  "email": "sismas-adm@outlook.com",
+  "emailVerified": false,
+  "passwordHash": "yh+JZS1UOuKiwQSSAC4kiWBJhJ6xkhESclJ691SXvmdJj2YsvcyStvzkXdIzi9O5e+vIRWGShXlmKKWBO8OahA==",
+  "salt": "bf2EbKX/h7PmDQ==",
+  "lastSignedInAt": "1787262461881",
+  "createdAt": "1787262173508",
+  "disabled": false,
+  "providerUserInfo": []
+}]}

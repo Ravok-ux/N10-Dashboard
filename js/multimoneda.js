@@ -80,7 +80,7 @@ function _html() {
       <label style="display:block;font-size:.82rem;font-weight:700;margin-bottom:.4rem">Nuevo tipo de cambio (USD → MXN)</label>
       <div style="display:flex;gap:.5rem;align-items:center">
         <input id="mm-input-tc" type="number" min="1" step="0.01" placeholder="Ej: 17.25"
-          style="padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:1rem;width:140px" />
+          style="padding:.5rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);font-size:1rem;width:140px" />
         <button id="mm-btn-actualizar" style="background:#2563EB;color:#fff;border:none;border-radius:7px;padding:.5rem 1.2rem;font-weight:700;cursor:pointer">Actualizar</button>
       </div>
       <p class="mm-hint">El tipo de cambio se aplica a todos los pedidos y cotizaciones nuevos en USD.</p>
@@ -94,7 +94,7 @@ function _html() {
 
   <div class="mm-info-card">
     <h3>Cómo funciona</h3>
-    <ul style="font-size:.88rem;line-height:1.8;padding-left:1.2rem;color:var(--text)">
+    <ul style="font-size:.88rem;line-height:1.8;padding-left:1.2rem;color:var(--text-primary)">
       <li>Pedidos y cotizaciones pueden crearse en <strong>MXN</strong> o <strong>USD</strong>.</li>
       <li>El sistema almacena siempre el total en <strong>MXN</strong> (usando el TC del momento de la captura) para reportes y cartera consistentes.</li>
       <li>El TC capturado queda registrado en cada documento para auditoría.</li>
@@ -108,7 +108,7 @@ function _html() {
 .mm-header { margin-bottom:1rem; }
 .mm-panel { display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem; }
 @media(max-width:680px) { .mm-panel { grid-template-columns:1fr; } }
-.mm-config-card, .mm-hist-card, .mm-info-card { background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1.25rem; }
+.mm-config-card, .mm-hist-card, .mm-info-card { background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:1.25rem; }
 .mm-config-card h3, .mm-hist-card h3, .mm-info-card h3 { margin:0 0 1rem;font-size:1rem; }
 .mm-tc-display { display:flex;align-items:baseline;gap:.5rem;margin-bottom:.25rem; }
 .mm-tc-label { font-size:1rem;color:var(--muted); }

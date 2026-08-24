@@ -22,7 +22,7 @@ const fmtNum = n => (n ?? "—").toLocaleString?.("es-MX") ?? "—";
 export const ObservabilidadModule = {
   mount(container) {
     if (!Sesion.esSuperAdmin?.() && !["GERENTE", "ADMINISTRADOR"].includes(Sesion.rol)) {
-      container.innerHTML = `<div style="padding:48px;text-align:center;color:var(--text2)">
+      container.innerHTML = `<div style="padding:48px;text-align:center;color:var(--text-sec)">
         Sin acceso a este módulo.</div>`;
       return;
     }
@@ -44,11 +44,11 @@ export const ObservabilidadModule = {
         display:flex;align-items:center;gap:12px;font-size:13px">
         <span id="obs-dot" style="width:10px;height:10px;border-radius:50%;background:#94a3b8;flex-shrink:0"></span>
         <span id="obs-health-txt">Sin verificar</span>
-        <span id="obs-latencia" style="margin-left:auto;font-size:11px;color:var(--text2)"></span>
+        <span id="obs-latencia" style="margin-left:auto;font-size:11px;color:var(--text-sec)"></span>
       </div>
 
       <!-- KPIs hoy -->
-      <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text2);
+      <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text-sec);
         text-transform:uppercase;letter-spacing:.5px">Métricas de hoy</div>
       <div class="kpi-row" style="margin-bottom:20px">
         <div class="kpi-card"><div class="kpi-icon">🛒</div><div class="kpi-val" id="obs-k-ped">–</div><div class="kpi-label">Pedidos</div></div>
@@ -59,7 +59,7 @@ export const ObservabilidadModule = {
       </div>
 
       <!-- Histórico 7 días -->
-      <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text2);
+      <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text-sec);
         text-transform:uppercase;letter-spacing:.5px">Últimos 7 días</div>
       <div style="overflow-x:auto;margin-bottom:24px">
         <table class="data-table" id="obs-tabla-hist">
@@ -74,12 +74,12 @@ export const ObservabilidadModule = {
       </div>
 
       <!-- Último backup manifesto -->
-      <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text2);
+      <div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--text-sec);
         text-transform:uppercase;letter-spacing:.5px">Último backup manifesto</div>
       <div id="obs-backup-panel" style="
         background:var(--surface2);border:1px solid var(--border);
         border-radius:8px;padding:16px">
-        <div style="color:var(--text2);font-size:13px">Cargando…</div>
+        <div style="color:var(--text-sec);font-size:13px">Cargando…</div>
       </div>
     </div>`;
 
@@ -118,7 +118,7 @@ async function _cargarMetricas() {
     const tbody = document.getElementById("obs-hist-body");
     if (!tbody) return;
     if (snap.empty) {
-      tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text2)">
+      tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-sec)">
         Sin datos — las métricas se generan automáticamente a las 23:55</td></tr>`;
       return;
     }
@@ -147,7 +147,7 @@ async function _cargarBackup() {
       query(collection(db, "backups_manifesto"), orderBy("_ts", "desc"), limit(1))
     );
     if (snap.empty) {
-      panel.innerHTML = `<div style="color:var(--text2);font-size:13px">
+      panel.innerHTML = `<div style="color:var(--text-sec);font-size:13px">
         Sin backups — se generan automáticamente a las 02:00 hrs</div>`;
       return;
     }
@@ -155,7 +155,7 @@ async function _cargarBackup() {
     const colRows = Object.entries(b.conteos || {}).map(([col, count]) =>
       `<div style="display:flex;justify-content:space-between;padding:4px 0;
         border-bottom:1px solid var(--border);font-size:12px">
-        <span style="color:var(--text2)">${esc(col)}</span>
+        <span style="color:var(--text-sec)">${esc(col)}</span>
         <span style="font-variant-numeric:tabular-nums;font-weight:600">${fmtNum(count)}</span>
       </div>`
     ).join("");
@@ -164,11 +164,11 @@ async function _cargarBackup() {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div>
           <div style="font-size:14px;font-weight:700">📦 ${esc(b.fecha)}</div>
-          <div style="font-size:11px;color:var(--text2)">Generado: ${fmtFecha(b._ts)}</div>
+          <div style="font-size:11px;color:var(--text-sec)">Generado: ${fmtFecha(b._ts)}</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:20px;font-weight:800">${fmtNum(b.totalDocs)}</div>
-          <div style="font-size:11px;color:var(--text2)">docs totales</div>
+          <div style="font-size:11px;color:var(--text-sec)">docs totales</div>
         </div>
       </div>
       <div>${colRows}</div>`;

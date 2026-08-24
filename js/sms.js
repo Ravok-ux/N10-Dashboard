@@ -75,12 +75,12 @@ function _html() {
 .sms-badge { background:#7C3AED; color:#fff; border-radius:12px; padding:.25rem .8rem; font-size:.8rem; font-weight:700; }
 .sms-panel { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
 @media(max-width:700px) { .sms-panel { grid-template-columns:1fr; } }
-.sms-form-card, .sms-historial-card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:1.25rem; }
+.sms-form-card, .sms-historial-card { background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:1.25rem; }
 .sms-form-card h3, .sms-historial-card h3 { margin:0 0 1rem; font-size:1rem; }
 .sms-form-card label { display:block; font-size:.82rem; font-weight:700; margin-bottom:.3rem; }
 .sms-form-card select,
 .sms-form-card input,
-.sms-form-card textarea { width:100%; padding:.5rem; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:.9rem; box-sizing:border-box; }
+.sms-form-card textarea { width:100%; padding:.5rem; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text-primary); font-size:.9rem; box-sizing:border-box; }
 .sms-form-card textarea { resize:vertical; }
 .sms-hint { font-size:.78rem; color:var(--muted); margin:.25rem 0 .75rem; }
 .btn-primario { background:#7C3AED; color:#fff; border:none; border-radius:7px; padding:.65rem 1.4rem; font-size:.95rem; font-weight:700; cursor:pointer; width:100%; }
@@ -90,7 +90,7 @@ function _html() {
 .sms-camp-item { border-bottom:1px solid var(--border); padding:.75rem 0; }
 .sms-camp-item:last-child { border-bottom:none; }
 .sms-camp-meta { font-size:.8rem; color:var(--muted); margin-top:.25rem; }
-.sms-camp-msg { font-size:.88rem; margin:.25rem 0; background:var(--bg); border-radius:5px; padding:.4rem .6rem; word-break:break-word; }
+.sms-camp-msg { font-size:.88rem; margin:.25rem 0; background:var(--surface); border-radius:5px; padding:.4rem .6rem; word-break:break-word; }
 .badge-env  { background:#D1FAE5; color:#065F46; border-radius:4px; padding:.15rem .4rem; font-size:.75rem; font-weight:700; }
 .badge-err  { background:#FEE2E2; color:#991B1B; border-radius:4px; padding:.15rem .4rem; font-size:.75rem; font-weight:700; }
 .badge-pend { background:#FEF3C7; color:#92400E; border-radius:4px; padding:.15rem .4rem; font-size:.75rem; font-weight:700; }

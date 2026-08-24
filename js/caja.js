@@ -28,14 +28,14 @@ function _html() {
   <div class="caja-header">
     <h2>🏦 Arqueo / Corte de Caja</h2>
     <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-      <select id="caja-filtro-status" style="padding:.4rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.9rem">
+      <select id="caja-filtro-status" style="padding:.4rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);font-size:.9rem">
         <option value="">Todos</option>
         <option value="PENDIENTE">Pendientes</option>
         <option value="VALIDADO">Validados</option>
         <option value="DIFERENCIA">Con diferencia</option>
       </select>
       <input id="caja-filtro-alias" type="text" placeholder="Filtrar vendedor…"
-        style="padding:.4rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:.9rem;width:150px" />
+        style="padding:.4rem .6rem;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);font-size:.9rem;width:150px" />
     </div>
   </div>
 
@@ -68,9 +68,9 @@ function _html() {
 .caja-header { display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem; }
 .caja-resumen-bar { font-size:.85rem;color:var(--muted);margin-bottom:.75rem; }
 .tabla-caja { width:100%;border-collapse:collapse;font-size:.88rem; }
-.tabla-caja th { background:var(--bg2);padding:.6rem .8rem;text-align:left;font-weight:600;border-bottom:2px solid var(--border);white-space:nowrap; }
+.tabla-caja th { background:var(--surface-2);padding:.6rem .8rem;text-align:left;font-weight:600;border-bottom:2px solid var(--border);white-space:nowrap; }
 .tabla-caja td { padding:.55rem .8rem;border-bottom:1px solid var(--border);vertical-align:top; }
-.tabla-caja tr:hover td { background:var(--bg2); }
+.tabla-caja tr:hover td { background:var(--surface-2); }
 .monto-pos { color:#16A34A;font-weight:700; }
 .monto-neg { color:#DC2626;font-weight:700; }
 .badge-pend { background:#FEF3C7;color:#92400E;border-radius:4px;padding:.2rem .4rem;font-size:.75rem;font-weight:700; }

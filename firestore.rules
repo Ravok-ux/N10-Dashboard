@@ -401,7 +401,49 @@ service cloud.firestore {
     // ── /clientes ─────────────────────────────────────────────────────────────
     match /clientes/{clienteId} {
       allow read: if cuentaActiva() && esRolConocido();
-      allow write: if cuentaActiva() && esAdminOSuperior();
+      // Escritura: admins + INGENIERO y RECUPERADOR (APK crea/actualiza sus propios clientes)
+      allow write: if cuentaActiva()
+                   && (esAdminOSuperior()
+                       || miRol() in ['INGENIERO', 'RECUPERADOR', 'MESA_CONTROL']
+                       || tieneFlag('PUEDE_CREAR_CLIENTES'));
+    }
+
+    // ── /clientes/{clienteId}/ubicaciones ────────────────────────────────────
+    match /clientes/{clienteId}/ubicaciones/{ubicId} {
+      // Lectura: cualquier rol conocido y activo (ingeniero y recuperador deben ver las ubicaciones)
+      allow read: if cuentaActiva() && esRolConocido();
+
+      // Creación y edición: INGENIERO, RECUPERADOR, admins
+      allow create: if cuentaActiva()
+                    && (esAdminOSuperior()
+                        || miRol() in ['INGENIERO', 'RECUPERADOR', 'MESA_CONTROL'])
+                    && request.resource.data.keys().hasAll(['tipo','lat','lng','creadoPor','creadoEn'])
+                    && request.resource.data.lat  is number
+                    && request.resource.data.lng  is number
+                    && request.resource.data.tipo is string
+                    && request.resource.data.tipo.size() > 0
+                    && request.resource.data.tipo.size() <= 60;
+
+      allow update: if cuentaActiva()
+                    && (esAdminOSuperior()
+                        || miRol() in ['INGENIERO', 'RECUPERADOR', 'MESA_CONTROL'])
+                    && request.resource.data.lat  is number
+                    && request.resource.data.lng  is number;
+
+      // Solo admins pueden eliminar ubicaciones
+      allow delete: if cuentaActiva() && esAdminOSuperior();
+    }
+
+    // ── /clientes/{clienteId}/ubicaciones/{ubicId}/historial ─────────────────
+    match /clientes/{clienteId}/ubicaciones/{ubicId}/historial/{logId} {
+      allow read:   if cuentaActiva() && esRolConocido();
+      // Solo creación — el historial es inmutable una vez escrito
+      allow create: if cuentaActiva()
+                    && (esAdminOSuperior()
+                        || miRol() in ['INGENIERO', 'RECUPERADOR', 'MESA_CONTROL'])
+                    && request.resource.data.keys().hasAll(['quien','rol','cuándo'])
+                    && request.resource.data.quien is string;
+      allow update, delete: if false;
     }
 
     // ── /solicitudes_visita ───────────────────────────────────────────────────
@@ -901,6 +943,26 @@ service cloud.firestore {
     match /config_intereses/{docId} {
       allow read: if cuentaActiva() && esRolConocido();
       allow write: if cuentaActiva() && esSuperAdmin();
+    }
+
+    // ── /traspasos ────────────────────────────────────────────────────────────
+    match /traspasos/{traspasoId} {
+      // Lectura: admins, gerentes, mesa de control y quien tenga flag PUEDE_CREAR_CLIENTES
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior()
+                      || miRol() == 'MESA_CONTROL'
+                      || tieneFlag('PUEDE_CREAR_CLIENTES'));
+
+      // Creación: mismos roles (registro de auditoría de reasignación de clientes)
+      allow create: if cuentaActiva()
+                    && (esAdminOSuperior()
+                        || miRol() == 'MESA_CONTROL'
+                        || tieneFlag('PUEDE_CREAR_CLIENTES'))
+                    && request.resource.data.keys().hasAll(['ingenieroOrigen','ingenieroDestino','clienteIds','fecha'])
+                    && request.resource.data.clienteIds is list;
+
+      // Los traspasos son inmutables (auditoría)
+      allow update, delete: if false;
     }
 
     // ── Bloqueo por defecto ───────────────────────────────────────────────────

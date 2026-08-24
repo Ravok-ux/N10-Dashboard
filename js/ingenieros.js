@@ -371,7 +371,7 @@ function _escuchar() {
     query(collection(db, "usuarios"), orderBy("alias")),
     snap => {
       _usuarios = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        .filter(u => u.activo !== false && u.rol !== "SUPER_ADMIN");
+        .filter(u => u.activo !== false && ["INGENIERO","RECUPERADOR"].includes(u.rol));
       _render();
     },
     err => {

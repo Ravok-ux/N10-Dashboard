@@ -57,7 +57,7 @@ const FUENTES = [
 export const AuditoriaModule = {
   mount(container) {
     if (!_puedeVer()) {
-      container.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted)">
+      container.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-sec)">
         Acceso restringido a administradores.</div>`;
       return;
     }
@@ -83,7 +83,7 @@ function _html() {
     <div class="mod-topbar">
       <h2 class="mod-title">🔍 Panel de Auditoría</h2>
       <div class="mod-actions">
-        <button class="btn-outline" id="aud-export-xlsx">↓ Excel</button>
+        <button id="aud-export-xlsx" style="padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">⬇️ Excel</button>
       </div>
     </div>
 
@@ -100,9 +100,9 @@ function _html() {
       </select>
       <input type="text" class="sel-sm" id="aud-usuario"
         placeholder="Filtrar por usuario…" style="width:160px">
-      <span style="font-size:11px;color:var(--text-muted)">Desde</span>
+      <span style="font-size:11px;color:var(--text-sec)">Desde</span>
       <input type="date" class="sel-sm" id="aud-desde" value="${hace7}">
-      <span style="font-size:11px;color:var(--text-muted)">Hasta</span>
+      <span style="font-size:11px;color:var(--text-sec)">Hasta</span>
       <input type="date" class="sel-sm" id="aud-hasta" value="${hoy}">
       <button class="btn-primary" id="aud-filtrar">Filtrar</button>
     </div>
@@ -135,7 +135,7 @@ function _html() {
           </tr>
         </thead>
         <tbody id="aud-body">
-          <tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-muted)">Cargando…</td></tr>
+          <tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-sec)">Cargando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -211,7 +211,7 @@ function _renderTabla(rows) {
   const tbody = document.getElementById("aud-body");
   if (!tbody) return;
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-muted)">
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-sec)">
       Sin eventos en el período seleccionado</td></tr>`;
     return;
   }
@@ -223,7 +223,7 @@ function _renderTabla(rows) {
     const rowBg = cfg.sev === "alta" ? "background:rgba(220,38,38,.04)" : "";
 
     return `<tr style="${rowBg}">
-      <td style="white-space:nowrap;font-size:12px;color:var(--text-muted)">${fmtFecha(ts)}</td>
+      <td style="white-space:nowrap;font-size:12px;color:var(--text-sec)">${fmtFecha(ts)}</td>
       <td>
         <span style="font-size:14px">${cfg.icon}</span>
         <span style="font-size:11px;font-weight:700;margin-left:4px">${esc(cfg.label)}</span>
@@ -231,7 +231,7 @@ function _renderTabla(rows) {
       <td><span class="badge ${SEV_CLS[cfg.sev] || "badge-gray"}">${cfg.sev.toUpperCase()}</span></td>
       <td style="font-weight:600">${esc(r.alias || r.usuario || r.quien || r.quienRegistro || "–")}</td>
       <td style="font-size:12px;max-width:300px">${esc(desc)}</td>
-      <td style="font-size:11px;color:var(--text-muted);white-space:nowrap">${esc(String(ref))}</td>
+      <td style="font-size:11px;color:var(--text-sec);white-space:nowrap">${esc(String(ref))}</td>
     </tr>`;
   }).join("");
 }

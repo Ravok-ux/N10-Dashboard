@@ -122,8 +122,8 @@ function _html() {
       <!-- Controles -->
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
         <input id="cart-search" type="text" placeholder="🔍 Buscar cliente o ingeniero…"
-          style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px">
-        <select id="cart-color-filter" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px">
+          style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text-primary);font-size:13px">
+        <select id="cart-color-filter" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text-primary);font-size:13px">
           <option value="TODOS">Todos los semáforos</option>
           <option value="CRÍTICO">🔴 Crítico (+61 d)</option>
           <option value="GRAVE">🟠 Grave (44–61 d)</option>
@@ -138,7 +138,7 @@ function _html() {
       <div style="overflow-x:auto">
         <table id="cart-table" style="width:100%;border-collapse:collapse;font-size:13px">
           <thead>
-            <tr style="background:var(--bg2);text-align:left">
+            <tr style="background:var(--surface-2);text-align:left">
               <th style="padding:8px 10px">Cliente</th>
               <th style="padding:8px 10px">Ingeniero</th>
               <th style="padding:8px 10px;text-align:right">Capital</th>
@@ -167,7 +167,7 @@ function _html() {
 
 function _tabStyle(active) {
   return `padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:${active?"700":"400"};
-    color:${active?"var(--accent)":"var(--text2)"};border-bottom:${active?"2px solid var(--accent)":"2px solid transparent"};margin-bottom:-2px`;
+    color:${active?"var(--accent)":"var(--text-sec)"};border-bottom:${active?"2px solid var(--accent)":"2px solid transparent"};margin-bottom:-2px`;
 }
 
 function _htmlConfig() {
@@ -184,16 +184,16 @@ function _htmlConfig() {
   return `
   <div style="max-width:640px;display:flex;flex-direction:column;gap:24px">
 
-    <div style="background:var(--bg2);border-radius:10px;padding:20px">
+    <div style="background:var(--surface-2);border-radius:10px;padding:20px">
       <div style="font-weight:700;margin-bottom:14px;font-size:14px">🚦 Umbrales del semáforo (días vencidos)</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-        <label style="font-size:12px;color:var(--text2)">🟢 Verde hasta
+        <label style="font-size:12px;color:var(--text-sec)">🟢 Verde hasta
           <input id="cfg-verde" type="number" value="${s.verde??15}" min="1" style="${_inputStyle()} margin-top:4px">
         </label>
-        <label style="font-size:12px;color:var(--text2)">🟡 Amarillo hasta
+        <label style="font-size:12px;color:var(--text-sec)">🟡 Amarillo hasta
           <input id="cfg-amarillo" type="number" value="${s.amarillo??30}" min="1" style="${_inputStyle()} margin-top:4px">
         </label>
-        <label style="font-size:12px;color:var(--text2)">🟠 Naranja hasta
+        <label style="font-size:12px;color:var(--text-sec)">🟠 Naranja hasta
           <input id="cfg-naranja" type="number" value="${s.naranja??60}" min="1" style="${_inputStyle()} margin-top:4px">
         </label>
       </div>
@@ -203,19 +203,19 @@ function _htmlConfig() {
       </div>
     </div>
 
-    <div style="background:var(--bg2);border-radius:10px;padding:20px">
+    <div style="background:var(--surface-2);border-radius:10px;padding:20px">
       <div style="font-weight:700;margin-bottom:14px;font-size:14px">🔓 Horas de desbloqueo temporal</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Opciones disponibles para el menú (separadas por coma)</div>
+      <div style="font-size:12px;color:var(--text-sec);margin-bottom:8px">Opciones disponibles para el menú (separadas por coma)</div>
       <input id="cfg-horas" value="${esc(h)}" style="${_inputStyle()} width:200px">
     </div>
 
-    <div style="background:var(--bg2);border-radius:10px;padding:20px">
+    <div style="background:var(--surface-2);border-radius:10px;padding:20px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div style="font-weight:700;font-size:14px">📅 Categorías de frecuencia de visita</div>
         <button onclick="CarteraUI.agregarFrecuencia()" style="padding:5px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px">+ Agregar</button>
       </div>
       <table id="cfg-freqs-table" style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="color:var(--text2);font-size:12px">
+        <thead><tr style="color:var(--text-sec);font-size:12px">
           <th style="padding:4px 8px;text-align:left">Nombre</th>
           <th style="padding:4px 8px;text-align:left">Días</th>
           <th></th>
@@ -231,7 +231,7 @@ function _htmlConfig() {
 }
 
 function _inputStyle() {
-  return "width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;box-sizing:border-box;";
+  return "width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);font-size:13px;box-sizing:border-box;";
 }
 
 // ── Render tabla ──────────────────────────────────────────────
@@ -239,7 +239,7 @@ function _renderTabla() {
   const tbody = document.getElementById("cart-tbody");
   if (!tbody) return;
   if (_filtrados.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text2)">Sin clientes con saldo pendiente</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-sec)">Sin clientes con saldo pendiente</td></tr>`;
     return;
   }
   tbody.innerHTML = _filtrados.map(c => {
@@ -267,9 +267,9 @@ function _renderTabla() {
 
     return `<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:9px 10px;font-weight:600">${esc(c.nombre || c.id)}</td>
-      <td style="padding:9px 10px;color:var(--text2)">${esc(c.vendedor || "—")}</td>
-      <td style="padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text2)">${fmt.format(capital)}</td>
-      <td style="padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums;color:${interes>0?"#F59E0B":"var(--text2)"}">
+      <td style="padding:9px 10px;color:var(--text-sec)">${esc(c.vendedor || "—")}</td>
+      <td style="padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text-sec)">${fmt.format(capital)}</td>
+      <td style="padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums;color:${interes>0?"#F59E0B":"var(--text-sec)"}">
         ${interes > 0 ? fmt.format(interes) : "—"}</td>
       <td style="padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:#F97316">
         ${fmt.format(totalAP)}</td>
@@ -295,10 +295,10 @@ function _renderKpis() {
   const bloq      = _clientes.filter(c => c.bloqueado).length;
   const desbloq   = _clientes.filter(c => c.desbloqueoHasta > Date.now()).length;
 
-  const kpi = (val, label, color="#10B981") =>
-    `<div style="background:var(--bg2);border-radius:8px;padding:14px 16px">
+  const kpi = (val, label, color="var(--text-primary)") =>
+    `<div style="background:var(--surface);border-radius:8px;border:1px solid var(--border);padding:14px 16px">
       <div style="font-size:18px;font-weight:700;color:${color};font-variant-numeric:tabular-nums">${val}</div>
-      <div style="font-size:11px;color:var(--text2);margin-top:2px">${label}</div>
+      <div style="font-size:11px;color:var(--text-sec);margin-top:2px">${label}</div>
     </div>`;
 
   el.innerHTML =
@@ -343,7 +343,7 @@ function _cambiarTab(tab, container) {
   container.querySelectorAll(".cart-tab").forEach(b => {
     const active = b.dataset.tab === tab;
     b.style.fontWeight  = active ? "700" : "400";
-    b.style.color       = active ? "var(--accent)" : "var(--text2)";
+    b.style.color       = active ? "var(--accent)" : "var(--text-sec)";
     b.style.borderBottom = active ? "2px solid var(--accent)" : "2px solid transparent";
   });
   document.getElementById("cart-panel-aging").style.display  = tab === "aging"  ? "" : "none";
@@ -357,17 +357,17 @@ function _abrirDesbloqueo(clienteId, clienteNombre) {
   const modal = document.createElement("div");
   modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;justify-content:center";
   modal.innerHTML = `
-    <div style="background:var(--bg);border-radius:12px;padding:24px;width:360px;box-shadow:0 20px 40px rgba(0,0,0,.3)">
+    <div style="background:var(--surface);border-radius:12px;padding:24px;width:360px;box-shadow:0 20px 40px rgba(0,0,0,.3)">
       <h3 style="margin:0 0 4px">🔓 Desbloqueo temporal</h3>
-      <p style="margin:0 0 16px;font-size:13px;color:var(--text2)">${esc(clienteNombre)}</p>
+      <p style="margin:0 0 16px;font-size:13px;color:var(--text-sec)">${esc(clienteNombre)}</p>
       <label style="font-size:13px;display:block;margin-bottom:8px">Duración del desbloqueo:
-        <select id="dl-horas" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text)">${opts}</select>
+        <select id="dl-horas" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary)">${opts}</select>
       </label>
       <label style="font-size:13px;display:block;margin-bottom:16px">Motivo (opcional):
-        <textarea id="dl-motivo" rows="2" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);resize:none;box-sizing:border-box" placeholder="Ej. Autorizado por gerencia para pedido urgente"></textarea>
+        <textarea id="dl-motivo" rows="2" style="width:100%;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-primary);resize:none;box-sizing:border-box" placeholder="Ej. Autorizado por gerencia para pedido urgente"></textarea>
       </label>
       <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button id="dl-cancel" style="padding:8px 16px;border:1px solid var(--border);background:none;border-radius:6px;cursor:pointer;color:var(--text)">Cancelar</button>
+        <button id="dl-cancel" style="padding:8px 16px;border:1px solid var(--border);background:none;border-radius:6px;cursor:pointer;color:var(--text-primary)">Cancelar</button>
         <button id="dl-ok" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700">Desbloquear</button>
       </div>
     </div>`;

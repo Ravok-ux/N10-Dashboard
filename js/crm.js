@@ -345,7 +345,10 @@ function _filtrados() {
   const buscar = (document.getElementById("crm-buscar")?.value || "").toLowerCase();
   return _todosProspectos.filter(r => {
     if (etapa  && r.etapa       !== etapa) return false;
-    if (ing    && r.ingenieroId !== ing)   return false;
+    if (ing) {
+      const ingObj = _ingenieros.find(u => u.uid === ing);
+      if (r.ingenieroId !== ing && r.ingenieroAlias !== (ingObj?.alias || ingObj?.uid || "")) return false;
+    }
     if (buscar && !(r.nombre||"").toLowerCase().includes(buscar)
                && !(r.giro  ||"").toLowerCase().includes(buscar)) return false;
     return true;
