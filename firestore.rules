@@ -478,7 +478,11 @@ service cloud.firestore {
       allow create: if cuentaActiva()
                     && (esAdminOSuperior() || miRol() == 'ALMACENISTA')
                     && request.resource.data.keys().hasAll(['productoId','tipo','cantidad','_ts'])
-                    && request.resource.data.tipo in ['ENTRADA','SALIDA','AJUSTE','DEVOLUCION','TRASLADO']
+                    && request.resource.data.tipo in [
+                        'ENTRADA','SALIDA','AJUSTE','DEVOLUCION','TRASLADO',
+                        'AJUSTE_ENTRADA','AJUSTE_SALIDA','AJUSTE_INVENTARIO','EDITAR_MINIMO',
+                        'REABASTO_SURTIDO'
+                    ]
                     && request.resource.data.cantidad is number;
 
       // Los movimientos son inmutables (auditoría)

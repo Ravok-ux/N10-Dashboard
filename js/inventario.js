@@ -333,10 +333,10 @@ function _montarStock() {
   }
 
   function _invSelProducto(prod) {
-    document.getElementById("inv-prod-id").value  = prod.codigo || prod.id;
+    document.getElementById("inv-prod-id").value  = prod.codigoN10 || prod.codigo || prod.id;
     document.getElementById("inv-prod-nom").value = prod.nombre;
     document.getElementById("inv-chip-nombre").textContent = prod.nombre;
-    document.getElementById("inv-chip-codigo").textContent = `Código: ${prod.codigo || prod.id}`;
+    document.getElementById("inv-chip-codigo").textContent = `Código: ${prod.codigoN10 || prod.codigo || prod.id}`;
     document.getElementById("inv-prod-chip").style.display   = "flex";
     document.getElementById("inv-prod-search").style.display = "none";
     document.getElementById("inv-prod-lista").style.display  = "none";
@@ -381,6 +381,7 @@ function _montarStock() {
     const matches = _catalogoCache.filter(p =>
       !t ||
       (p.nombre||"").toLowerCase().includes(t) ||
+      (p.codigoN10||"").toLowerCase().includes(t) ||
       (p.codigo||"").toLowerCase().includes(t) ||
       (p.categoria||"").toLowerCase().includes(t)
     ).slice(0, 40);
@@ -408,9 +409,9 @@ function _montarStock() {
               ${esc(p.nombre)}${n10}
             </div>
             <div style="font-size:10px;color:#64748B;margin-top:1px">
-              ${p.codigo ? `<span style="font-family:monospace">${esc(p.codigo)}</span>` : ""}
+              ${(p.codigoN10||p.codigo) ? `<span style="font-family:monospace">${esc(p.codigoN10||p.codigo)}</span>` : ""}
               ${p.categoria ? ` · ${esc(p.categoria)}` : ""}
-              ${p.precio_base ? ` · $${Number(p.precio_base).toLocaleString("es-MX")}` : ""}
+              ${p.precioBase ? ` · $${Number(p.precioBase).toLocaleString("es-MX")}` : ""}
             </div>
           </div>
         </div>`;
@@ -457,7 +458,9 @@ function _montarStock() {
     const estado = document.getElementById("inv-filtro-estado")?.value || "";
     let rows = _allRows;
     if (buscar) rows = rows.filter(r =>
-      (r.nombre||"").toLowerCase().includes(buscar) || (r.sku||"").toLowerCase().includes(buscar));
+      (r.nombre||"").toLowerCase().includes(buscar) ||
+      (r.sku||"").toLowerCase().includes(buscar) ||
+      (r.codigoN10||"").toLowerCase().includes(buscar));
     if (estado === "bajo")  rows = rows.filter(r => r.stockActual > 0 && r.stockActual <= (r.stockMinimo||0));
     if (estado === "ok")    rows = rows.filter(r => r.stockActual > (r.stockMinimo||0));
     if (estado === "cero")  rows = rows.filter(r => (r.stockActual||0) <= 0);
@@ -485,7 +488,8 @@ function _renderStock(rows) {
   const tbody = document.getElementById("inv-body");
   if (!tbody) return;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="padding:32px;text-align:center;color:var(--text-sec)">Sin productos</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="padding:32px;text-align:center;color:var(--text-sec)">
+      Sin productos con stock registrado. Usa <strong>+ Ajuste / editar mínimo</strong> para agregar el primero.</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(r => {
