@@ -6,10 +6,11 @@ import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
 import {
   collection, query, orderBy, limit, where, onSnapshot, doc, updateDoc, getDoc,
-  addDoc, getDocs, Timestamp, serverTimestamp
+  addDoc, getDocs, Timestamp, serverTimestamp, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { registrarVentaN10, revertirVentaN10 } from "./comisiones-n10-engine.js";
 import { getIngenieros } from "./erp-cache.js";
+import { logAudit } from "./app.js";
 
 let _unsub    = null;
 let _filtroStatus  = "TODOS";
@@ -872,8 +873,21 @@ async function _confirmarPedido() {
   if (btn) { btn.disabled = true; btn.textContent = "Guardando…"; }
 
   const total   = _pedidoLineas.reduce((s, l) => s + l.cantidad * l.precio, 0);
-  const folio   = "W-" + Date.now().toString(36).toUpperCase();
   const ingeniero = (document.getElementById("pd-ingeniero")?.value || Sesion.alias || "").trim();
+
+  // Folio único con contador atómico
+  const contadorRef = doc(db, "config", "contadores");
+  let folio;
+  try {
+    folio = await runTransaction(db, async tx => {
+      const snap = await tx.get(contadorRef);
+      const n = (snap.exists() ? (snap.data().pedidos || 0) : 0) + 1;
+      tx.set(contadorRef, { pedidos: n }, { merge: true });
+      return "W-" + String(n).padStart(5, "0");
+    });
+  } catch(e) {
+    folio = "W-" + Date.now().toString(36).toUpperCase(); // fallback
+  }
 
   const payload = {
     folio,
@@ -899,7 +913,8 @@ async function _confirmarPedido() {
   };
 
   try {
-    await addDoc(collection(db, "pedidos"), payload);
+    const ref = await addDoc(collection(db, "pedidos"), payload);
+    logAudit("PEDIDO_CONFIRMADO", { folio, pedidoId: ref.id, clienteId: payload.clienteId, total, ingeniero });
     window.toast?.(`✅ Pedido ${folio} creado y confirmado.`, "success");
     window.PedidosUI.cerrarFormPedido();
   } catch(e) {

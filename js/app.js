@@ -46,12 +46,14 @@ import { ManualesModule }          from "./manuales.js";
 import { AsignacionesModule }      from "./asignaciones.js";
 import { ConfigInteresesModule }   from "./config-intereses.js";
 import { mount as rcMount, destroy as rcDestroy } from "./reportes-custom.js";
+import { mount as cajaMount, destroy as cajaDestroy } from "./caja.js";
+import { mount as gastosMount, destroy as gastosDestroy } from "./gastos.js";
 import { iniciarNotificaciones, detenerNotificaciones } from "./notificaciones.js";
 import { iniciarFCM } from "./fcm.js";
 import { db } from "./firebase-config.js";
 import {
   collection, query, where, orderBy, limit as fsLimit, getDocs,
-  startAt, endAt
+  startAt, endAt, addDoc, serverTimestamp as appSTS
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ── Sanitización XSS ──────────────────────────────────────────
@@ -62,6 +64,22 @@ const _escMap = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":"&#x27;
 export function esc(str) {
   if (str == null) return '';
   return String(str).replace(/[&<>"']/g, c => _escMap[c]);
+}
+
+// ── Auditoría ─────────────────────────────────────────────────
+// Escribe un evento a audit_log. Silencioso — nunca bloquea la UI.
+export async function logAudit(evento, datos = {}) {
+  try {
+    const { Sesion: S } = await import("./auth.js");
+    await addDoc(collection(db, "audit_log"), {
+      evento,
+      uid:    S.uid    ?? null,
+      alias:  S.alias  ?? null,
+      rol:    S.rol    ?? null,
+      datos,
+      ts: appSTS(),
+    });
+  } catch(e) { /* silencioso — auditoría no debe romper la UI */ }
 }
 // Exponerlo globalmente para módulos que no usen import
 window.esc = esc;
@@ -194,6 +212,8 @@ const MODULES = {
   config_intereses: ConfigInteresesModule,
   comentarios:      ComentariosModule,
   reportes_custom:  { mount: rcMount, destroy: rcDestroy },
+  caja:             { mount: cajaMount, destroy: cajaDestroy },
+  gastos:           { mount: gastosMount, destroy: gastosDestroy },
 };
 
 let vistaActual = null;
@@ -433,7 +453,8 @@ function _navigate(viewId) {
     rh:"Recursos Humanos", mi_rh:"Mi RH", chat:"Chat interno",
     juridico:"Jurídico", observabilidad:"Observabilidad", manuales:"Manuales y Políticas",
     cotizaciones:"Cotizaciones", reportes_custom:"Reportes Configurables",
-    asignaciones:"Asignaciones" };
+    asignaciones:"Asignaciones",
+    caja:"Arqueo de Caja", gastos:"Gastos de Empleados" };
   const subs = { dashboard:"Resumen del día", mapa:"Ingenieros en campo", mapa_clientes:"Localización total de clientes georeferenciados",
     feed:"Actividades globales", usuarios:"Gestión de privilegios",
     reportes:"Generación de reportes", comisiones:"Nómina e incentivos por ingeniero",
@@ -453,7 +474,9 @@ function _navigate(viewId) {
     observabilidad:"Salud del sistema y métricas operativas",
     manuales:"Diagramas de flujo y políticas operativas",
     cotizaciones:"Cotizaciones activas y vencidas",
-    reportes_custom:"Reportes con campos configurables por fuente de datos" };
+    reportes_custom:"Reportes con campos configurables por fuente de datos",
+    caja:"Cortes y arqueos de caja por turno",
+    gastos:"Solicitudes de gastos y reembolsos" };
   document.getElementById("tb-bc").innerHTML =
     `${bc[viewId] ?? viewId} <span>/ ${subs[viewId] ?? ""}</span>`;
   document.getElementById("subhdr-title").textContent = bc[viewId] ?? viewId;
@@ -904,6 +927,8 @@ function _aplicarVisibilidadSidebar() {
     config_intereses: SA,  // solo SUPER_ADMIN
     reportes:         pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
     reportes_custom:  pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
+    caja:             pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
+    gastos:           pv("GERENTE","ADMINISTRADOR","MESA_CONTROL"),
   };
 
   // Aplicar visibilidad a cada sb-item
@@ -925,7 +950,7 @@ function _aplicarVisibilidadSidebar() {
 
   // Sublabels y divisores — ocultar si ningún item visible en su grupo
   // Operaciones: usuarios → logistica (aprox las primeras 14 entradas del sbi-admin)
-  const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","devoluciones","chat","rh","crm","logistica"];
+  const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","devoluciones","chat","rh","caja","gastos","crm","logistica"];
   const ctrlViews = ["precios","geocercas","metas","autorizaciones","auditoria"];
   const cfgViews  = ["formularios","promociones","precios_segmento","productos","config","config_intereses","reportes","reportes_custom"];
 
