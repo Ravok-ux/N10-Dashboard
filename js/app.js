@@ -963,3 +963,137 @@ function _aplicarVisibilidadSidebar() {
   showEl("sb-sublabel-cfg",  anyVis(cfgViews));
   showEl("sb-div-cfg",       anyVis(cfgViews));
 }
+
+// ══════════════════════════════════════════════════════════════
+// COMBOBOX GLOBAL — convierte <select class="sel-sm|form-input">
+// en un input buscable con chevron ▾. Se activa automáticamente
+// via MutationObserver para cualquier módulo sin tocar su código.
+// ══════════════════════════════════════════════════════════════
+(function _initComboboxEngine() {
+  const SEL = "select.sel-sm, select.form-input";
+  // Selects que NO se deben convertir (multi-select internos o flags)
+  const SKIP = new Set(["inv-tipo","cr-aplicar-preset"]);
+
+  function _upgrade(sel) {
+    if (sel._cmb || SKIP.has(sel.id) || sel.multiple) return;
+    sel._cmb = true;
+
+    // ── Crear wrapper ──────────────────────────────────────────
+    const wrap = document.createElement("div");
+    wrap.className = "sel-cmb-wrap";
+    // Heredar ancho explícito del select si lo tiene
+    if (sel.style.width) wrap.style.width = sel.style.width;
+    else if (sel.style.minWidth) wrap.style.minWidth = sel.style.minWidth;
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+
+    // Input visible
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.autocomplete = "off";
+    inp.spellcheck = false;
+    inp.className = sel.className.replace("form-input","sel-sm");
+    // Heredar estilos inline del select
+    if (sel.style.cssText) inp.style.cssText = sel.style.cssText;
+    inp.style.width = "100%";
+    inp.style.boxSizing = "border-box";
+    const _syncLabel = () => {
+      const o = sel.options[sel.selectedIndex];
+      inp.value = o ? o.text : "";
+    };
+    _syncLabel();
+    inp.placeholder = inp.value || "Seleccionar…";
+
+    // Chevron
+    const chev = document.createElement("span");
+    chev.className = "sel-cmb-chevron";
+    chev.textContent = "▾";
+    chev.setAttribute("aria-hidden", "true");
+
+    // Dropdown
+    const dd = document.createElement("div");
+    dd.className = "sel-cmb-dd";
+
+    // Ocultar select nativo pero mantenerlo funcional
+    sel.style.cssText = "position:absolute;opacity:0;pointer-events:none;width:0;height:0;";
+
+    wrap.appendChild(inp);
+    wrap.appendChild(chev);
+    wrap.appendChild(dd);
+
+    // ── Lógica ────────────────────────────────────────────────
+    const open  = () => { wrap.classList.add("open"); _render(inp.value); };
+    const close = () => { wrap.classList.remove("open"); _syncLabel(); };
+
+    function _render(term) {
+      const q = term.trim().toLowerCase();
+      const opts = [...sel.options];
+      const matches = q
+        ? opts.filter(o => o.text.toLowerCase().includes(q))
+        : opts;
+
+      if (!matches.length) {
+        dd.innerHTML = `<div class="sel-cmb-empty">Sin resultados</div>`;
+        return;
+      }
+      dd.innerHTML = matches.map(o => {
+        const hi = q
+          ? o.text.replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")})`, "gi"),
+              "<strong>$1</strong>")
+          : o.text;
+        return `<div class="sel-cmb-item" data-val="${o.value.replace(/"/g,"&quot;")}">${hi}</div>`;
+      }).join("");
+
+      dd.querySelectorAll(".sel-cmb-item").forEach(item => {
+        // Marcar seleccionado
+        if (item.dataset.val === sel.value) item.classList.add("active");
+        item.addEventListener("mousedown", e => {
+          e.preventDefault();
+          sel.value = item.dataset.val;
+          sel.dispatchEvent(new Event("change", { bubbles: true }));
+          close();
+        });
+      });
+    }
+
+    inp.addEventListener("click",  () => wrap.classList.contains("open") ? close() : open());
+    inp.addEventListener("focus",  open);
+    inp.addEventListener("input",  () => { wrap.classList.add("open"); _render(inp.value); });
+    inp.addEventListener("blur",   () => setTimeout(close, 160));
+    inp.addEventListener("keydown", e => {
+      if (e.key === "Escape") { close(); inp.blur(); }
+      if (e.key === "Enter") {
+        const first = dd.querySelector(".sel-cmb-item");
+        if (first) first.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      }
+    });
+
+    // Re-sincronizar label si el select cambia programáticamente
+    const mo = new MutationObserver(_syncLabel);
+    mo.observe(sel, { childList: true, attributes: true, attributeFilter: ["value"] });
+    // También si las opciones se repoblan desde JS
+    new MutationObserver(() => { if (wrap.classList.contains("open")) _render(inp.value); else _syncLabel(); })
+      .observe(sel, { childList: true });
+  }
+
+  // Aplicar a todos los selects actuales y futuros
+  function _scan(root) {
+    root.querySelectorAll(SEL).forEach(_upgrade);
+  }
+
+  document.addEventListener("DOMContentLoaded", () => _scan(document));
+
+  const obs = new MutationObserver(muts => {
+    for (const m of muts) {
+      m.addedNodes.forEach(n => {
+        if (n.nodeType !== 1) return;
+        if (n.matches?.(SEL)) _upgrade(n);
+        if (n.querySelectorAll) _scan(n);
+      });
+    }
+  });
+  // Esperar a que exista body
+  if (document.body) obs.observe(document.body, { childList: true, subtree: true });
+  else document.addEventListener("DOMContentLoaded", () =>
+    obs.observe(document.body, { childList: true, subtree: true }));
+})();

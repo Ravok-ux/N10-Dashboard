@@ -200,8 +200,8 @@ function _html() {
         <table style="width:100%;border-collapse:collapse;font-size:12px" id="cli-table">
           <thead>
             <tr style="background:var(--surface-2);border-bottom:2px solid var(--border)">
-              <th id="cli-th-nombre"    style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">CLIENTE</th>
               <th id="cli-th-clienteId" style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">ID</th>
+              <th id="cli-th-nombre"    style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">CLIENTE</th>
               <th id="cli-th-segmento"  style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">SEGMENTO</th>
               <th id="cli-th-ingeniero" style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">INGENIERO</th>
               <th id="cli-th-zona"      style="padding:10px 14px;text-align:left;font-weight:700;color:var(--text-sec);white-space:nowrap;position:sticky;top:0;background:var(--surface-2);z-index:2">ZONA</th>
@@ -744,13 +744,13 @@ function _renderTabla() {
     return `<tr style="border-bottom:1px solid var(--border);
       ${i % 2 === 1 ? "background:var(--surface-2)" : ""}
       cursor:pointer" onclick="ClientesUI.abrirDetalle('${esc(c.id)}')">
+      <td style="padding:10px 14px;font-size:11px;font-family:monospace;color:#6B7280;white-space:nowrap">
+        ${esc(c.clienteId || "—")}
+      </td>
       <td style="padding:10px 14px">
         <div style="font-weight:700;font-size:12px;color:var(--text-primary)">${esc(c.nombre || "—")}</div>
         ${c.telefono ? `<div style="font-size:11px;color:#6B7280">${esc(c.telefono)}</div>` : ""}
         ${c.ciudad || c.colonia ? `<div style="font-size:10px;color:#9CA3AF">${esc([c.colonia,c.ciudad].filter(Boolean).join(", "))}</div>` : ""}
-      </td>
-      <td style="padding:10px 14px;font-size:11px;font-family:monospace;color:#6B7280;white-space:nowrap">
-        ${esc(c.clienteId || "—")}
       </td>
       <td style="padding:10px 14px">
         ${c.segmento
@@ -942,8 +942,8 @@ function _campo(label, valor) {
 
 // ── Definición de columnas (mismo patrón que productos-control) ──
 const CLI_ALL_COLS = [
+  { key:"clienteId", label:"ID",              locked:true  },
   { key:"nombre",    label:"CLIENTE",        locked:true  },
-  { key:"clienteId", label:"ID"                           },
   { key:"segmento",  label:"SEGMENTO"                     },
   { key:"ingeniero", label:"INGENIERO"                    },
   { key:"zona",      label:"ZONA"                         },

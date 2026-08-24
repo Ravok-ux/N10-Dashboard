@@ -592,8 +592,8 @@ function _renderizar() {
         case "foto":
           return p.fotoUrl
             ? `<td style="${COL_TD}text-align:center"><img src="${esc(p.fotoUrl)}" alt="foto"
-                style="width:40px;height:40px;object-fit:cover;border-radius:6px;cursor:pointer"
-                onclick="ProdCtrlUI.abrirEdicion('${esc(p._docId)}')" title="Ver producto"></td>`
+                style="width:40px;height:40px;object-fit:cover;border-radius:6px;cursor:zoom-in"
+                onclick="(function(s){var o=document.createElement('div');o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';var i=document.createElement('img');i.src=s;i.style.cssText='max-width:90vw;max-height:90vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5)';o.appendChild(i);o.onclick=function(){o.remove()};document.body.appendChild(o)})(this.src)" title="Ver foto"></td>`
             : `<td style="${COL_TD}text-align:center;color:#6B7280;font-size:18px">📷</td>`;
         case "numero":
           return `<td style="${COL_TD}color:#9CA3AF;font-variant-numeric:tabular-nums">${num}</td>`;
@@ -744,6 +744,26 @@ function _renderDetalle(docId) {
     <div id="pd-body" style="flex:1;overflow:auto;padding:24px 20px;min-height:0">
       <!-- Tab general -->
       <div id="pd-tab-general">
+        ${p.fotoUrl ? `
+        <div style="margin-bottom:20px;display:flex;align-items:flex-start;gap:16px">
+          <img src="${esc(p.fotoUrl)}" alt="${esc(p.nombre)}"
+            style="width:120px;height:120px;object-fit:cover;border-radius:10px;
+                   border:1px solid var(--border);flex-shrink:0;cursor:zoom-in"
+            ondblclick="(function(el){
+              const ov=document.createElement('div');
+              ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+              const im=document.createElement('img');
+              im.src=el.src;im.style.cssText='max-width:90vw;max-height:90vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5)';
+              ov.appendChild(im);
+              ov.onclick=()=>ov.remove();
+              document.body.appendChild(ov);
+            })(this)"
+            title="Doble clic para ampliar">
+          <div style="display:flex;flex-direction:column;justify-content:center;gap:4px">
+            <div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em">Foto del producto</div>
+            <div style="font-size:11px;color:#6B7280">Doble clic para ampliar</div>
+          </div>
+        </div>` : ""}
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px">
           ${_dfield("Código N10",         esc(codigo))}
           ${_dfield("Clave SAT",          esc(p.clave_sat || "–"))}
