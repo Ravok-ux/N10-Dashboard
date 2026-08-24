@@ -519,10 +519,14 @@ service cloud.firestore {
     // ── /solicitudes_reabasto ─────────────────────────────────────────────────
     // Solicitudes de reabasto enviadas desde el APK
     match /solicitudes_reabasto/{solId} {
-      // Lectura: admins, almacenistas; el propio ingeniero puede leer sus solicitudes
-      allow read: if cuentaActiva()
+      // Queries (list): admins y almacenistas; los ingenieros ven sus solicitudes via query filtrada
+      allow list: if cuentaActiva()
                   && (esAdminOSuperior() || miRol() == 'ALMACENISTA'
-                      || resource.data.ingenieroUid == request.auth.uid);
+                      || miRol() in ['INGENIERO','RECUPERADOR']);
+      // Lectura individual (get): admins, almacenistas o el propio ingeniero
+      allow get: if cuentaActiva()
+                 && (esAdminOSuperior() || miRol() == 'ALMACENISTA'
+                     || resource.data.ingenieroUid == request.auth.uid);
       // Creación: cualquier rol activo (APK lo crea desde el ingeniero)
       allow create: if cuentaActiva() && esRolConocido()
                     && request.resource.data.keys().hasAll(['ingenieroUid','ingenieroAlias','estado','items','_ts']);

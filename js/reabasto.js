@@ -119,6 +119,11 @@ function _escuchar() {
     _renderKPIs();
     _renderConteoTabs();
     _renderLista();
+  }, err => {
+    console.error("[reabasto] onSnapshot error:", err);
+    const el = document.getElementById("reb-lista");
+    if (el) el.innerHTML = `<div style="padding:40px;text-align:center;color:#DC2626;font-size:13px">
+      Error al cargar solicitudes: ${err.message}</div>`;
   });
 }
 

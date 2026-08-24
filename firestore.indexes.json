@@ -57,32 +57,11 @@
       ]
     },
     {
-      "collectionGroup": "sms_campanas",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "_ts", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "asistencias",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "_ts", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "asistencias",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "_ts",   "order": "ASCENDING" },
         { "fieldPath": "alias", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "historial_tipo_cambio",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "_ts", "order": "DESCENDING" }
       ]
     },
     {

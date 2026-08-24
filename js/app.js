@@ -456,6 +456,7 @@ function _navigate(viewId) {
     juridico:"Jurídico", observabilidad:"Observabilidad", manuales:"Manuales y Políticas",
     cotizaciones:"Cotizaciones", reportes_custom:"Reportes Configurables",
     asignaciones:"Asignaciones",
+    reabasto:"Reabasto",
     caja:"Arqueo de Caja", gastos:"Gastos de Empleados" };
   const subs = { dashboard:"Resumen del día", mapa:"Ingenieros en campo", mapa_clientes:"Localización total de clientes georeferenciados",
     feed:"Actividades globales", usuarios:"Gestión de privilegios",
@@ -477,6 +478,7 @@ function _navigate(viewId) {
     manuales:"Diagramas de flujo y políticas operativas",
     cotizaciones:"Cotizaciones activas y vencidas",
     reportes_custom:"Reportes con campos configurables por fuente de datos",
+    reabasto:"Solicitudes de reabasto por ingeniero",
     caja:"Cortes y arqueos de caja por turno",
     gastos:"Solicitudes de gastos y reembolsos" };
   document.getElementById("tb-bc").innerHTML =
