@@ -5,7 +5,7 @@
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc } from "./app.js";
+import { esc, logAudit } from "./app.js";
 import {
   collection, doc, query, where, orderBy, limit,
   onSnapshot, addDoc, updateDoc, setDoc, getDoc, serverTimestamp
@@ -57,7 +57,7 @@ export const InventarioModule = {
 };
 
 function _puedeVer()    { return Sesion.esSuperAdmin?.() || ["GERENTE","ADMINISTRADOR","MESA_CONTROL","GERENTE_ZONA","INGENIERO","VENDEDOR"].includes(Sesion.rol); }
-function _puedeEditar() { return Sesion.esSuperAdmin?.() || ["GERENTE","ADMINISTRADOR"].includes(Sesion.rol); }
+function _puedeEditar() { return Sesion.esSuperAdmin?.() || ["GERENTE","ADMINISTRADOR"].includes(Sesion.rol) || Sesion.flags?.PUEDE_AJUSTAR_INVENTARIO; }
 
 function _activarTab(tab) {
   _tab = tab;
@@ -592,6 +592,8 @@ async function _guardarAjuste() {
         quienRegistro: Sesion.alias, _ts: Date.now()
       });
       await setDoc(invRef, { nombre: prodNom, stockActual: stockDespues, ...n10Meta, _ts: Date.now() }, { merge: true });
+      logAudit(tipo === "AJUSTE_ENTRADA" ? "STOCK_ENTRADA" : tipo === "AJUSTE_SALIDA" ? "STOCK_SALIDA" : "AJUSTE_INVENTARIO",
+        { productoId: prodId, productoNombre: prodNom, cantidad: cant, stockAntes, stockDespues, motivo });
       window.toast?.("Ajuste guardado", "success");
     }
     document.getElementById("inv-modal")?.classList.add("hidden");

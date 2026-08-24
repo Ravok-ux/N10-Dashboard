@@ -12,6 +12,7 @@ import {
   onSnapshot, query, where, orderBy, limit,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { logAudit } from "./app.js";
 
 const STATUS_PENDIENTE = "PENDIENTE_AUTORIZACION";
 const STATUS_CONFIRMADO = "CONFIRMADO";
@@ -26,7 +27,17 @@ let _historial  = [];  // últimos resueltos
 // ── Render ─────────────────────────────────────────────────────────────────────
 export const AutorizacionesModule = {
 
-  mount(container) { this.render(container); },
+  mount(container) {
+    if (!Sesion.esSuperAdmin?.() && !Sesion.flags?.PUEDE_AUTORIZAR_PEDIDOS) {
+      container.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-sec)">
+        <div style="font-size:40px;margin-bottom:12px">🔒</div>
+        <div style="font-weight:700;font-size:15px">Acceso restringido</div>
+        <div style="font-size:12px;margin-top:6px">Solo Mesa de Control y Super Admin pueden autorizar pedidos.</div>
+      </div>`;
+      return;
+    }
+    this.render(container);
+  },
 
   render(container) {
     container.innerHTML = `
@@ -239,32 +250,23 @@ function _renderHistorial() {
   }).join("");
 }
 
-// ── Cargar items de un pedido ──────────────────────────────────────────────────
-async function _cargarItems(pedidoId, containerId) {
-  try {
-    const snap = await getDocs(query(
-      collection(db, "pedido_items"),
-      where("pedidoId", "==", pedidoId)
-    ));
-    const el = document.getElementById(containerId);
-    if (!el) return;
-    if (snap.empty) {
-      el.querySelector(".aut-items-loading")?.remove();
-      return;
-    }
-    const rows = snap.docs.map(d => {
-      const it = d.data();
-      return `<div class="aut-item-row">
-        <span>${esc(it.nombreProducto || "–")} × ${it.cantidad || 0}</span>
-        <span>${_fmtMXN(it.total || it.subtotal || 0)}</span>
-      </div>`;
-    }).join("");
-    el.innerHTML = `<div class="aut-items-title">Productos</div>${rows}`;
-  } catch (e) {
-    console.error('_cargarItems error:', e);
-    const el = document.getElementById(containerId);
-    if (el) el.innerHTML = '<div style="color:var(--text-sec);font-size:.78rem">Sin detalle disponible</div>';
+// ── Render items desde array incrustado en el pedido ──────────────────────────
+function _cargarItems(pedidoId, containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const p = _pendientes[pedidoId];
+  const lineas = p?.items || p?.productos || [];
+  if (!lineas.length) {
+    el.innerHTML = '<div style="color:var(--text-sec);font-size:.78rem">Sin detalle de productos</div>';
+    return;
   }
+  const rows = lineas.map(it =>
+    `<div class="aut-item-row">
+      <span>${esc(it.nombre || it.nombreProducto || "–")} × ${it.cantidad || 0}</span>
+      <span>${_fmtMXN((it.cantidad || 0) * (it.precio || 0))}</span>
+    </div>`
+  ).join("");
+  el.innerHTML = `<div class="aut-items-title">Productos</div>${rows}`;
 }
 
 // ── Acciones ───────────────────────────────────────────────────────────────────
@@ -281,12 +283,14 @@ window._autAprobar = async id => {
   if (!ok) return;
   _enProgreso.add(id);
   try {
+    const p = _pendientes[id];
     await updateDoc(doc(db, "pedidos", id), {
       status:           STATUS_CONFIRMADO,
       autorizadoPor:    Sesion.alias,
       fechaAutorizacion: Date.now(),
       updatedAt:        serverTimestamp()
     });
+    logAudit("DESCUENTO_APROBADO", { folio: p?.folio || id, clienteNombre: p?.clienteNombre, total: p?.total, ingeniero: p?.ingenieroAlias });
   } catch (e) {
     window.toast?.("Error al aprobar. Intenta de nuevo.", "error");
   } finally {
@@ -307,6 +311,7 @@ window._autRechazar = id => {
     const motivo = document.getElementById("autMotivoInput").value.trim();
     if (!motivo) { window.toast?.("Escribe el motivo de rechazo.", "error"); return; }
     try {
+      const p = _pendientes[_rechazandoId];
       await updateDoc(doc(db, "pedidos", _rechazandoId), {
         status:           STATUS_RECHAZADO,
         rechazadoPor:     Sesion.alias,
@@ -314,6 +319,7 @@ window._autRechazar = id => {
         fechaAutorizacion: Date.now(),
         updatedAt:        serverTimestamp()
       });
+      logAudit("PEDIDO_CANCELADO", { folio: p?.folio || _rechazandoId, clienteNombre: p?.clienteNombre, total: p?.total, ingeniero: p?.ingenieroAlias, motivoRechazo: motivo });
       overlay.style.display = "none";
       _rechazandoId = null;
     } catch (e) {

@@ -6,7 +6,7 @@
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc } from "./app.js";
+import { esc, logAudit } from "./app.js";
 import {
   collection, doc, query, where, orderBy, limit,
   onSnapshot, addDoc, updateDoc, setDoc, getDocs, serverTimestamp
@@ -551,6 +551,7 @@ async function _guardarProspecto() {
       ingenieroId: ingId || null, ingenieroAlias: ing?.alias || null,
       creadoPor: Sesion.alias, _ts: Date.now()
     });
+    logAudit("PROSPECTO_CREADO", { nombre, giro, ingenieroAlias: ing?.alias || null, etapa });
     window.toast?.("Prospecto creado","success");
     document.getElementById("crm-modal")?.classList.add("hidden");
   } catch(e) { window.toast?.(e.message,"error"); }

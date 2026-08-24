@@ -5,7 +5,7 @@
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc } from "./app.js";
+import { esc, logAudit } from "./app.js";
 import {
   collection, doc, addDoc, updateDoc, onSnapshot,
   query, orderBy, where, getDocs, serverTimestamp, limit
@@ -347,7 +347,7 @@ async function _aprobarDev(id, dev) {
       aprobadaEn:      serverTimestamp(),
       aprobadaEn_ts:   Date.now(),
     });
-    // La Cloud Function onDevolucionAprobada se encarga del ajuste de inventario y cartera
+    logAudit("DEVOLUCION_APROBADA", { folio: dev?.folio, monto: dev?.monto, clienteNombre: dev?.clienteNombre, ingeniero: dev?.ingenieroAlias });
     window.toast?.("Devolución aprobada. Ajustando inventario…", "success");
 
     await crearNotificacion({

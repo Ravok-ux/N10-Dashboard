@@ -9,7 +9,7 @@
 
 import { db }    from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc }   from "./app.js";
+import { esc, logAudit }   from "./app.js";
 import { calcularRemision } from "./intereses-engine.js";
 import {
   collection, query, orderBy, limit, onSnapshot,
@@ -143,6 +143,7 @@ function _bindUI() {
             fechaConfirmacion: new Date().toISOString(),
           }),
         });
+        logAudit("ABONO_CONCILIADO", { remisionId, abonoIdx });
         window.toast?.("Abono conciliado.", "success");
       } catch(e) {
         window.toast?.("Error: " + e.message, "error");

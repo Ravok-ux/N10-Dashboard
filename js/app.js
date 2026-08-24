@@ -68,16 +68,16 @@ export function esc(str) {
 
 // ── Auditoría ─────────────────────────────────────────────────
 // Escribe un evento a audit_log. Silencioso — nunca bloquea la UI.
-export async function logAudit(evento, datos = {}) {
+export async function logAudit(tipo, datos = {}) {
   try {
     const { Sesion: S } = await import("./auth.js");
     await addDoc(collection(db, "audit_log"), {
-      evento,
+      tipo,                          // campo que auditoria.js espera
+      alias:  S.alias  ?? null,      // campo que auditoria.js lee para "usuario"
       uid:    S.uid    ?? null,
-      alias:  S.alias  ?? null,
       rol:    S.rol    ?? null,
-      datos,
-      ts: appSTS(),
+      _ts:    Date.now(),            // número — auditoria.js filtra por _ts numérico
+      ...datos,                      // folio, clienteId, etc. al nivel raíz para _descripcion()
     });
   } catch(e) { /* silencioso — auditoría no debe romper la UI */ }
 }

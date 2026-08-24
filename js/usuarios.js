@@ -37,15 +37,17 @@ const MODULOS = [
 
 // Flags exclusivos de roles administrativos
 const ADMIN_FLAGS = [
-  { key:"PUEDE_ALMACEN_ENTRADAS",   label:"Entrada almacén",        icon:"📥" },
-  { key:"PUEDE_ALMACEN_INVENTARIO", label:"Inventario físico",      icon:"🔢" },
-  { key:"PUEDE_ORDENES_COMPRA",     label:"Órdenes compra",         icon:"🛒" },
-  { key:"PUEDE_VER_COMISIONES",     label:"Ver comisiones",         icon:"📊" },
-  { key:"PUEDE_CONFIG_COMISIONES",  label:"Config. comisiones",     icon:"⚙️" },
-  { key:"PUEDE_CARTERA_GLOBAL",     label:"Cartera global (admin)", icon:"💰" },
-  { key:"PUEDE_MODULO_JURIDICO",    label:"Módulo jurídico",        icon:"⚖️" },
-  { key:"PUEDE_CONFIG_INTERESES",   label:"Config. intereses",      icon:"📈" },
-  { key:"PUEDE_REPORTES_CUSTOM",    label:"Reportes custom",        icon:"📉" }
+  { key:"PUEDE_ALMACEN_ENTRADAS",    label:"Entrada almacén",        icon:"📥" },
+  { key:"PUEDE_ALMACEN_INVENTARIO",  label:"Inventario físico",      icon:"🔢" },
+  { key:"PUEDE_AJUSTAR_INVENTARIO",  label:"Ajuste manual stock",    icon:"⚖️" },
+  { key:"PUEDE_AUTORIZAR_PEDIDOS",   label:"Autorizar pedidos",      icon:"✅" },
+  { key:"PUEDE_ORDENES_COMPRA",      label:"Órdenes compra",         icon:"🛒" },
+  { key:"PUEDE_VER_COMISIONES",      label:"Ver comisiones",         icon:"📊" },
+  { key:"PUEDE_CONFIG_COMISIONES",   label:"Config. comisiones",     icon:"⚙️" },
+  { key:"PUEDE_CARTERA_GLOBAL",      label:"Cartera global (admin)", icon:"💰" },
+  { key:"PUEDE_MODULO_JURIDICO",     label:"Módulo jurídico",        icon:"⚖️" },
+  { key:"PUEDE_CONFIG_INTERESES",    label:"Config. intereses",      icon:"📈" },
+  { key:"PUEDE_REPORTES_CUSTOM",     label:"Reportes custom",        icon:"📉" }
 ];
 
 const TODOS_FLAGS = [...PRIVILEGIOS, ...MODULOS];
@@ -139,6 +141,8 @@ const PRESET = {
     PUEDE_RUTA_OPTIMA:          false,
     PUEDE_ALMACEN_ENTRADAS:     true,
     PUEDE_ALMACEN_INVENTARIO:   true,
+    PUEDE_AJUSTAR_INVENTARIO:   true,
+    PUEDE_AUTORIZAR_PEDIDOS:    false,
     PUEDE_ORDENES_COMPRA:       true,
     PUEDE_VER_COMISIONES:       true,
     PUEDE_CONFIG_COMISIONES:    true,
@@ -162,6 +166,8 @@ const PRESET = {
     PUEDE_RUTA_OPTIMA:        false,
     PUEDE_ALMACEN_ENTRADAS:   true,
     PUEDE_ALMACEN_INVENTARIO: true,
+    PUEDE_AJUSTAR_INVENTARIO: true,
+    PUEDE_AUTORIZAR_PEDIDOS:  false,
     PUEDE_ORDENES_COMPRA:     false,
     PUEDE_VER_COMISIONES:     false,
     PUEDE_CONFIG_COMISIONES:  false,
@@ -225,6 +231,8 @@ const PRESET = {
     PUEDE_RUTA_OPTIMA:        false,
     PUEDE_ALMACEN_ENTRADAS:   false,
     PUEDE_ALMACEN_INVENTARIO: false,
+    PUEDE_AJUSTAR_INVENTARIO: false,
+    PUEDE_AUTORIZAR_PEDIDOS:  true,
     PUEDE_ORDENES_COMPRA:     false,
     PUEDE_VER_COMISIONES:     false,
     PUEDE_CONFIG_COMISIONES:  false,
