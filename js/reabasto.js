@@ -15,10 +15,13 @@ const PUEDE_GESTIONAR = () =>
   ["SUPER_ADMIN","GERENTE","ADMINISTRADOR","ALMACENISTA"].includes(Sesion.rol);
 
 // ── Estado local ───────────────────────────────────────────────
-let _unsub      = null;
-let _solicitudes = [];
-let _filtroTab   = "PENDIENTE";
-let _container   = null;
+let _unsub       = null;
+let _unsubStock  = null;
+let _solicitudes  = [];
+let _stockIng     = [];
+let _filtroStock  = "";
+let _filtroTab    = "PENDIENTE";
+let _container    = null;
 
 // ── Estados y colores ─────────────────────────────────────────
 const ESTADOS = {
@@ -34,6 +37,7 @@ const TABS = [
   { key: "EN_PROCESO", label: "En proceso",  icon: "🔄" },
   { key: "SURTIDO",    label: "Surtidos",    icon: "📦" },
   { key: "HISTORIAL",  label: "Historial",   icon: "📋" },
+  { key: "STOCK",      label: "Stock ingenieros", icon: "🚛" },
 ];
 
 // ── Mount / Destroy ───────────────────────────────────────────
@@ -42,12 +46,16 @@ export function mount(container) {
   _container.innerHTML = _html();
   _bindTabs();
   _escuchar();
+  _escucharStock();
 }
 
 export function destroy() {
   _unsub?.();
+  _unsubStock?.();
   _unsub = null;
+  _unsubStock = null;
   _solicitudes = [];
+  _stockIng    = [];
   _container = null;
 }
 
@@ -142,9 +150,14 @@ function _renderConteoTabs() {
   TABS.forEach(t => {
     const el = document.querySelector(`.reb-tab-count[data-tab="${t.key}"]`);
     if (!el) return;
-    const n = t.key === "HISTORIAL"
-      ? _solicitudes.filter(s => ["RECIBIDO_COMPLETO","RECIBIDO_PARCIAL"].includes(s.estado)).length
-      : _solicitudes.filter(s => s.estado === t.key).length;
+    let n = 0;
+    if (t.key === "HISTORIAL") {
+      n = _solicitudes.filter(s => ["RECIBIDO_COMPLETO","RECIBIDO_PARCIAL"].includes(s.estado)).length;
+    } else if (t.key === "STOCK") {
+      n = _stockIng.length;
+    } else {
+      n = _solicitudes.filter(s => s.estado === t.key).length;
+    }
     el.textContent = n > 0 ? `(${n})` : "";
   });
 }
@@ -153,6 +166,8 @@ function _renderConteoTabs() {
 function _renderLista() {
   const el = document.getElementById("reb-lista");
   if (!el) return;
+
+  if (_filtroTab === "STOCK") { _renderStockIngenieros(el); return; }
 
   const filtradas = _filtroTab === "HISTORIAL"
     ? _solicitudes.filter(s => ["RECIBIDO_COMPLETO","RECIBIDO_PARCIAL"].includes(s.estado))
@@ -422,3 +437,118 @@ async function _notificarIngeniero(s, items) {
     });
   } catch(e) { /* silencioso */ }
 }
+
+// ══════════════════════════════════════════════════════════════
+// STOCK POR INGENIERO — tiempo real
+// ══════════════════════════════════════════════════════════════
+
+function _escucharStock() {
+  _unsubStock?.();
+  const q = query(collection(db, "stock_ingenieros"), orderBy("ingenieroAlias", "asc"));
+  _unsubStock = onSnapshot(q, snap => {
+    _stockIng = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (_filtroTab === "STOCK") _renderLista();
+  });
+}
+
+function _renderStockIngenieros(el) {
+  const ahora = Date.now();
+  const DIAS_40 = 40 * 24 * 60 * 60 * 1000;
+
+  const filtrados = _filtroStock
+    ? _stockIng.filter(ing =>
+        (ing.ingenieroAlias || "").toLowerCase().includes(_filtroStock.toLowerCase())
+      )
+    : _stockIng;
+
+  if (!filtrados.length) {
+    el.innerHTML = `<div style="padding:40px;text-align:center;color:#9CA3AF;font-size:13px">
+      Sin datos de stock. Los ingenieros publican su inventario desde el APK.</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
+      <input id="reb-stock-buscar" type="text" placeholder="Filtrar por ingeniero…"
+        value="${esc(_filtroStock)}"
+        style="flex:1;border:1px solid var(--border);border-radius:8px;padding:8px 12px;
+          font-size:12px;background:var(--surface);color:var(--text-primary)">
+      <span style="font-size:11px;color:#9CA3AF">${filtrados.length} ingeniero${filtrados.length!==1?"s":""}</span>
+    </div>
+    ${filtrados.map(ing => _cardStockIngeniero(ing, ahora, DIAS_40)).join("")}
+  `;
+
+  document.getElementById("reb-stock-buscar")?.addEventListener("input", e => {
+    _filtroStock = e.target.value;
+    _renderLista();
+  });
+
+  el.querySelectorAll(".reb-stock-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const detail = card.nextElementSibling;
+      if (detail?.classList.contains("reb-stock-detail")) {
+        detail.style.display = detail.style.display === "none" ? "block" : "none";
+      }
+    });
+  });
+}
+
+function _cardStockIngeniero(ing, ahora, DIAS_40) {
+  const items         = ing.items || [];
+  const totalItems    = items.length;
+  const estancados    = items.filter(i => i.cantidad > 0 && i.ultimoMovimiento && (ahora - i.ultimoMovimiento) > DIAS_40);
+  const sinProductos  = totalItems === 0;
+  const tsSync        = ing._ts ? new Date(ing._ts).toLocaleDateString("es-MX",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "–";
+
+  const filasItems = items.length === 0
+    ? `<tr><td colspan="4" style="padding:10px;text-align:center;color:#9CA3AF;font-size:11px">Sin productos en vehículo</td></tr>`
+    : items.map(item => {
+        const diasSinMov = item.ultimoMovimiento ? Math.floor((ahora - item.ultimoMovimiento) / 86400000) : null;
+        const estancado  = item.cantidad > 0 && diasSinMov !== null && diasSinMov > 40;
+        return `
+        <tr style="border-bottom:1px solid var(--border);${estancado?"background:#FFF7F7":""}">
+          <td style="padding:7px 10px;font-size:12px;color:var(--text-primary)">${esc(item.nombre||"–")}</td>
+          <td style="padding:7px 10px;font-size:11px;font-family:monospace;color:#6B7280">${esc(item.codigoN10||"–")}</td>
+          <td style="padding:7px 10px;text-align:right;font-size:13px;font-weight:700;color:${item.cantidad>0?"var(--text-primary)":"#9CA3AF"}">
+            ${Number(item.cantidad||0).toFixed(1)} ${esc(item.unidad||"")}
+          </td>
+          <td style="padding:7px 10px;text-align:center;font-size:10px;color:${estancado?"#DC2626":"#9CA3AF"}">
+            ${diasSinMov !== null ? `${diasSinMov}d${estancado?" ⚠":""}` : "–"}
+          </td>
+        </tr>`;
+      }).join("");
+
+  return `
+  <div class="reb-stock-card" style="background:var(--surface);border:1px solid ${estancados.length?"#FECACA":"var(--border)"};
+    border-radius:10px;margin-bottom:8px;cursor:pointer;
+    ${estancados.length?"border-left:4px solid #DC2626;":""}">
+    <div style="padding:14px 16px;display:flex;align-items:center;gap:10px">
+      <div style="width:36px;height:36px;border-radius:50%;background:#EDE9FE;
+        display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🚛</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px;color:var(--text-primary)">${esc(ing.ingenieroAlias||"–")}</div>
+        <div style="font-size:11px;color:#6B7280">
+          ${totalItems} producto${totalItems!==1?"s":""}
+          ${estancados.length ? `· <span style="color:#DC2626;font-weight:600">${estancados.length} estancado${estancados.length!==1?"s":""}</span>` : ""}
+          · Sync: ${tsSync}
+        </div>
+      </div>
+      <span style="font-size:18px;color:#9CA3AF">›</span>
+    </div>
+  </div>
+  <div class="reb-stock-detail" style="display:none;margin-top:-8px;margin-bottom:8px;
+    border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr style="background:var(--surface-2)">
+          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#9CA3AF;font-weight:700">PRODUCTO</th>
+          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#9CA3AF;font-weight:700">CÓDIGO</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#9CA3AF;font-weight:700">CANTIDAD</th>
+          <th style="padding:7px 10px;text-align:center;font-size:10px;color:#9CA3AF;font-weight:700">DÍAS SIN MOV</th>
+        </tr>
+      </thead>
+      <tbody>${filasItems}</tbody>
+    </table>
+  </div>`;
+}
+
