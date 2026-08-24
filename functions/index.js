@@ -612,6 +612,175 @@ exports.onNotificacionCreada = onDocumentCreated(
 );
 
 // ═══════════════════════════════════════════════════════════════
+// REABASTO — Cloud Functions
+// ═══════════════════════════════════════════════════════════════
+
+// ── onSolicitudReabasto: nueva solicitud → notif a almacenistas/admins ──
+exports.onSolicitudReabasto = onDocumentCreated(
+  { document: "solicitudes_reabasto/{solId}", region: "us-central1" },
+  async (event) => {
+    const sol   = event.data.data();
+    const solId = event.params.solId;
+    if (!sol) return;
+
+    const tieneProductosSinStock = (sol.items || []).some(i => !i.hayStock);
+    const tipo = tieneProductosSinStock ? "REABASTO_SIN_STOCK" : "REABASTO_SOLICITADO";
+    const msg  = tieneProductosSinStock
+      ? `${sol.ingenieroAlias} solicitó reabasto — hay productos sin stock en almacén`
+      : `${sol.ingenieroAlias} solicitó reabasto de ${(sol.items||[]).length} producto(s)`;
+
+    // Notificación en-app para almacenistas y admins
+    await db.collection("notificaciones_web").add({
+      tipo,
+      titulo: "Nueva solicitud de reabasto",
+      mensaje: msg,
+      destinatarios: ["ROL_ALMACENISTAS"], // Cloud Function resuelve a UIDs reales vía query
+      leida: false,
+      timestamp: FieldValue.serverTimestamp(),
+      _ts: Date.now(),
+      datos: { solicitudId: solId, zona: sol.zona || "" },
+      creadaPor: "SISTEMA",
+    });
+
+    // FCM push directo a almacenistas y admins (sin pasar por notificaciones_web listener)
+    const rolesTarget = ["ALMACENISTA", "ADMINISTRADOR", "GERENTE", "SUPER_ADMIN"];
+    const usersSnap = await db.collection("usuarios")
+      .where("activo", "==", true)
+      .get();
+    let tokens = [];
+    usersSnap.docs.forEach(d => {
+      const u = d.data();
+      if (rolesTarget.includes(u.rol)) tokens.push(...(u.fcmTokens || []));
+    });
+    tokens = [...new Set(tokens)].filter(Boolean);
+
+    if (tokens.length > 0) {
+      await getMessaging().sendEachForMulticast({
+        tokens,
+        notification: { title: "📥 Solicitud de reabasto", body: msg },
+        data: { tipo, "accion.vista": "reabasto", "accion.id": solId },
+        android: { priority: "high", notification: { sound: "default", channelId: "n10_fcm" } },
+        webpush: { notification: { icon: "/icons/icon-192.svg" }, fcmOptions: { link: "/" } },
+      });
+    }
+    logger.info(`[onSolicitudReabasto] ${solId} — tipo: ${tipo} — tokens: ${tokens.length}`);
+  }
+);
+
+// ── onSolicitudSurtida: estado → SURTIDO → notif al ingeniero ───
+exports.onSolicitudSurtida = onDocumentUpdated(
+  { document: "solicitudes_reabasto/{solId}", region: "us-central1" },
+  async (event) => {
+    const antes  = event.data.before.data();
+    const despues = event.data.after.data();
+    if (antes.estado === "SURTIDO" || despues.estado !== "SURTIDO") return;
+
+    const solId = event.params.solId;
+    const ingUid = despues.ingenieroUid;
+    if (!ingUid) return;
+
+    const msg = `Tu solicitud de reabasto fue surtida. Pasa al almacén a recoger.`;
+    await db.collection("notificaciones_web").add({
+      tipo: "REABASTO_SURTIDO",
+      titulo: "Reabasto listo",
+      mensaje: msg,
+      destinatarios: [ingUid],
+      leida: false,
+      timestamp: FieldValue.serverTimestamp(),
+      _ts: Date.now(),
+      datos: { solicitudId: solId },
+      creadaPor: "SISTEMA",
+    });
+
+    const ingSnap = await db.collection("usuarios").doc(ingUid).get();
+    const tokens  = (ingSnap.data()?.fcmTokens || []).filter(Boolean);
+    if (tokens.length > 0) {
+      await getMessaging().sendEachForMulticast({
+        tokens,
+        notification: { title: "📦 Reabasto listo", body: msg },
+        data: { tipo: "REABASTO_SURTIDO", "accion.vista": "reabasto", "accion.id": solId },
+        android: { priority: "high", notification: { sound: "default", channelId: "n10_fcm" } },
+        webpush: { notification: { icon: "/icons/icon-192.svg" }, fcmOptions: { link: "/" } },
+      });
+    }
+    logger.info(`[onSolicitudSurtida] ${solId} notificado a ${ingUid}`);
+  }
+);
+
+// ── productosEstancados: diario 07:30 MX — busca stock >40 días sin movimiento ──
+exports.productosEstancados = onSchedule(
+  { schedule: "30 7 * * *", timeZone: "America/Mexico_City", region: "us-central1" },
+  async () => {
+    const ahora    = Date.now();
+    const DIAS_40  = 40 * 24 * 60 * 60 * 1000;
+    const limite   = ahora - DIAS_40;
+
+    const snap = await db.collection("stock_ingenieros").get();
+    const alertas = [];
+
+    for (const d of snap.docs) {
+      const data = d.data();
+      const items = data.items || [];
+      const estancados = items.filter(i =>
+        i.cantidad > 0 && i.ultimoMovimiento && i.ultimoMovimiento < limite
+      );
+      if (estancados.length === 0) continue;
+
+      alertas.push({
+        ingenieroAlias: data.ingenieroAlias || d.id,
+        ingenieroUid:   data.ingenieroUid   || d.id,
+        estancados,
+      });
+    }
+
+    if (alertas.length === 0) {
+      logger.info("[productosEstancados] Sin productos estancados hoy");
+      return;
+    }
+
+    // Notificar a almacenistas/admins
+    const rolesTarget = ["ALMACENISTA", "ADMINISTRADOR", "GERENTE", "SUPER_ADMIN"];
+    const usersSnap = await db.collection("usuarios").where("activo", "==", true).get();
+    let tokens = [];
+    const destinatarios = [];
+    usersSnap.docs.forEach(d => {
+      const u = d.data();
+      if (rolesTarget.includes(u.rol)) {
+        tokens.push(...(u.fcmTokens || []));
+        destinatarios.push(d.id);
+      }
+    });
+    tokens = [...new Set(tokens)].filter(Boolean);
+
+    const totalEstancados = alertas.reduce((acc, a) => acc + a.estancados.length, 0);
+    const msg = `${totalEstancados} producto(s) en vehículos sin movimiento >40 días`;
+
+    await db.collection("notificaciones_web").add({
+      tipo: "PRODUCTO_ESTANCADO",
+      titulo: "Stock estancado detectado",
+      mensaje: msg,
+      destinatarios,
+      leida: false,
+      timestamp: FieldValue.serverTimestamp(),
+      _ts: ahora,
+      datos: { alertas: alertas.map(a => ({ alias: a.ingenieroAlias, n: a.estancados.length })) },
+      creadaPor: "SISTEMA",
+    });
+
+    if (tokens.length > 0) {
+      await getMessaging().sendEachForMulticast({
+        tokens,
+        notification: { title: "🕒 Stock estancado", body: msg },
+        data: { tipo: "PRODUCTO_ESTANCADO", "accion.vista": "reabasto" },
+        android: { priority: "normal", notification: { sound: "default", channelId: "n10_fcm" } },
+        webpush: { notification: { icon: "/icons/icon-192.svg" }, fcmOptions: { link: "/" } },
+      });
+    }
+    logger.info(`[productosEstancados] ${alertas.length} ingeniero(s) con stock estancado`);
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════
 // S9 — OBSERVABILIDAD Y BACKUP
 // ═══════════════════════════════════════════════════════════════
 

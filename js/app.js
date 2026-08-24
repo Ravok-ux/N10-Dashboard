@@ -48,6 +48,7 @@ import { ConfigInteresesModule }   from "./config-intereses.js";
 import { mount as rcMount, destroy as rcDestroy } from "./reportes-custom.js";
 import { mount as cajaMount, destroy as cajaDestroy } from "./caja.js";
 import { mount as gastosMount, destroy as gastosDestroy } from "./gastos.js";
+import { mount as reabastoMount, destroy as reabastoDestroy } from "./reabasto.js";
 import { iniciarNotificaciones, detenerNotificaciones } from "./notificaciones.js";
 import { iniciarFCM } from "./fcm.js";
 import { db } from "./firebase-config.js";
@@ -214,6 +215,7 @@ const MODULES = {
   reportes_custom:  { mount: rcMount, destroy: rcDestroy },
   caja:             { mount: cajaMount, destroy: cajaDestroy },
   gastos:           { mount: gastosMount, destroy: gastosDestroy },
+  reabasto:         { mount: reabastoMount, destroy: reabastoDestroy },
 };
 
 let vistaActual = null;
@@ -578,6 +580,7 @@ function _initGlobalSearch() {
     { view:"comisiones",       icon:"💵", label:"Comisiones",               kw:"comisiones nomina incentivos bono" },
     { view:"compras",          icon:"🛒", label:"Ordenes de compra",        kw:"compras ordenes proveedores" },
     { view:"inventario",       icon:"📦", label:"Inventario",               kw:"inventario stock existencias bodega" },
+    { view:"reabasto",         icon:"📥", label:"Reabasto",                 kw:"reabasto surtido solicitud almacen stock ingeniero" },
     { view:"kardex",           icon:"🗂️", label:"Kardex",                   kw:"kardex movimientos entradas salidas" },
     { view:"productos",        icon:"🏷️", label:"Control de productos",     kw:"productos catalogo precios costos" },
     { view:"precios",          icon:"💲", label:"Precios y costos",         kw:"precios costos lista" },
@@ -950,7 +953,7 @@ function _aplicarVisibilidadSidebar() {
 
   // Sublabels y divisores — ocultar si ningún item visible en su grupo
   // Operaciones: usuarios → logistica (aprox las primeras 14 entradas del sbi-admin)
-  const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","devoluciones","chat","rh","caja","gastos","crm","logistica"];
+  const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","reabasto","devoluciones","chat","rh","caja","gastos","crm","logistica"];
   const ctrlViews = ["precios","geocercas","metas","autorizaciones","auditoria"];
   const cfgViews  = ["formularios","promociones","precios_segmento","productos","config","config_intereses","reportes","reportes_custom"];
 

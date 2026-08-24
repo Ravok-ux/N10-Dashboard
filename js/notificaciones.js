@@ -57,6 +57,11 @@ const TIPOS = {
   GASTO_SOLICITADO:       { icon: "💸", color: "#D97706", label: "Gasto solicitado"          },
   GASTO_APROBADO:         { icon: "✅", color: "#16A34A", label: "Gasto aprobado"            },
   GASTO_RECHAZADO:        { icon: "❌", color: "#DC2626", label: "Gasto rechazado"           },
+  // Reabasto de inventario
+  REABASTO_SOLICITADO:    { icon: "📥", color: "#F59E0B", label: "Solicitud de reabasto"     },
+  REABASTO_SIN_STOCK:     { icon: "⚠️",  color: "#DC2626", label: "Producto sin stock"        },
+  REABASTO_SURTIDO:       { icon: "📦", color: "#7C3AED", label: "Reabasto surtido"          },
+  PRODUCTO_ESTANCADO:     { icon: "🕒", color: "#6B7280", label: "Stock estancado >40 días"  },
   // Caja
   CORTE_CAJA:             { icon: "🏦", color: "#0EA5E9", label: "Corte de caja"             },
   // Metas y BI

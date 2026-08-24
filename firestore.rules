@@ -504,6 +504,46 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ── /stock_ingenieros ─────────────────────────────────────────────────────
+    // Inventario asignado a cada ingeniero en su vehículo
+    match /stock_ingenieros/{uid} {
+      // Lectura: el propio ingeniero o admins/almacenista
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || miRol() == 'ALMACENISTA'
+                      || request.auth.uid == uid);
+      // Escritura: admins y almacenistas (actualizan al surtir); Cloud Functions actualiza vía Admin SDK
+      allow write: if cuentaActiva()
+                   && (esAdminOSuperior() || miRol() == 'ALMACENISTA');
+    }
+
+    // ── /solicitudes_reabasto ─────────────────────────────────────────────────
+    // Solicitudes de reabasto enviadas desde el APK
+    match /solicitudes_reabasto/{solId} {
+      // Lectura: admins, almacenistas; el propio ingeniero puede leer sus solicitudes
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || miRol() == 'ALMACENISTA'
+                      || resource.data.ingenieroUid == request.auth.uid);
+      // Creación: cualquier rol activo (APK lo crea desde el ingeniero)
+      allow create: if cuentaActiva() && esRolConocido()
+                    && request.resource.data.keys().hasAll(['ingenieroUid','ingenieroAlias','estado','items','_ts']);
+      // Actualización: admins y almacenistas (cambios de estado)
+      allow update: if cuentaActiva()
+                    && (esAdminOSuperior() || miRol() == 'ALMACENISTA'
+                        // El ingeniero solo puede marcar como recibido
+                        || (resource.data.ingenieroUid == request.auth.uid
+                            && resource.data.estado == 'SURTIDO'
+                            && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['estado','tsRecibido','notasIngeniero'])));
+      allow delete: if false;
+    }
+
+    // ── /estadisticas_zona ────────────────────────────────────────────────────
+    // Estadísticas de ventas y demanda por zona geográfica
+    match /estadisticas_zona/{zona} {
+      allow read: if cuentaActiva() && esRolConocido();
+      allow write: if cuentaActiva() && esAdminOSuperior();
+    }
+
     // ── /cotizaciones ─────────────────────────────────────────────────────────
     match /cotizaciones/{cotId} {
       // Lectura: admins, gerentes, mesa de control + ingeniero propietario
