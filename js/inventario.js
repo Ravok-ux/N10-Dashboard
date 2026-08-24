@@ -261,15 +261,24 @@ function _montarStock() {
             </div>
             <div style="padding:12px 14px;display:flex;gap:10px">
               <div style="flex:1">
-                <label style="font-size:10px;color:#94A3B8;font-weight:600;display:block;margin-bottom:4px">
+                <label style="font-size:10px;color:#94A3B8;font-weight:600;display:block;margin-bottom:8px">
                   Familia
                 </label>
-                <select class="form-input" id="inv-familia"
-                  onchange="document.getElementById('inv-litros-wrap').style.opacity=this.value==='N10'?'1':'.4'"
-                  style="width:100%">
-                  <option value="">— Otra familia —</option>
-                  <option value="N10">Nutrición de 10 (N10)</option>
-                </select>
+                <div style="display:flex;gap:6px">
+                  <button type="button" data-fam="" onclick="window._invSelFamilia('')"
+                    id="inv-fam-otra"
+                    style="flex:1;padding:7px 6px;border-radius:7px;border:1.5px solid #6366F1;
+                      background:#6366F114;font-size:11px;font-weight:700;color:#6366F1;cursor:pointer">
+                    Otra
+                  </button>
+                  <button type="button" data-fam="N10" onclick="window._invSelFamilia('N10')"
+                    id="inv-fam-n10"
+                    style="flex:1;padding:7px 6px;border-radius:7px;border:1.5px solid var(--border);
+                      background:transparent;font-size:11px;font-weight:700;color:var(--text-sec);cursor:pointer">
+                    💧 N10
+                  </button>
+                </div>
+                <input type="hidden" id="inv-familia">
               </div>
               <div style="flex:1;opacity:.4;transition:opacity .2s" id="inv-litros-wrap">
                 <label style="font-size:10px;color:#94A3B8;font-weight:600;display:block;margin-bottom:4px">
@@ -305,6 +314,26 @@ function _montarStock() {
         </div>
       </div>
     </div>`;
+
+  // Selector de familia (botones toggle)
+  window._invSelFamilia = (val) => {
+    document.getElementById("inv-familia").value = val;
+    const esN10 = val === "N10";
+    const btnOtra = document.getElementById("inv-fam-otra");
+    const btnN10  = document.getElementById("inv-fam-n10");
+    const wrap    = document.getElementById("inv-litros-wrap");
+    if (btnOtra) {
+      btnOtra.style.borderColor = esN10 ? "var(--border)" : "#6366F1";
+      btnOtra.style.background  = esN10 ? "transparent"   : "#6366F114";
+      btnOtra.style.color       = esN10 ? "var(--text-sec)": "#6366F1";
+    }
+    if (btnN10) {
+      btnN10.style.borderColor = esN10 ? "#6366F1" : "var(--border)";
+      btnN10.style.background  = esN10 ? "#6366F114" : "transparent";
+      btnN10.style.color       = esN10 ? "#6366F1" : "var(--text-sec)";
+    }
+    if (wrap) wrap.style.opacity = esN10 ? "1" : ".4";
+  };
 
   // Selector visual de tipo por tarjetas
   window._invSelTipo = (val) => {
@@ -342,12 +371,9 @@ function _montarStock() {
     document.getElementById("inv-prod-lista").style.display  = "none";
     // Pre-poblar N10 si el producto ya tiene familia definida
     if (prod.familia) {
-      const famEl = document.getElementById("inv-familia");
+      window._invSelFamilia?.(prod.familia);
       const litEl = document.getElementById("inv-litros-u");
-      const wrap  = document.getElementById("inv-litros-wrap");
-      if (famEl) famEl.value = prod.familia;
       if (litEl) litEl.value = prod.litros_por_unidad || "";
-      if (wrap)  wrap.style.opacity = prod.familia === "N10" ? "1" : ".4";
     }
   }
 
@@ -434,9 +460,8 @@ function _montarStock() {
     window._invLimpiarProducto?.();
     document.getElementById("inv-cantidad").value = "";
     document.getElementById("inv-motivo").value   = "";
-    document.getElementById("inv-familia").value  = "";
+    window._invSelFamilia?.("");
     document.getElementById("inv-litros-u").value = "";
-    document.getElementById("inv-litros-wrap").style.opacity = ".4";
   };
 
   document.getElementById("inv-ajuste-btn")?.addEventListener("click", async () => {
@@ -605,7 +630,7 @@ async function _guardarAjuste() {
     document.getElementById("inv-prod-nom").disabled = false;
     document.getElementById("inv-cantidad").value  = "";
     document.getElementById("inv-motivo").value    = "";
-    document.getElementById("inv-familia").value   = "";
+    window._invSelFamilia?.("");
     document.getElementById("inv-litros-u").value  = "";
   } catch(e) { window.toast?.("Error: " + e.message, "error"); }
   finally { btn.disabled = false; btn.textContent = "Guardar"; }
