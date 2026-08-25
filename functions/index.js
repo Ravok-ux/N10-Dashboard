@@ -2156,3 +2156,264 @@ exports.notificarVencimientosIntereses = onSchedule(
     }
   }
 );
+
+// ═══════════════════════════════════════════════════════════════
+// ABONO APK → CONCILIACIÓN AUTOMÁTICA EN remisiones_credito
+//
+// Cuando el APK registra un abono en la colección `abonos`,
+// este trigger actualiza montoAbonado en la remisión correspondiente
+// y registra el evento en audit_log para trazabilidad completa.
+// ═══════════════════════════════════════════════════════════════
+exports.onAbonoCreado = onDocumentCreated(
+  { document: "abonos/{abonoId}", region: "us-central1" },
+  async (event) => {
+    const data    = event.data.data();
+    const abonoId = event.params.abonoId;
+
+    const remisionId   = data.remisionId;
+    const monto        = Number(data.monto) || 0;
+    const clienteId    = data.clienteId    || null;
+    const quien        = data.quienRegistro || data.alias || "APK";
+    const timestamp    = data.timestamp    || Date.now();
+    const metodoPago   = data.metodoPago   || "";
+    const numeroRecibo = data.numeroRecibo || "";
+
+    if (!remisionId || monto <= 0) {
+      logger.warn(`[onAbonoCreado] Abono ${abonoId} inválido — remisionId=${remisionId} monto=${monto}`);
+      return;
+    }
+
+    logger.info(`[onAbonoCreado] Conciliando abono ${abonoId} → remisión ${remisionId} monto=${monto}`);
+
+    try {
+      // Buscar la remisión por número o por id
+      let remRef = null;
+      const snapPorNumero = await db.collection("remisiones_credito")
+        .where("remisionNumero", "==", remisionId)
+        .limit(1)
+        .get();
+
+      if (!snapPorNumero.empty) {
+        remRef = snapPorNumero.docs[0].ref;
+      } else {
+        // Intentar por doc id directamente
+        const directRef = db.collection("remisiones_credito").doc(remisionId);
+        const directSnap = await directRef.get();
+        if (directSnap.exists) remRef = directRef;
+      }
+
+      if (!remRef) {
+        logger.warn(`[onAbonoCreado] Remisión ${remisionId} no encontrada en Firestore`);
+        return;
+      }
+
+      const batch = db.batch();
+      const ahora = Date.now();
+
+      // Incrementar montoAbonado en la remisión
+      batch.update(remRef, {
+        montoAbonado:     FieldValue.increment(monto),
+        ultimoAbonoTs:    ahora,
+        ultimoAbonoMonto: monto,
+        _ts:              ahora,
+      });
+
+      // Registrar en audit_log para trazabilidad
+      const auditRef = db.collection("audit_log").doc();
+      batch.set(auditRef, {
+        tipo:          "ABONO_CONCILIADO",
+        usuario:       quien,
+        descripcion:   `Abono de ${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(monto)} conciliado desde APK`,
+        referencia:    remisionId,
+        monto:         monto,
+        clienteId:     clienteId,
+        metodoPago:    metodoPago,
+        numeroRecibo:  numeroRecibo,
+        abonoId:       abonoId,
+        fuente:        "APK",
+        leido:         false,
+        _ts:           ahora,
+        timestamp:     FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+      logger.info(`[onAbonoCreado] Abono ${abonoId} conciliado — remisión ${remisionId} += ${monto}`);
+    } catch (err) {
+      logger.error(`[onAbonoCreado] Error:`, err);
+      throw err;
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════
+// PEDIDO AUTORIZADO / RECHAZADO → FCM al vendedor en campo
+//
+// Cuando el panel web cambia el status de un pedido de
+// PENDIENTE_AUTORIZACION a AUTORIZADO o RECHAZADO,
+// este trigger envía una notificación push al APK del vendedor.
+// ═══════════════════════════════════════════════════════════════
+exports.onPedidoDecision = onDocumentUpdated(
+  { document: "pedidos/{pedidoId}", region: "us-central1" },
+  async (event) => {
+    const antes   = event.data.before.data();
+    const despues = event.data.after.data();
+    const pedidoId = event.params.pedidoId;
+
+    const statusAntes  = antes.status  || "";
+    const statusDespues = despues.status || "";
+
+    if (statusAntes !== "PENDIENTE_AUTORIZACION") return;
+    if (statusDespues !== "AUTORIZADO" && statusDespues !== "RECHAZADO") return;
+
+    const alias  = despues.ingenieroAlias || despues.vendedorAlias || "";
+    const folio  = despues.folio          || pedidoId;
+    const total  = despues.total          || 0;
+    const fmtTotal = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(total);
+
+    logger.info(`[onPedidoDecision] Pedido ${folio} → ${statusDespues} para alias=${alias}`);
+
+    if (!alias) {
+      logger.warn(`[onPedidoDecision] Sin alias — no se puede enviar FCM`);
+      return;
+    }
+
+    try {
+      // Buscar FCM token del vendedor
+      const usuariosSnap = await db.collection("usuarios")
+        .where("alias", "==", alias)
+        .limit(1)
+        .get();
+
+      if (usuariosSnap.empty) {
+        logger.warn(`[onPedidoDecision] Usuario alias=${alias} no encontrado`);
+        return;
+      }
+
+      const fcmToken = usuariosSnap.docs[0].data().fcmToken || "";
+      if (!fcmToken) {
+        logger.warn(`[onPedidoDecision] Sin fcmToken para alias=${alias}`);
+        return;
+      }
+
+      const esAutorizado = statusDespues === "AUTORIZADO";
+      const titulo = esAutorizado ? "✅ Pedido autorizado" : "❌ Pedido rechazado";
+      const cuerpo = esAutorizado
+        ? `Pedido ${folio} (${fmtTotal}) fue autorizado. Ya puedes proceder con la entrega.`
+        : `Pedido ${folio} fue rechazado. Motivo: ${despues.motivoRechazo || "Sin detalle"}`;
+
+      await getMessaging().send({
+        token: fcmToken,
+        notification: { title: titulo, body: cuerpo },
+        data: {
+          tipo:     "PEDIDO_DECISION",
+          folio:    folio,
+          status:   statusDespues,
+          pedidoId: pedidoId,
+          vista:    "mis_pedidos",
+        },
+        android: {
+          priority: "high",
+          notification: { channelId: "alertas_operativas" },
+        },
+      });
+
+      logger.info(`[onPedidoDecision] FCM enviado a ${alias} — pedido ${folio} ${statusDespues}`);
+
+      // Crear también notificación web para el feed
+      await db.collection("notificaciones_web").add({
+        tipo:        esAutorizado ? "DESCUENTO_APROBADO" : "PEDIDO_CANCELADO",
+        usuario:     despues.autorizadoPor || despues.rechazadoPor || "PANEL",
+        descripcion: cuerpo,
+        referencia:  folio,
+        monto:       total,
+        leida:       false,
+        _ts:         Date.now(),
+        timestamp:   FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      logger.error(`[onPedidoDecision] Error enviando FCM:`, err);
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════
+// CAMPAÑA ACTIVADA → FCM broadcast a vendedores en campo
+//
+// Cuando una campaña pasa a activa=true en campanas_promociones,
+// notifica a todos los vendedores (INGENIERO / RECUPERADOR) para
+// que su APK la descargue en el próximo ciclo de SyncWorker.
+// ═══════════════════════════════════════════════════════════════
+exports.onCampanaActivada = onDocumentUpdated(
+  { document: "campanas_promociones/{campanaId}", region: "us-central1" },
+  async (event) => {
+    const antes   = event.data.before.data();
+    const despues = event.data.after.data();
+    const campanaId = event.params.campanaId;
+
+    // Solo actuar cuando pasa de inactiva a activa
+    if (antes.activa === true || despues.activa !== true) return;
+
+    const nombre = despues.nombre || campanaId;
+    const fechaFin = despues.fechaFin
+      ? new Date(despues.fechaFin).toLocaleDateString("es-MX")
+      : "–";
+
+    logger.info(`[onCampanaActivada] Campaña "${nombre}" activada — buscando vendedores`);
+
+    try {
+      // Obtener tokens FCM de todos los vendedores activos
+      const usuariosSnap = await db.collection("usuarios")
+        .where("activo", "==", true)
+        .where("rol", "in", ["INGENIERO", "RECUPERADOR"])
+        .get();
+
+      const tokens = usuariosSnap.docs
+        .map(d => d.data().fcmToken)
+        .filter(t => !!t);
+
+      if (tokens.length === 0) {
+        logger.info(`[onCampanaActivada] Sin tokens FCM disponibles`);
+        return;
+      }
+
+      // Enviar multicast (máx 500 tokens por llamada)
+      const chunks = [];
+      for (let i = 0; i < tokens.length; i += 500) chunks.push(tokens.slice(i, i + 500));
+
+      for (const chunk of chunks) {
+        await getMessaging().sendEachForMulticast({
+          tokens: chunk,
+          notification: {
+            title: "🎁 Nueva campaña activa",
+            body:  `"${nombre}" — válida hasta ${fechaFin}`,
+          },
+          data: {
+            tipo:      "CAMPANA_NUEVA",
+            campanaId: campanaId,
+            nombre:    nombre,
+            vista:     "campanas",
+          },
+          android: {
+            priority: "normal",
+            notification: { channelId: "alertas_operativas" },
+          },
+        });
+      }
+
+      logger.info(`[onCampanaActivada] FCM enviado a ${tokens.length} vendedores`);
+
+      // Notificación web para el feed del panel
+      await db.collection("notificaciones_web").add({
+        tipo:        "CAMPANA_ACTIVADA",
+        usuario:     "SISTEMA",
+        descripcion: `Campaña "${nombre}" activada — vigente hasta ${fechaFin}`,
+        referencia:  campanaId,
+        leida:       false,
+        _ts:         Date.now(),
+        timestamp:   FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      logger.error(`[onCampanaActivada] Error:`, err);
+    }
+  }
+);
