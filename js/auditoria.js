@@ -5,7 +5,7 @@
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc } from "./app.js";
+import { esc, norm } from "./app.js";
 import {
   collection, query, where, orderBy, limit,
   onSnapshot, getDocs, Timestamp
@@ -261,11 +261,11 @@ async function _escuchar() {
 function _aplicarFiltrosCliente() {
   let rows = [..._rowsRaw];
 
-  const uFilter  = document.getElementById("aud-usuario")?.value.trim().toLowerCase();
+  const uFilter  = norm(document.getElementById("aud-usuario")?.value.trim() ?? "");
   const ingFilter = document.getElementById("aud-ingeniero")?.value || "";
   const sevFiltro = document.getElementById("aud-sev")?.value;
 
-  if (uFilter)   rows = rows.filter(r => (r.alias || r.usuario || r.quien || "").toLowerCase().includes(uFilter));
+  if (uFilter)   rows = rows.filter(r => norm(r.alias || r.usuario || r.quien || "").includes(uFilter));
   if (ingFilter) rows = rows.filter(r => (r.alias || r.ingenieroAlias || r.quien || "") === ingFilter);
   if (sevFiltro) rows = rows.filter(r => (TIPOS[r.tipo]?.sev || "baja") === sevFiltro);
 

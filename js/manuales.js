@@ -822,7 +822,10 @@ function _abrirAsistenteMermaid(targetTextarea) {
 }
 
 async function _confirmarEliminar(m) {
-  if (!confirm(`¿Eliminar "${m.titulo}"? Esta acción no se puede deshacer.`)) return;
+  const confirmar = window.modal
+    ? await window.modal({ title: "Eliminar manual", message: `¿Eliminar "${m.titulo}"? Esta acción no se puede deshacer.`, danger: true, confirmLabel: "Eliminar" })
+    : confirm(`¿Eliminar "${m.titulo}"? Esta acción no se puede deshacer.`);
+  if (!confirmar) return;
   try {
     await deleteDoc(doc(db, "manuales", m.id));
     if (m.imagenUrl) {
@@ -833,6 +836,6 @@ async function _confirmarEliminar(m) {
     }
     await _cargarManuales();
   } catch(err) {
-    alert("Error al eliminar: " + err.message);
+    window.toast?.("Error al eliminar: " + err.message, "error");
   }
 }

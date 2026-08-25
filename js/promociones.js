@@ -1,6 +1,7 @@
 // W5 — Motor de Promociones S3
 import { db } from './firebase-config.js';
 import { Sesion } from './auth.js';
+import { norm } from './app.js';
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, setDoc, getDoc,
   onSnapshot, query, orderBy, where, getDocs,
@@ -60,25 +61,54 @@ export const PromocionesModule = (() => {
         .promo-card-dates { font-size:10px; color:#9CA3AF; padding:0 16px 10px;
           border-bottom:1px solid var(--border); }
         .promo-card-footer { display:flex; align-items:center; padding:10px 16px; gap:6px; }
-        .promo-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55);
-          z-index:1000; align-items:flex-start; justify-content:center; padding-top:40px;
-          overflow-y:auto; }
+        .promo-modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6);
+          backdrop-filter:blur(3px); z-index:1000; align-items:flex-start; justify-content:center;
+          padding:32px 12px 48px; overflow-y:auto; }
         .promo-modal-overlay.open { display:flex; }
-        .promo-modal { background:var(--surface); border-radius:14px; padding:28px;
-          width:480px; max-width:94vw; border:1px solid var(--border);
-          margin-bottom:40px; }
+        .promo-modal { background:var(--surface); border-radius:18px;
+          width:500px; max-width:96vw; border:1px solid var(--border);
+          box-shadow:0 24px 64px rgba(0,0,0,.18); overflow:hidden; }
+        .promo-modal-header { padding:22px 24px 18px;
+          border-bottom:1px solid var(--border);
+          display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+          background:linear-gradient(135deg,rgba(59,130,246,.06) 0%,transparent 60%); }
+        .promo-modal-icon { width:38px; height:38px; border-radius:10px;
+          background:linear-gradient(135deg,#3B82F6,#1D4ED8);
+          display:flex; align-items:center; justify-content:center;
+          font-size:18px; flex-shrink:0; }
         .promo-modal-title { font-size:16px; font-weight:800; color:var(--text-primary);
-          margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; }
-        .pf-row { margin-bottom:14px; }
-        .pf-label { font-size:11px; font-weight:700; color:var(--text-sec);
-          text-transform:uppercase; letter-spacing:.05em; display:block; margin-bottom:5px; }
-        .pf-input { width:100%; padding:9px 12px; border-radius:8px;
-          border:1px solid var(--border); background:var(--surface-2);
-          color:var(--text-primary); font-size:13px; box-sizing:border-box; }
+          line-height:1.2; margin:0; }
+        .promo-modal-subtitle { font-size:11px; color:var(--text-sec); margin-top:2px; }
+        .promo-modal-close { background:none; border:none; cursor:pointer;
+          color:var(--text-sec); padding:4px; line-height:1; border-radius:6px;
+          font-size:16px; transition:background .15s,color .15s; flex-shrink:0; margin-top:2px; }
+        .promo-modal-close:hover { background:var(--surface-2); color:var(--text-primary); }
+        .promo-modal-body { padding:22px 24px; }
+        .pf-row { margin-bottom:16px; }
+        .pf-label { font-size:10.5px; font-weight:700; color:var(--text-sec);
+          text-transform:uppercase; letter-spacing:.07em; display:block; margin-bottom:5px; }
+        .pf-input { width:100%; padding:10px 13px; border-radius:9px;
+          border:1.5px solid var(--border); background:var(--surface);
+          color:var(--text-primary); font-size:13.5px; box-sizing:border-box;
+          transition:border-color .15s, box-shadow .15s; }
+        .pf-input::placeholder { color:var(--text-sec); opacity:.6; }
         .pf-input:focus { outline:none; border-color:#3B82F6;
-          box-shadow:0 0 0 3px rgba(59,130,246,.15); }
+          box-shadow:0 0 0 3px rgba(59,130,246,.14); background:var(--surface); }
         .pf-2col { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-        .promo-form-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
+        .pf-campos-tipo { background:var(--surface-2);
+          border:1.5px solid var(--border); border-radius:10px;
+          padding:14px; border-left:3px solid #3B82F6; }
+        .pf-check-row { display:flex; align-items:center; gap:10px;
+          padding:11px 14px; background:var(--surface-2); border-radius:9px;
+          border:1.5px solid var(--border); cursor:pointer; }
+        .pf-check-row input[type=checkbox] { width:16px; height:16px;
+          accent-color:#3B82F6; cursor:pointer; flex-shrink:0; }
+        .pf-check-label { font-size:13px; font-weight:600; color:var(--text-primary);
+          user-select:none; }
+        .pf-check-sub { font-size:11px; color:var(--text-sec); margin-top:1px; }
+        .promo-form-actions { display:flex; gap:10px; justify-content:flex-end;
+          padding:16px 24px; border-top:1px solid var(--border);
+          background:var(--surface-2); }
       </style>
 
       <!-- Cabecera -->
@@ -144,57 +174,66 @@ export const PromocionesModule = (() => {
       <!-- Modal campaña (centrado) -->
       <div id="modalCampanaOverlay" class="promo-modal-overlay">
         <div class="promo-modal">
-          <div class="promo-modal-title">
-            <span id="panelCampanaTitulo">Nueva campaña</span>
-            <button id="cerrarPanelCampana"
-              style="background:none;border:none;font-size:18px;cursor:pointer;
-                color:var(--text-sec);padding:0;line-height:1">✕</button>
+          <div class="promo-modal-header">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="promo-modal-icon">🎁</div>
+              <div>
+                <div class="promo-modal-title" id="panelCampanaTitulo">Nueva campaña</div>
+                <div class="promo-modal-subtitle">Configura los parámetros de la promoción</div>
+              </div>
+            </div>
+            <button id="cerrarPanelCampana" class="promo-modal-close" title="Cerrar">✕</button>
           </div>
           <form id="formCampana" novalidate>
-            <div class="pf-row">
-              <label class="pf-label">Nombre *</label>
-              <input name="nombre" class="pf-input" required maxlength="80" placeholder="Ej: Campaña Temporada Maíz 2026">
-            </div>
-            <div class="pf-row">
-              <label class="pf-label">Descripción</label>
-              <textarea name="descripcion" class="pf-input" rows="2" maxlength="300"
-                style="resize:vertical" placeholder="Descripción breve de la campaña…"></textarea>
-            </div>
-            <div class="pf-row">
-              <label class="pf-label">Tipo de promoción</label>
-              <select name="tipo" id="selectTipoPromo" class="pf-input">
-                ${Object.entries(TIPOS_PROMO).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}
-              </select>
-            </div>
-            <div class="pf-2col pf-row">
-              <div>
-                <label class="pf-label">Fecha inicio *</label>
-                <input name="fechaInicio" type="date" class="pf-input" required>
+            <div class="promo-modal-body">
+              <div class="pf-row">
+                <label class="pf-label">Nombre *</label>
+                <input name="nombre" class="pf-input" required maxlength="80" placeholder="Ej: Campaña Temporada Maíz 2026">
               </div>
-              <div>
-                <label class="pf-label">Fecha fin *</label>
-                <input name="fechaFin" type="date" class="pf-input" required>
+              <div class="pf-row">
+                <label class="pf-label">Descripción</label>
+                <textarea name="descripcion" class="pf-input" rows="2" maxlength="300"
+                  style="resize:vertical" placeholder="Descripción breve de la campaña…"></textarea>
               </div>
-            </div>
-            <div id="camposTipo" class="pf-row" style="background:var(--surface-2);
-              border-radius:8px;padding:12px;border:1px solid var(--border)"></div>
-            <div class="pf-row">
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;
-                font-size:13px;color:var(--text-primary)">
-                <input name="activa" type="checkbox" checked style="width:15px;height:15px">
-                Campaña activa
-              </label>
+              <div class="pf-row">
+                <label class="pf-label">Tipo de promoción</label>
+                <select name="tipo" id="selectTipoPromo" class="pf-input">
+                  ${Object.entries(TIPOS_PROMO).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}
+                </select>
+              </div>
+              <div class="pf-2col pf-row">
+                <div>
+                  <label class="pf-label">Fecha inicio *</label>
+                  <input name="fechaInicio" type="date" class="pf-input" required>
+                </div>
+                <div>
+                  <label class="pf-label">Fecha fin *</label>
+                  <input name="fechaFin" type="date" class="pf-input" required>
+                </div>
+              </div>
+              <div id="camposTipo" class="pf-row pf-campos-tipo"></div>
+              <div class="pf-row" style="margin-bottom:0">
+                <label class="pf-check-row">
+                  <input name="activa" type="checkbox" checked>
+                  <div>
+                    <div class="pf-check-label">Campaña activa</div>
+                    <div class="pf-check-sub">Los clientes podrán ver y aplicar esta promoción</div>
+                  </div>
+                </label>
+              </div>
             </div>
             <div class="promo-form-actions">
               <button type="button" id="btnCancelarCampana"
-                style="padding:9px 20px;border:1px solid var(--border);border-radius:8px;
-                  background:transparent;color:var(--text-sec);font-size:13px;cursor:pointer">
+                style="padding:9px 20px;border:1.5px solid var(--border);border-radius:9px;
+                  background:transparent;color:var(--text-sec);font-size:13px;font-weight:600;cursor:pointer;transition:background .15s">
                 Cancelar
               </button>
               <button type="submit"
-                style="padding:9px 24px;border:none;border-radius:8px;
-                  background:#1565C0;color:#fff;font-size:13px;font-weight:700;cursor:pointer">
-                Guardar campaña
+                style="padding:9px 24px;border:none;border-radius:9px;
+                  background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;
+                  font-size:13px;font-weight:700;cursor:pointer;
+                  box-shadow:0 2px 8px rgba(37,99,235,.35);transition:opacity .15s">
+                💾 Guardar campaña
               </button>
             </div>
           </form>
@@ -438,9 +477,9 @@ export const PromocionesModule = (() => {
     const nombre     = form.nombre.value.trim();
     const fechaInicio = form.fechaInicio.value;
     const fechaFin   = form.fechaFin.value;
-    if (!nombre)                        { alert('El nombre es obligatorio.'); return; }
-    if (!fechaInicio || !fechaFin)      { alert('Las fechas son obligatorias.'); return; }
-    if (fechaFin < fechaInicio)         { alert('La fecha fin debe ser posterior.'); return; }
+    if (!nombre)                        { window.toast?.('El nombre es obligatorio.', 'warn'); return; }
+    if (!fechaInicio || !fechaFin)      { window.toast?.('Las fechas son obligatorias.', 'warn'); return; }
+    if (fechaFin < fechaInicio)         { window.toast?.('La fecha fin debe ser posterior.', 'warn'); return; }
 
     const tipo = form.tipo?.value || 'DESCUENTO_MONTO_PEDIDO';
     const fechaInicioTs = new Date(fechaInicio + 'T00:00:00').getTime();
@@ -500,7 +539,7 @@ export const PromocionesModule = (() => {
       }
       _cerrarPanelCampana(container);
     } catch (err) {
-      alert('Error al guardar: ' + err.message);
+      window.toast?.('Error al guardar: ' + err.message, 'error');
     }
   }
 
@@ -531,8 +570,8 @@ export const PromocionesModule = (() => {
       const snap = await getDocs(query(collection(db, COL_PUNTOS), orderBy('puntos', 'desc'), limit(100)));
       let docs = snap.docs;
       if (busqueda) {
-        const lower = busqueda.toLowerCase();
-        docs = docs.filter(d => (d.data().clienteNombre || '').toLowerCase().includes(lower));
+        const lower = norm(busqueda);
+        docs = docs.filter(d => norm(d.data().clienteNombre || '').includes(lower));
       }
       if (!docs.length) { tbody.innerHTML = '<tr><td colspan="4">Sin registros.</td></tr>'; return; }
       tbody.innerHTML = docs.map(d => {
@@ -577,7 +616,7 @@ export const PromocionesModule = (() => {
   async function _confirmarAjustePuntos(container, form) {
     const clienteId = form.clienteId.value;
     const puntos    = parseInt(form.puntos.value, 10);
-    if (!clienteId || isNaN(puntos) || puntos < 1) { alert('Ingresa un número de puntos válido.'); return; }
+    if (!clienteId || isNaN(puntos) || puntos < 1) { window.toast?.('Ingresa un número de puntos válido.', 'warn'); return; }
     const delta = form.operacion.value === 'sumar' ? puntos : -Math.abs(puntos);
     try {
       await addDoc(collection(db, COL_HISTORIAL), {
@@ -595,7 +634,7 @@ export const PromocionesModule = (() => {
       await setDoc(ref, { puntos: nuevo, ultimaActividad: Date.now() }, { merge: true });
       container.querySelector('#modalPuntos').classList.add('hidden');
       _cargarPuntos(container, '');
-    } catch (err) { alert('Error: ' + err.message); }
+    } catch (err) { window.toast?.('Error: ' + err.message, 'error'); }
   }
 
   // ── Historial de canje ────────────────────────────────────────────────
@@ -787,7 +826,7 @@ export const LealtadConfigModule = (() => {
     const nombre = _container.querySelector("#lc-nombre").value.trim();
     const pts    = parseFloat(_container.querySelector("#lc-puntos").value) || 1;
     const activo = _container.querySelector("#lc-activo").checked;
-    if (!refId) { alert("Ingresa el ID de referencia."); return; }
+    if (!refId) { window.toast?.("Ingresa el ID de referencia.", "warn"); return; }
 
     const payload = { tipo, refId, nombre: nombre || refId, puntosPorPeso: pts, activo, timestamp: serverTimestamp() };
     if (_editId) {

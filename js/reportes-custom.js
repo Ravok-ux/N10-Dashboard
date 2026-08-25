@@ -1,6 +1,7 @@
 // reportes-custom.js — Reportes configurables por el usuario
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
+import { norm } from "./app.js";
 import { enriquecerRemisiones } from "./intereses-engine.js";
 import { exportarExcel } from "./excel-utils.js";
 import {
@@ -330,8 +331,8 @@ async function _generar() {
 
     // Filtro adicional en cliente (para campos no indexados)
     if (filtroCampo && filtroValor) {
-      const v = filtroValor.toLowerCase();
-      docs = docs.filter(d => String(d[filtroCampo] ?? "").toLowerCase().includes(v));
+      const v = norm(filtroValor);
+      docs = docs.filter(d => norm(String(d[filtroCampo] ?? "")).includes(v));
     }
 
     _resultados = docs;

@@ -3,7 +3,7 @@
 // ══════════════════════════════════════════════════════════════
 
 import { db } from "./firebase-config.js";
-import { esc } from "./app.js";
+import { esc, norm } from "./app.js";
 import { Sesion } from "./auth.js";
 import {
   collection, query, orderBy, limit, onSnapshot, where, getDocs
@@ -141,7 +141,7 @@ function _renderizar() {
   if (!tbody) return;
 
   const filtrados = _busqueda.length >= 2
-    ? _todos.filter(e => (e.nombreProducto || "").toLowerCase().includes(_busqueda.toLowerCase()))
+    ? _todos.filter(e => norm(e.nombreProducto || "").includes(norm(_busqueda)))
     : _todos;
 
   // KPIs
@@ -195,7 +195,7 @@ function _bindBusqueda() {
   if (!input || !dd) return;
 
   input.addEventListener("input", () => {
-    const q = input.value.trim().toLowerCase();
+    const q = norm(input.value.trim());
     _busqueda = input.value.trim();
     _renderizar();
 
@@ -204,7 +204,7 @@ function _bindBusqueda() {
       : [...new Set(_todos.map(e => e.nombreProducto).filter(Boolean))].sort()
           .map(n => ({ nombre: n, codigo: "" }));
     const matches = source
-      .filter(p => p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q))
+      .filter(p => norm(p.nombre).includes(q) || norm(p.codigo).includes(q))
       .slice(0, 12);
     if (!matches.length) { dd.style.display = "none"; return; }
 

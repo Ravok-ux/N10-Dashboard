@@ -8,7 +8,7 @@
 // ══════════════════════════════════════════════════════════════
 
 import { db }   from "./firebase-config.js";
-import { esc }  from "./app.js";
+import { esc, norm } from "./app.js";
 import { Sesion } from "./auth.js";
 import { TASA_SEMANAL_DEFAULT, DIAS_GRACIA_DEFAULT } from "./intereses-engine.js";
 import {
@@ -398,12 +398,12 @@ function _bindUI() {
     },
 
     filtrarNotas() {
-      const q = (document.getElementById("ci-buscar-nota")?.value ?? "").toLowerCase();
+      const q = norm(document.getElementById("ci-buscar-nota")?.value ?? "");
       const clienteSel = document.getElementById("ci-filtro-cliente")?.value ?? "";
       const soloOverride = document.getElementById("ci-solo-override")?.checked;
       _renderNotas(
         _notasCache.filter(r => {
-          const matchQ  = !q || (r.folio || "").toLowerCase().includes(q);
+          const matchQ  = !q || norm(r.folio || "").includes(q);
           const matchCli = !clienteSel || (r.clienteNombre || "") === clienteSel;
           const ov = !soloOverride || !!r.tasaDiaria;
           return matchQ && matchCli && ov;

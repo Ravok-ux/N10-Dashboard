@@ -158,7 +158,7 @@ async function _cargar() {
 async function _actualizar() {
   const input = _container.querySelector("#mm-input-tc");
   const tc    = parseFloat(input.value);
-  if (!tc || tc < 1) { alert("Ingresa un tipo de cambio válido (mayor a 1)."); return; }
+  if (!tc || tc < 1) { window.toast?.("Ingresa un tipo de cambio válido (mayor a 1).", "warn"); return; }
 
   const btn = _container.querySelector("#mm-btn-actualizar");
   btn.disabled = true; btn.textContent = "Guardando…";
@@ -184,7 +184,7 @@ async function _actualizar() {
     btn.textContent = "✓ Actualizado";
     setTimeout(() => { btn.disabled = false; btn.textContent = "Actualizar"; }, 2000);
   } catch (e) {
-    alert(`Error: ${e.message}`);
+    window.toast?.(`Error: ${e.message}`, "error");
     btn.disabled = false; btn.textContent = "Actualizar";
   }
 }

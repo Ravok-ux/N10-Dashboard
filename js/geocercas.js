@@ -365,8 +365,8 @@ async function _guardar() {
   const alias   = _linesToJsonArray(document.getElementById("gInputAlias").value);
   const emails  = _linesToJsonArray(document.getElementById("gInputEmails").value);
 
-  if (!nombre) { alert("El nombre es obligatorio."); return; }
-  if (isNaN(latVal) || isNaN(lngVal)) { alert("Coordenadas inválidas."); return; }
+  if (!nombre) { window.toast?.("El nombre es obligatorio.", "warn"); return; }
+  if (isNaN(latVal) || isNaN(lngVal)) { window.toast?.("Coordenadas inválidas.", "warn"); return; }
 
   const datos = {
     nombre, lat: latVal, lng: lngVal, radioMetros: radio,

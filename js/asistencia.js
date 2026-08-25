@@ -1,6 +1,7 @@
 // asistencia.js — Control de Asistencia y Horarios (GERENTE / MESA_CONTROL)
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
+import { norm } from "./app.js";
 import {
   collection, query, where, orderBy, onSnapshot, doc,
   setDoc, getDoc, getDocs, serverTimestamp, limit
@@ -144,7 +145,7 @@ async function _cargar() {
   let q = query(collection(db, "asistencias"), where("_ts", ">=", ini), where("_ts", "<=", fin), orderBy("_ts", "desc"), limit(300));
   _unsub = onSnapshot(q, snap => {
     let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    if (alias) docs = docs.filter(d => (d.alias || "").toLowerCase().includes(alias));
+    if (alias) docs = docs.filter(d => norm(d.alias || "").includes(norm(alias)));
     _renderTabla(docs);
   });
 }
@@ -227,7 +228,10 @@ async function _cargarHorarios() {
 
   div.querySelectorAll(".hor-del").forEach(btn => {
     btn.addEventListener("click", async () => {
-      if (!confirm(`¿Eliminar horario de ${btn.dataset.alias}?`)) return;
+      const ok = window.modal
+        ? await window.modal({ title: "Eliminar horario", message: `¿Eliminar horario de ${btn.dataset.alias}?`, danger: true, confirmLabel: "Eliminar" })
+        : confirm(`¿Eliminar horario de ${btn.dataset.alias}?`);
+      if (!ok) return;
       const { deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
       await deleteDoc(doc(db, "horarios_empleado", btn.dataset.alias));
       _cargarHorarios();
@@ -240,7 +244,7 @@ async function _guardarHorario() {
   const entrada    = _container.querySelector("#hor-entrada").value;
   const salida     = _container.querySelector("#hor-salida").value;
   const tolerancia = parseInt(_container.querySelector("#hor-tolerancia").value) || 15;
-  if (!alias) { alert("Ingresa el alias del empleado."); return; }
+  if (!alias) { window.toast?.("Ingresa el alias del empleado.", "warn"); return; }
 
   await setDoc(doc(db, "horarios_empleado", alias), {
     alias, horaEntrada: entrada, horaSalida: salida,
@@ -251,5 +255,5 @@ async function _guardarHorario() {
   _container.querySelector("#hor-alias").value = "";
   _cargarHorarios();
   _lastHorarios[alias] = { horaEntrada: entrada, horaSalida: salida, toleranciaMin: tolerancia };
-  alert("Horario guardado correctamente.");
+  window.toast?.("Horario guardado correctamente.", "success");
 }

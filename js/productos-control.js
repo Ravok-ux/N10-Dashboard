@@ -4,6 +4,7 @@
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
+import { norm } from "./app.js";
 import { exportarExcel, descargarPlantilla, importarExcel, toolbarHTML, puedeImportar,
          descargarPlantillaStock, importarPlantillaStock } from "./excel-utils.js";
 import {
@@ -662,14 +663,14 @@ function _aplicarFiltros() {
   if (_filtroActivo === "activos")   lista = lista.filter(p => p.activo !== false);
   if (_filtroActivo === "inactivos") lista = lista.filter(p => p.activo === false);
   if (_busqueda.length >= 2) {
-    const q = _busqueda.toLowerCase();
+    const q = norm(_busqueda);
     lista = lista.filter(p =>
-      (p.nombre      || "").toLowerCase().includes(q) ||
-      (p.descripcion || "").toLowerCase().includes(q) ||
-      (p.codigo      || "").toLowerCase().includes(q) ||
-      (p.clave_sat   || "").toLowerCase().includes(q) ||
-      (p.marca       || "").toLowerCase().includes(q) ||
-      (p.categoria   || "").toLowerCase().includes(q)
+      norm(p.nombre      || "").includes(q) ||
+      norm(p.descripcion || "").includes(q) ||
+      norm(p.codigo      || "").includes(q) ||
+      norm(p.clave_sat   || "").includes(q) ||
+      norm(p.marca       || "").includes(q) ||
+      norm(p.categoria   || "").includes(q)
     );
   }
   return lista;

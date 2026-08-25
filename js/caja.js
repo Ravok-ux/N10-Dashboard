@@ -1,6 +1,7 @@
 // caja.js — Arqueo/Corte de Caja (MESA_CONTROL / GERENTE — vista cajero web)
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
+import { norm } from "./app.js";
 import {
   collection, query, orderBy, onSnapshot, doc, getDoc,
   where, getDocs, addDoc, updateDoc, serverTimestamp
@@ -95,7 +96,7 @@ function _bindEvents() {
   let timer;
   _container.querySelector("#caja-filtro-alias").addEventListener("input", e => {
     clearTimeout(timer);
-    timer = setTimeout(() => { _filtroAlias = e.target.value.trim().toLowerCase(); _render(_lastDocs); }, 300);
+    timer = setTimeout(() => { _filtroAlias = norm(e.target.value.trim()); _render(_lastDocs); }, 300);
   });
 }
 
@@ -124,7 +125,7 @@ function _render(docs) {
   if (!tbody) return;
 
   const filtrados = _filtroAlias
-    ? docs.filter(d => (d.alias || "").toLowerCase().includes(_filtroAlias))
+    ? docs.filter(d => norm(d.alias || "").includes(_filtroAlias))
     : docs;
 
   if (filtrados.length === 0) {

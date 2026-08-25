@@ -5,7 +5,7 @@
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc } from "./app.js";
+import { esc, norm } from "./app.js";
 import { invalidarCache } from "./erp-cache.js";
 import {
   collection, doc, getDocs, addDoc, updateDoc, deleteDoc,
@@ -158,10 +158,9 @@ async function _cargar() {
 }
 
 function _render() {
-  const q  = _filtro.toLowerCase();
+  const q  = norm(_filtro);
   const lista = _provs.filter(p => {
-    const pass = !q || [p.nombre,p.rfc,p.contacto,p.email,p.categoria]
-      .join(" ").toLowerCase().includes(q);
+    const pass = !q || norm([p.nombre,p.rfc,p.contacto,p.email,p.categoria].join(" ")).includes(q);
     const passCat = !_filtrosCat || p.categoria === _filtrosCat;
     return pass && passCat;
   });
@@ -280,7 +279,10 @@ function _bindUI() {
     },
 
     async eliminar(id, nombre) {
-      if (!confirm(`¿Eliminar proveedor "${nombre}"? Esta acción no se puede deshacer.`)) return;
+      const ok = window.modal
+        ? await window.modal({ title: "Eliminar proveedor", message: `¿Eliminar "${nombre}"? Esta acción no se puede deshacer.`, danger: true, confirmLabel: "Eliminar" })
+        : confirm(`¿Eliminar proveedor "${nombre}"? Esta acción no se puede deshacer.`);
+      if (!ok) return;
       try {
         await deleteDoc(doc(db, "proveedores", id));
         invalidarCache("proveedores");

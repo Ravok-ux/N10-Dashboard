@@ -10,9 +10,10 @@
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
+import { exportarExcel } from "./excel-utils.js";
 import {
   collection, doc, addDoc, setDoc, deleteDoc,
-  onSnapshot, query, where, orderBy, limit, getDocs,
+  onSnapshot, query, where, limit, getDocs, getDoc,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -145,7 +146,11 @@ export const FormulariosModule = {
         container.querySelectorAll(".frm-tab").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
         _tabActual = btn.dataset.tab;
-        _renderContenido();
+        if (_tabActual === "plantillas") {
+          _renderPlantillas();
+        } else {
+          _suscribirRespuestas();
+        }
       });
     });
 
@@ -156,7 +161,7 @@ export const FormulariosModule = {
         if (ch.type === "removed") delete _formularios[ch.doc.id];
         else _formularios[ch.doc.id] = { id: ch.doc.id, ...ch.doc.data() };
       });
-      _renderContenido();
+      if (_tabActual === "plantillas") _renderPlantillas();
     });
   },
 
@@ -169,10 +174,26 @@ export const FormulariosModule = {
   }
 };
 
-// ── Contenido según tab ────────────────────────────────────────────────────────
-function _renderContenido() {
-  if (_tabActual === "plantillas") _renderPlantillas();
-  else _renderTablaRespuestas();
+// ── Suscripción en tiempo real a respuestas ────────────────────────────────────
+function _suscribirRespuestas() {
+  if (_unsubResp) return; // ya activa
+  const wrap = document.getElementById("frmContenido");
+  if (wrap) wrap.innerHTML = `<div class="empty-state" style="grid-column:1/-1">Cargando respuestas…</div>`;
+
+  _unsubResp = onSnapshot(
+    query(collection(db, "respuestas_formulario"), limit(200)),
+    snap => {
+      const docs = [...snap.docs]
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.timestamp?.seconds ?? 0) - (a.timestamp?.seconds ?? 0));
+      _respuestas = docs;
+      _renderTablaRespuestas(docs);
+    },
+    () => {
+      const w = document.getElementById("frmContenido");
+      if (w) w.innerHTML = `<div class="empty-state" style="grid-column:1/-1">Error cargando respuestas.</div>`;
+    }
+  );
 }
 
 // ── Tab: Plantillas ────────────────────────────────────────────────────────────
@@ -213,56 +234,53 @@ function _renderPlantillas() {
 }
 
 // ── Tab: Respuestas globales ───────────────────────────────────────────────────
-async function _renderTablaRespuestas() {
+function _renderTablaRespuestas(docs) {
   const wrap = document.getElementById("frmContenido");
   if (!wrap) return;
-  wrap.innerHTML = `<div class="empty-state" style="grid-column:1/-1">Cargando respuestas…</div>`;
 
-  try {
-    const q = query(
-      collection(db, "respuestas_formulario"),
-      orderBy("timestamp", "desc"),
-      limit(100)
-    );
-    const snap = await getDocs(q);
-    if (snap.empty) {
-      wrap.innerHTML = `<div class="empty-state" style="grid-column:1/-1">Sin respuestas registradas aún.</div>`;
-      return;
-    }
-    wrap.innerHTML = `
-      <div style="grid-column:1/-1;overflow-x:auto">
+  if (!docs.length) {
+    wrap.innerHTML = `<div class="empty-state" style="grid-column:1/-1">Sin respuestas registradas aún.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <div style="grid-column:1/-1">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button id="frmBtnExportar" class="btn-secondary btn-sm">⬇ Exportar Excel</button>
+      </div>
+      <div style="overflow-x:auto;border:1px solid var(--border,#e2e8f0);border-radius:10px">
         <table style="width:100%;border-collapse:collapse;font-size:.84rem">
           <thead>
-            <tr style="background:var(--surface,#f8fafc);text-align:left">
-              <th style="padding:8px 10px">Formulario</th>
-              <th style="padding:8px 10px">Ingeniero</th>
-              <th style="padding:8px 10px">Cliente</th>
-              <th style="padding:8px 10px">Fecha</th>
-              <th style="padding:8px 10px">Acciones</th>
+            <tr style="background:var(--surface-2,#f8fafc);text-align:left">
+              <th style="padding:9px 12px;font-size:.76rem;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em">Formulario</th>
+              <th style="padding:9px 12px;font-size:.76rem;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em">Ingeniero</th>
+              <th style="padding:9px 12px;font-size:.76rem;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em">Cliente</th>
+              <th style="padding:9px 12px;font-size:.76rem;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em">Fecha</th>
+              <th style="padding:9px 12px;font-size:.76rem;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em">Ver</th>
             </tr>
           </thead>
           <tbody>
-            ${snap.docs.map(d => {
-              const r = d.data();
-              return `<tr style="border-top:1px solid var(--border,#e2e8f0)">
-                <td style="padding:7px 10px">${esc(r.formularioTitulo || r.formularioId)}</td>
-                <td style="padding:7px 10px">${esc(r.aliasIngeniero || "–")}</td>
-                <td style="padding:7px 10px">${esc(r.clienteNombre || "–")}</td>
-                <td style="padding:7px 10px">${_fmtFecha(r.timestamp)}</td>
-                <td style="padding:7px 10px">
-                  <button class="btn-primary btn-sm" onclick="_frmVerRespuesta('${esc(d.id)}')">Ver</button>
+            ${docs.map(r => `
+              <tr style="border-top:1px solid var(--border,#e2e8f0)">
+                <td style="padding:8px 12px">${esc(r.formularioTitulo || r.formularioId)}</td>
+                <td style="padding:8px 12px">${esc(r.aliasIngeniero || "–")}</td>
+                <td style="padding:8px 12px">${esc(r.clienteNombre || "–")}</td>
+                <td style="padding:8px 12px;white-space:nowrap;font-size:.8rem">${_fmtFecha(r.timestamp)}</td>
+                <td style="padding:8px 12px">
+                  <button class="btn-primary btn-sm frm-btn-ver" data-id="${esc(r.id)}">Ver</button>
                 </td>
-              </tr>`;
-            }).join("")}
+              </tr>`).join("")}
           </tbody>
         </table>
       </div>
-    `;
-    // Cache para poder mostrar detalle
-    _respuestas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  } catch (e) {
-    wrap.innerHTML = `<div class="empty-state" style="grid-column:1/-1">Error cargando respuestas.</div>`;
-  }
+    </div>
+  `;
+
+  wrap.querySelectorAll(".frm-btn-ver").forEach(btn =>
+    btn.addEventListener("click", () => _frmVerRespuestaById(btn.dataset.id))
+  );
+
+  wrap.querySelector("#frmBtnExportar")?.addEventListener("click", () => _exportarRespuestas(docs));
 }
 
 // ── Panel lateral: respuestas de una plantilla ─────────────────────────────────
@@ -281,20 +299,31 @@ window._frmVerRespuestas = async id => {
     const q = query(
       collection(db, "respuestas_formulario"),
       where("formularioId", "==", id),
-      orderBy("timestamp", "desc"),
       limit(50)
     );
     const snap = await getDocs(q);
     if (snap.empty) { body.innerHTML = `<div style="padding:12px">Sin respuestas para esta plantilla.</div>`; return; }
 
+    const docsOrdenados = [...snap.docs].sort((a, b) =>
+      (b.data().timestamp?.seconds ?? 0) - (a.data().timestamp?.seconds ?? 0)
+    );
     const campos = form?.campos || [];
-    body.innerHTML = snap.docs.map(d => {
+    body.innerHTML = docsOrdenados.map(d => {
       const r = d.data();
       const filas = campos.map(c => {
         const val = r.respuestas?.[c.id];
+        let valHtml;
+        if (c.tipo === "foto" && val) {
+          valHtml = `<a href="${esc(val)}" target="_blank" rel="noopener">
+            <img src="${esc(val)}" alt="foto" style="max-width:120px;max-height:80px;
+              border-radius:6px;border:1px solid var(--border);cursor:zoom-in;object-fit:cover">
+          </a>`;
+        } else {
+          valHtml = esc(Array.isArray(val) ? val.join(", ") : (val ?? "–"));
+        }
         return `<div class="frm-resp-row">
           <span class="frm-resp-label">${esc(c.etiqueta)}</span>
-          <span>${esc(Array.isArray(val) ? val.join(", ") : (val ?? "–"))}</span>
+          <span>${valHtml}</span>
         </div>`;
       }).join("");
       return `<div class="frm-resp-card">
@@ -315,17 +344,28 @@ window._frmCerrarResp = () => {
   document.getElementById("frmRespPanel").style.display = "none";
 };
 
-window._frmVerRespuesta = id => {
-  const r = _respuestas.find(x => x.id === id);
-  if (!r) return;
-  const form = _formularios[r.formularioId];
-  _frmVerRespuestas(r.formularioId);
-};
+window._frmVerRespuesta = id => _frmVerRespuestaById(id);
+
+async function _frmVerRespuestaById(id) {
+  // Primero busca en caché local, si no, consulta Firestore directamente
+  let r = _respuestas.find(x => x.id === id);
+  if (!r) {
+    try {
+      const snap = await getDoc(doc(db, "respuestas_formulario", id));
+      if (!snap.exists()) return;
+      r = { id: snap.id, ...snap.data() };
+    } catch { return; }
+  }
+  window._frmVerRespuestas(r.formularioId);
+}
 
 // ── Acciones de plantilla ──────────────────────────────────────────────────────
 window._frmEditar   = id => _abrirModal(id);
 window._frmEliminar = async id => {
-  if (!await window.modal({ title: "Eliminar plantilla", message: "¿Eliminar esta plantilla? Las respuestas existentes no se borrarán.", danger: true, confirmLabel: "Eliminar" })) return;
+  const confirmar = window.modal
+    ? await window.modal({ title: "Eliminar plantilla", message: "¿Eliminar esta plantilla? Las respuestas existentes no se borrarán.", danger: true, confirmLabel: "Eliminar" })
+    : confirm("¿Eliminar esta plantilla?");
+  if (!confirmar) return;
   await deleteDoc(doc(db, "formularios", id));
 };
 
@@ -491,8 +531,8 @@ async function _guardarPlantilla(id) {
   const asignado = document.getElementById("fmAsignado").value
     .split(",").map(s => s.trim()).filter(Boolean);
 
-  if (!titulo) { alert("El título es obligatorio."); return; }
-  if (_camposEnEdicion.length === 0) { alert("Agrega al menos un campo."); return; }
+  if (!titulo) { window.toast?.("El título es obligatorio.", "warn"); return; }
+  if (_camposEnEdicion.length === 0) { window.toast?.("Agrega al menos un campo.", "warn"); return; }
 
   const datos = {
     titulo, descripcion: desc, activo,
@@ -510,6 +550,43 @@ async function _guardarPlantilla(id) {
     await addDoc(collection(db, "formularios"), datos);
   }
   _cerrarModal();
+}
+
+// ── Exportar respuestas a Excel ───────────────────────────────────────────────
+function _exportarRespuestas(docs) {
+  const cols = [
+    { key: "formularioTitulo", header: "Formulario",  width: 28 },
+    { key: "aliasIngeniero",   header: "Ingeniero",   width: 18 },
+    { key: "clienteNombre",    header: "Cliente",     width: 28 },
+    { key: "clienteId",        header: "Cliente ID",  width: 16 },
+    { key: "fecha",            header: "Fecha",       width: 20 },
+  ];
+  // Recolectar todas las etiquetas de campos únicos que aparezcan en las respuestas
+  const camposIdx = {};
+  docs.forEach(r => {
+    const form = _formularios[r.formularioId];
+    (form?.campos || []).forEach(c => {
+      if (!camposIdx[c.id]) {
+        camposIdx[c.id] = c.etiqueta || c.id;
+        cols.push({ key: `resp_${c.id}`, header: c.etiqueta || c.id, width: 22 });
+      }
+    });
+  });
+  const rows = docs.map(r => {
+    const row = {
+      formularioTitulo: r.formularioTitulo || r.formularioId || "",
+      aliasIngeniero:   r.aliasIngeniero   || "",
+      clienteNombre:    r.clienteNombre    || "",
+      clienteId:        r.clienteId        || "",
+      fecha:            _fmtFecha(r.timestamp),
+    };
+    Object.keys(camposIdx).forEach(cid => {
+      const val = r.respuestas?.[cid];
+      row[`resp_${cid}`] = Array.isArray(val) ? val.join(", ") : (val ?? "");
+    });
+    return row;
+  });
+  exportarExcel(rows, cols, `respuestas_formularios_${new Date().toISOString().slice(0,10)}.xlsx`, "Respuestas");
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

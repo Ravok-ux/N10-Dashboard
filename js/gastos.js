@@ -6,7 +6,7 @@ import {
   doc, updateDoc, serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { crearNotificacion } from "./notificaciones.js";
-import { norm } from "./app.js";
+import { norm, esc } from "./app.js";
 
 const ROLES_APROBADOR = ["GERENTE", "ADMINISTRADOR", "SUPER_ADMIN"];
 
@@ -184,7 +184,7 @@ function _render(docs) {
     const st     = STATUS_CONFIG[g.status]  || STATUS_CONFIG.PENDIENTE;
     const fecha  = g._ts ? new Date(g._ts).toLocaleDateString("es-MX", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }) : "—";
     const monto  = `$${(g.monto || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`;
-    const fotoLink = g.fotoUrl ? `<a href="${g.fotoUrl}" target="_blank" style="font-size:.78rem;color:#2563EB;display:block;margin-bottom:.3rem">🖼️ Ver ticket</a>` : "";
+    const fotoLink = g.fotoUrl ? `<a href="${esc(g.fotoUrl)}" target="_blank" rel="noopener" style="font-size:.78rem;color:#2563EB;display:block;margin-bottom:.3rem">🖼️ Ver ticket</a>` : "";
     const esAprobador = ROLES_APROBADOR.includes(Sesion.rol);
     let acciones;
     if (g.status === "PENDIENTE" && esAprobador) {
@@ -199,7 +199,7 @@ function _render(docs) {
     }
     // Status badge + motivo rechazo si aplica
     const motivoHtml = g.status === "RECHAZADO" && g.motivoRechazo
-      ? `<div style="font-size:.74rem;color:#991B1B;margin-top:.2rem">Motivo: ${g.motivoRechazo}</div>` : "";
+      ? `<div style="font-size:.74rem;color:#991B1B;margin-top:.2rem">Motivo: ${esc(g.motivoRechazo)}</div>` : "";
     return `
 <tr>
   <td>${g.alias || g.uid}</td>
@@ -217,7 +217,7 @@ function _render(docs) {
     btn.addEventListener("click", async () => {
       const { id, uid, alias, monto } = btn.dataset;
       const confirmar = window.modal
-        ? await window.modal({ title: "Aprobar gasto", body: `¿Aprobar el gasto de <b>${alias}</b> por <b>$${Number(monto).toLocaleString("es-MX", { minimumFractionDigits:2 })}</b>?`, ok: "Aprobar", cancel: "Cancelar" })
+        ? await window.modal({ title: "Aprobar gasto", message: `¿Aprobar el gasto de ${alias} por $${Number(monto).toLocaleString("es-MX", { minimumFractionDigits:2 })}?`, confirmLabel: "Aprobar" })
         : confirm(`¿Aprobar el gasto de ${alias} por $${Number(monto).toLocaleString("es-MX", { minimumFractionDigits:2 })}?`);
       if (!confirmar) return;
       await _setStatus({ id, empleadoUid: uid, empleadoAlias: alias, status: "APROBADO" });
@@ -227,7 +227,7 @@ function _render(docs) {
     btn.addEventListener("click", async () => {
       const { id, uid, alias, monto } = btn.dataset;
       const motivo = window.promptModal
-        ? await window.promptModal({ title: "Rechazar gasto", body: `Motivo de rechazo para el gasto de <b>${alias}</b> por <b>$${Number(monto).toLocaleString("es-MX", { minimumFractionDigits:2 })}</b>:`, placeholder: "Escribe el motivo…", ok: "Rechazar" })
+        ? await window.promptModal({ title: "Rechazar gasto", label: `Motivo de rechazo — ${alias} · $${Number(monto).toLocaleString("es-MX", { minimumFractionDigits:2 })}`, placeholder: "Escribe el motivo…", confirmLabel: "Rechazar" })
         : prompt(`Motivo de rechazo para el gasto de ${alias}:`);
       if (!motivo || !motivo.trim()) return; // cancelado o vacío
       await _setStatus({ id, empleadoUid: uid, empleadoAlias: alias, status: "RECHAZADO", motivoRechazo: motivo.trim() });

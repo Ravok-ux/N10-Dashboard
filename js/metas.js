@@ -458,8 +458,8 @@ async function _guardarForm(id) {
   const prosp     = parseInt(document.getElementById("mfProspectos")?.value) || 0;
   const semana    = parseInt(document.getElementById("mfSemana")?.value) || 0;
 
-  if (!alias) { alert("Selecciona un ingeniero."); return; }
-  if (!fi || !ff) { alert("Las fechas son obligatorias."); return; }
+  if (!alias) { window.toast?.("Selecciona un ingeniero.", "warn"); return; }
+  if (!fi || !ff) { window.toast?.("Las fechas son obligatorias.", "warn"); return; }
 
   const datos = {
     alias, tipo, activa,

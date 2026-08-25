@@ -1,6 +1,7 @@
 // W7 — Catálogo de Precios por Segmento
 import { exportarExcel, descargarPlantilla, importarExcel, toolbarHTML, puedeImportar } from "./excel-utils.js";
 import { db } from './firebase-config.js';
+import { norm } from './app.js';
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
   onSnapshot, query, orderBy, getDocs, where,
@@ -322,9 +323,9 @@ export const SegmentoPrecioModule = (() => {
       await _guardarSegmento(container, e.target);
     });
     container.querySelector('#seg-cli-buscar')?.addEventListener('input', e => {
-      const q = e.target.value.toLowerCase();
+      const q = norm(e.target.value);
       container.querySelectorAll('#tbodyClientesSegmento tr[data-nombre]').forEach(tr => {
-        tr.style.display = !q || tr.dataset.nombre.toLowerCase().includes(q) ? '' : 'none';
+        tr.style.display = !q || norm(tr.dataset.nombre).includes(q) ? '' : 'none';
       });
     });
   }
@@ -355,7 +356,7 @@ export const SegmentoPrecioModule = (() => {
 
   async function _guardarSegmento(container, form) {
     const nombre = form.nombre.value.trim();
-    if (!nombre) { alert('El nombre es obligatorio.'); return; }
+    if (!nombre) { window.toast?.('El nombre es obligatorio.', 'warn'); return; }
 
     const datos = {
       nombre:      nombre.slice(0, 60),
@@ -389,7 +390,7 @@ export const SegmentoPrecioModule = (() => {
       batch.delete(doc(db, 'segmentos', id));
       await batch.commit();
     } catch (err) {
-      alert('Error al eliminar: ' + err.message);
+      window.toast?.('Error al eliminar: ' + err.message, 'error');
     }
   }
 
@@ -403,7 +404,7 @@ export const SegmentoPrecioModule = (() => {
     });
 
     container.querySelector('#btnGuardarMatriz').addEventListener('click', async () => {
-      if (!_segmentoActivo) { alert('Selecciona un segmento.'); return; }
+      if (!_segmentoActivo) { window.toast?.('Selecciona un segmento.', 'warn'); return; }
       await _guardarMatriz(container, _segmentoActivo);
     });
   }
@@ -511,13 +512,13 @@ export const SegmentoPrecioModule = (() => {
       cambios++;
     });
 
-    if (!cambios) { alert('Sin cambios para guardar.'); return; }
+    if (!cambios) { window.toast?.('Sin cambios para guardar.', 'warn'); return; }
 
     try {
       await batch.commit();
-      alert('Matriz de precios guardada.');
+      window.toast?.('Matriz de precios guardada.', 'success');
     } catch (err) {
-      alert('Error al guardar: ' + err.message);
+      window.toast?.('Error al guardar: ' + err.message, 'error');
     }
   }
 
@@ -545,7 +546,7 @@ export const SegmentoPrecioModule = (() => {
 
       tbody.innerHTML = snap.docs.map(d => {
         const c = d.data();
-        return `<tr data-nombre="${esc((c.nombre || d.id).toLowerCase())}">
+        return `<tr data-nombre="${esc(c.nombre || d.id)}">
           <td style="font-weight:600;color:var(--text-primary)">${esc(c.nombre || d.id)}</td>
           <td style="color:#9CA3AF">${esc(c.aliasVendedor || '—')}</td>
           <td><span style="font-size:10px;padding:2px 8px;border-radius:6px;
@@ -568,7 +569,7 @@ export const SegmentoPrecioModule = (() => {
             await updateDoc(doc(db, 'clientes', e.target.dataset.cid),
               { segmentoId: nuevoSegmento, actualizadoEn: serverTimestamp() });
           } catch (err) {
-            alert('Error al actualizar cliente: ' + err.message);
+            window.toast?.('Error al actualizar cliente: ' + err.message, 'error');
             e.target.value = e.target.dataset.prevVal || '';
           }
           e.target.dataset.prevVal = nuevoSegmento;
