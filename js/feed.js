@@ -27,6 +27,8 @@ export const FeedModule = {
     _unsubs = [];
     _filtroTipo  = "TODOS";
     _filtroAlias = "TODOS";
+    _aliases     = new Set();
+    _ultimoSnap  = null;
   }
 };
 
