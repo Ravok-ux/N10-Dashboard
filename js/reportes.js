@@ -19,11 +19,24 @@ function _setMeta(v) { const n = Number(v); if (n > 0) localStorage.setItem(META
 
 export const ReportesModule = {
   mount(container) {
+    _periodo    = "semana";
+    _tipo       = "comisiones";
+    _fechaDesde = null;
+    _fechaHasta = null;
+    _csvData    = [];
     container.innerHTML = _html();
     document.getElementById("rp-tbody").innerHTML = window.skeleton?.(5, 5) ?? "";
     _bindUI();
     _cargarDatos();
     return () => {};
+  },
+
+  destroy() {
+    _periodo    = "semana";
+    _tipo       = "comisiones";
+    _fechaDesde = null;
+    _fechaHasta = null;
+    _csvData    = [];
   }
 };
 
