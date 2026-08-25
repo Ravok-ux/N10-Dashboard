@@ -10,7 +10,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { registrarVentaN10, revertirVentaN10 } from "./comisiones-n10-engine.js";
 import { getIngenieros } from "./erp-cache.js";
-import { logAudit } from "./app.js";
+import { logAudit, norm } from "./app.js";
 
 let _unsub    = null;
 let _filtroStatus  = "TODOS";
@@ -155,7 +155,7 @@ function _bindUI() {
       const dd = document.getElementById("pd-ing-dd");
       if (!dd) return;
       const ings = await getIngenieros();
-      const filtrados = ings.filter(a => a.toLowerCase().includes(q.toLowerCase()));
+      const filtrados = ings.filter(a => norm(a).includes(norm(q)));
       if (!q || !filtrados.length) { dd.style.display = "none"; return; }
       dd.innerHTML = filtrados.map(a =>
         `<div style="padding:7px 10px;cursor:pointer;font-size:12px;color:var(--text-primary);border-bottom:1px solid var(--border)"
@@ -805,11 +805,11 @@ async function _buscarClientePedido(q) {
   if (!q || q.length < 2) { res.style.display = "none"; res.innerHTML = ""; return; }
   // Si el cache está vacío, intentar cargarlo ahora
   if (!window._clientesCache?.length) await _precargarCaches();
-  const qLow = q.toLowerCase();
+  const qLow = norm(q);
   const lista = (window._clientesCache || []).filter(c =>
-    (c.nombre || "").toLowerCase().includes(qLow) ||
-    (c.telefono || "").toLowerCase().includes(qLow) ||
-    (c.clienteId || "").toLowerCase().includes(qLow)
+    norm(c.nombre).includes(qLow) ||
+    norm(c.telefono).includes(qLow) ||
+    norm(c.clienteId).includes(qLow)
   ).slice(0, 10);
 
   if (!lista.length) {
@@ -853,11 +853,11 @@ async function _buscarProductoPedido(q) {
   if (!res) return;
   if (!q || q.length < 2) { res.style.display = "none"; res.innerHTML = ""; return; }
   if (!window._productosCache?.length) await _precargarCaches();
-  const qLow = q.toLowerCase();
+  const qLow = norm(q);
   const lista = (window._productosCache || []).filter(p =>
-    (p.nombre || "").toLowerCase().includes(qLow) ||
-    (p.codigoN10 || p.codigo || "").toLowerCase().includes(qLow) ||
-    (String(p.numero || "")).includes(q)
+    norm(p.nombre).includes(qLow) ||
+    norm(p.codigoN10 || p.codigo).includes(qLow) ||
+    norm(p.codigoN10 || p.codigo || p.numero).includes(qLow)
   ).slice(0, 10);
 
   if (!lista.length) {

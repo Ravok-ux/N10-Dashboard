@@ -3,7 +3,7 @@
 // ══════════════════════════════════════════════════════════════
 
 import { db } from "./firebase-config.js";
-import { esc } from "./app.js";
+import { esc, norm } from "./app.js";
 import { Sesion } from "./auth.js";
 import {
   collection, query, orderBy, onSnapshot,
@@ -401,7 +401,7 @@ function _kpi(id, label, color = "var(--text-primary)") {
 // ── Bind UI ───────────────────────────────────────────────────
 function _bindUI() {
   window.ClientesUI = {
-    buscar(v)      { _fBusqueda = v.toLowerCase(); _applyFilters(); },
+    buscar(v)      { _fBusqueda = norm(v); _applyFilters(); },
     setSegmento(v) { _fSegmento = v; _applyFilters(); },
     setIngeniero(v){ _fIngeniero = v; _applyFilters(); },
     setEstado(v)   { _fEstado = v; _applyFilters(); },
@@ -677,13 +677,13 @@ function _applyFilters() {
 
   if (_fBusqueda) {
     lista = lista.filter(c =>
-      (c.nombre     ?? "").toLowerCase().includes(_fBusqueda) ||
-      (c.clienteId  ?? "").toLowerCase().includes(_fBusqueda) ||
-      (c.telefono   ?? "").toLowerCase().includes(_fBusqueda) ||
-      (c.direccion  ?? "").toLowerCase().includes(_fBusqueda) ||
-      (c.colonia    ?? "").toLowerCase().includes(_fBusqueda) ||
-      (c.ciudad     ?? "").toLowerCase().includes(_fBusqueda) ||
-      (c.ingeniero  ?? "").toLowerCase().includes(_fBusqueda)
+      norm(c.nombre).includes(_fBusqueda) ||
+      norm(c.clienteId).includes(_fBusqueda) ||
+      norm(c.telefono).includes(_fBusqueda) ||
+      norm(c.direccion).includes(_fBusqueda) ||
+      norm(c.colonia).includes(_fBusqueda) ||
+      norm(c.ciudad).includes(_fBusqueda) ||
+      norm(c.ingeniero).includes(_fBusqueda)
     );
   }
 
@@ -1094,7 +1094,6 @@ async function _importarExcel(file) {
   if (ingenieroDefault === null) return; // usuario canceló
 
   // Obtener nombres existentes para upsert (clave: nombre+zona normalizados)
-  const norm = s => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
   const existSnap = await getDocs(collection(db, "clientes"));
   const existMap  = {};
   existSnap.forEach(d => {
@@ -1389,7 +1388,6 @@ async function _guardarFormCliente(clienteId) {
     // Validar duplicado por nombre exacto + zona (solo en alta, no en edición)
     if (!clienteId) {
       const zona = v("clf-zona");
-      const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
       const dup = _clientes.find(c =>
         norm(c.nombre || "") === norm(nombre) &&
         (!zona || norm(c.zona || "") === norm(zona))

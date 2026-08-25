@@ -3,7 +3,7 @@
 // ══════════════════════════════════════════════════════════════
 
 import { db } from "./firebase-config.js";
-import { esc } from "./app.js";
+import { esc, norm } from "./app.js";
 import { Sesion } from "./auth.js";
 import {
   collection, doc, onSnapshot, updateDoc, addDoc, getDoc, getDocs,
@@ -271,19 +271,25 @@ function _bindAcciones() {
     _filtrarProveedores(q) {
       const search = document.getElementById("oc-proveedor-search");
       const hidden = document.getElementById("oc-proveedor");
-      const dd = document.getElementById("oc-prov-dropdown");
+      const dd     = document.getElementById("oc-prov-dropdown");
+      if (!search || !hidden || !dd) return;
       hidden.value = search.value;
-      const lista = (window._proveedoresList || []).filter(p => p.toLowerCase().includes(q.toLowerCase()));
-      if (!q || !lista.length) { dd.style.display = "none"; return; }
+      const qn   = norm(q);
+      const lista = (window._proveedoresList || []).filter(p => norm(p).includes(qn));
+      if (!qn || !lista.length) { dd.style.display = "none"; return; }
       dd.innerHTML = lista.slice(0, 15).map(p =>
-        `<div style="padding:7px 10px;cursor:pointer;font-size:12px;color:var(--text-primary,#F9FAFB);
-          border-bottom:1px solid var(--border)"
-          onmousedown="event.preventDefault()"
-          onclick="document.getElementById('oc-proveedor-search').value='${esc(p)}';
-            document.getElementById('oc-proveedor').value='${esc(p)}';
-            document.getElementById('oc-prov-dropdown').style.display='none'">${esc(p)}</div>`
+        `<div class="oc-dd-item" data-nombre="${esc(p)}"
+          style="padding:7px 10px;cursor:pointer;font-size:12px;color:var(--text-primary,#F9FAFB);
+            border-bottom:1px solid var(--border)">${esc(p)}</div>`
       ).join("");
       dd.style.display = "block";
+      dd.querySelectorAll(".oc-dd-item").forEach(el =>
+        el.addEventListener("mousedown", ev => {
+          ev.preventDefault();
+          search.value = el.dataset.nombre;
+          hidden.value = el.dataset.nombre;
+          dd.style.display = "none";
+        }));
       search.onblur = () => setTimeout(() => { dd.style.display = "none"; }, 150);
     },
 

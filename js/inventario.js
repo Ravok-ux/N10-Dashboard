@@ -5,7 +5,7 @@
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc, logAudit } from "./app.js";
+import { esc, logAudit, norm } from "./app.js";
 import {
   collection, doc, query, where, orderBy, limit,
   onSnapshot, addDoc, updateDoc, setDoc, getDoc, serverTimestamp
@@ -403,13 +403,13 @@ function _montarStock() {
 
   function _renderLista(term) {
     if (!listaEl) return;
-    const t = term.toLowerCase().trim();
+    const t = norm(term);
     const matches = _catalogoCache.filter(p =>
       !t ||
-      (p.nombre||"").toLowerCase().includes(t) ||
-      (p.codigoN10||"").toLowerCase().includes(t) ||
-      (p.codigo||"").toLowerCase().includes(t) ||
-      (p.categoria||"").toLowerCase().includes(t)
+      norm(p.nombre).includes(t) ||
+      norm(p.codigoN10).includes(t) ||
+      norm(p.codigo).includes(t) ||
+      norm(p.categoria).includes(t)
     ).slice(0, 40);
 
     if (!matches.length) {
@@ -479,13 +479,13 @@ function _montarStock() {
   });
 
   const _filtrar = () => {
-    const buscar = (document.getElementById("inv-buscar")?.value || "").toLowerCase();
+    const buscar = norm(document.getElementById("inv-buscar")?.value || "");
     const estado = document.getElementById("inv-filtro-estado")?.value || "";
     let rows = _allRows;
     if (buscar) rows = rows.filter(r =>
-      (r.nombre||"").toLowerCase().includes(buscar) ||
-      (r.sku||"").toLowerCase().includes(buscar) ||
-      (r.codigoN10||"").toLowerCase().includes(buscar));
+      norm(r.nombre).includes(buscar) ||
+      norm(r.sku).includes(buscar) ||
+      norm(r.codigoN10).includes(buscar));
     if (estado === "bajo")  rows = rows.filter(r => r.stockActual > 0 && r.stockActual <= (r.stockMinimo||0));
     if (estado === "ok")    rows = rows.filter(r => r.stockActual > (r.stockMinimo||0));
     if (estado === "cero")  rows = rows.filter(r => (r.stockActual||0) <= 0);

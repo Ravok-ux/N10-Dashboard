@@ -6,7 +6,7 @@
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc } from "./app.js";
+import { esc, norm } from "./app.js";
 import {
   collection, doc, query, where, orderBy, limit,
   onSnapshot, addDoc, updateDoc, getDocs,
@@ -46,7 +46,12 @@ export const JuridicoModule = {
             <option value="ROJO">🔴 Crítico</option>
             <option value="NARANJA">🟠 En seguimiento</option>
           </select>
-          <input class="sel-sm" type="text" id="jur-buscar" placeholder="Buscar cliente…" style="width:180px">
+          <div style="position:relative;display:inline-block">
+            <input class="sel-sm" type="text" id="jur-buscar" placeholder="Buscar cliente…" style="width:180px">
+            <div id="jur-buscar-dd" style="display:none;position:absolute;top:100%;left:0;right:0;
+              background:var(--surface);border:1px solid var(--border);border-radius:6px;
+              max-height:220px;overflow-y:auto;z-index:200;box-shadow:0 4px 16px #0002;margin-top:2px;min-width:200px"></div>
+          </div>
         </div>
       </div>
 
@@ -147,12 +152,12 @@ function _semaforo(c) {
 function _render() {
   const filtroIng  = document.getElementById("jur-filtro-ing")?.value  || "";
   const filtroSem  = document.getElementById("jur-filtro-semaforo")?.value || "";
-  const filtroBusc = (document.getElementById("jur-buscar")?.value || "").toLowerCase().trim();
+  const filtroBusc = norm(document.getElementById("jur-buscar")?.value || "");
 
   const lista = _clientes.filter(c => {
     if (filtroIng  && (c.ingenieroAlias || "") !== filtroIng) return false;
     if (filtroSem  && _semaforo(c) !== filtroSem) return false;
-    if (filtroBusc && !(c.nombre || "").toLowerCase().includes(filtroBusc)) return false;
+    if (filtroBusc && !norm(c.nombre).includes(filtroBusc)) return false;
     return true;
   });
 
@@ -351,8 +356,31 @@ function _bindUI() {
   document.getElementById("jur-filtro-ing")?.addEventListener("change", _render);
   document.getElementById("jur-filtro-semaforo")?.addEventListener("change", _render);
   let _buscTimer;
-  document.getElementById("jur-buscar")?.addEventListener("input", () => {
+  const jurBuscar = document.getElementById("jur-buscar");
+  const jurBuscarDd = document.getElementById("jur-buscar-dd");
+  jurBuscar?.addEventListener("input", () => {
     clearTimeout(_buscTimer);
     _buscTimer = setTimeout(_render, 250);
+    const q = norm(jurBuscar.value);
+    if (q.length < 2 || !jurBuscarDd) { if (jurBuscarDd) jurBuscarDd.style.display = "none"; return; }
+    const matches = _clientes
+      .filter(c => norm(c.nombre).includes(q))
+      .slice(0, 12);
+    if (!matches.length) { jurBuscarDd.style.display = "none"; return; }
+    jurBuscarDd.innerHTML = matches.map(c =>
+      `<div class="jur-dd-item" data-nombre="${esc(c.nombre)}"
+        style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);color:var(--text-primary)">
+        ${esc(c.nombre)}
+      </div>`).join("");
+    jurBuscarDd.style.display = "block";
+    jurBuscarDd.querySelectorAll(".jur-dd-item").forEach(el =>
+      el.addEventListener("mousedown", ev => {
+        ev.preventDefault();
+        jurBuscar.value = el.dataset.nombre;
+        jurBuscarDd.style.display = "none";
+        _render();
+      }));
   });
+  jurBuscar?.addEventListener("blur",   () => setTimeout(() => { if (jurBuscarDd) jurBuscarDd.style.display = "none"; }, 150));
+  jurBuscar?.addEventListener("keydown", e => { if (e.key === "Escape" && jurBuscarDd) jurBuscarDd.style.display = "none"; });
 }

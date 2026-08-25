@@ -3,7 +3,7 @@
 // ══════════════════════════════════════════════════════════════
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc, logAudit } from "./app.js";
+import { esc, logAudit, norm } from "./app.js";
 import {
   collection, query, where, orderBy, onSnapshot,
   doc, updateDoc, getDoc, getDocs, limit,
@@ -461,9 +461,7 @@ function _renderStockIngenieros(el) {
   const DIAS_40 = 40 * 24 * 60 * 60 * 1000;
 
   const filtrados = _filtroStock
-    ? _stockIng.filter(ing =>
-        (ing.ingenieroAlias || "").toLowerCase().includes(_filtroStock.toLowerCase())
-      )
+    ? _stockIng.filter(ing => norm(ing.ingenieroAlias).includes(norm(_filtroStock)))
     : _stockIng;
 
   if (!filtrados.length) {
@@ -474,19 +472,47 @@ function _renderStockIngenieros(el) {
 
   el.innerHTML = `
     <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
-      <input id="reb-stock-buscar" type="text" placeholder="Filtrar por ingeniero…"
-        value="${esc(_filtroStock)}"
-        style="flex:1;border:1px solid var(--border);border-radius:8px;padding:8px 12px;
-          font-size:12px;background:var(--surface);color:var(--text-primary)">
+      <div style="position:relative;flex:1">
+        <input id="reb-stock-buscar" type="text" placeholder="Filtrar por ingeniero…"
+          value="${esc(_filtroStock)}"
+          style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;padding:8px 12px;
+            font-size:12px;background:var(--surface);color:var(--text-primary)">
+        <div id="reb-stock-dd" style="display:none;position:absolute;top:100%;left:0;right:0;
+          background:var(--surface);border:1px solid var(--border);border-radius:8px;
+          max-height:200px;overflow-y:auto;z-index:200;box-shadow:0 4px 16px #0002;margin-top:2px"></div>
+      </div>
       <span style="font-size:11px;color:#9CA3AF">${filtrados.length} ingeniero${filtrados.length!==1?"s":""}</span>
     </div>
     ${filtrados.map(ing => _cardStockIngeniero(ing, ahora, DIAS_40)).join("")}
   `;
 
-  document.getElementById("reb-stock-buscar")?.addEventListener("input", e => {
+  const rebBuscar = document.getElementById("reb-stock-buscar");
+  const rebDd     = document.getElementById("reb-stock-dd");
+  rebBuscar?.addEventListener("input", e => {
     _filtroStock = e.target.value;
     _renderLista();
+    const q = norm(_filtroStock);
+    if (q.length < 1 || !rebDd) { if (rebDd) rebDd.style.display = "none"; return; }
+    const aliases = [...new Set(_stockIng.map(i => i.ingenieroAlias).filter(Boolean))];
+    const matches = aliases.filter(a => norm(a).includes(q)).slice(0, 12);
+    if (!matches.length) { rebDd.style.display = "none"; return; }
+    rebDd.innerHTML = matches.map(a =>
+      `<div class="reb-dd-item" data-nombre="${esc(a)}"
+        style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);color:var(--text-primary)">
+        ${esc(a)}
+      </div>`).join("");
+    rebDd.style.display = "block";
+    rebDd.querySelectorAll(".reb-dd-item").forEach(el2 =>
+      el2.addEventListener("mousedown", ev => {
+        ev.preventDefault();
+        rebBuscar.value = el2.dataset.nombre;
+        _filtroStock = el2.dataset.nombre;
+        rebDd.style.display = "none";
+        _renderLista();
+      }));
   });
+  rebBuscar?.addEventListener("blur",   () => setTimeout(() => { if (rebDd) rebDd.style.display = "none"; }, 150));
+  rebBuscar?.addEventListener("keydown", e => { if (e.key === "Escape" && rebDd) rebDd.style.display = "none"; });
 
   el.querySelectorAll(".reb-stock-card").forEach(card => {
     card.addEventListener("click", () => {

@@ -4,7 +4,7 @@
 
 import { db }    from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc }   from "./app.js";
+import { esc, norm } from "./app.js";
 import {
   collection, doc, query, onSnapshot,
   getDoc, updateDoc, setDoc, serverTimestamp, limit
@@ -88,11 +88,10 @@ function _escuchar() {
 
 // ── Filtros ───────────────────────────────────────────────────
 function _aplicarFiltros() {
-  const q = _fBusq.toLowerCase();
+  const q = norm(_fBusq);
   const filtrados = _clientes.filter(c => {
     if (_fColor !== "TODOS" && c.semaforoColor !== _fColor) return false;
-    if (q && !(c.nombre||"").toLowerCase().includes(q) &&
-             !(c.vendedor||"").toLowerCase().includes(q)) return false;
+    if (q && !norm(c.nombre).includes(q) && !norm(c.vendedor).includes(q)) return false;
     return true;
   });
   _renderTabla(filtrados);
@@ -175,9 +174,14 @@ function _html() {
 
       <!-- Búsqueda + Exportar -->
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-        <input id="cart-search" type="search" placeholder="🔍 Buscar cliente o ingeniero…"
-          style="flex:1;min-width:220px;padding:7px 10px;border:1px solid var(--border);
-            border-radius:7px;background:var(--surface);color:var(--text-primary);font-size:13px">
+        <div style="position:relative;flex:1;min-width:220px">
+          <input id="cart-search" type="search" placeholder="🔍 Buscar cliente o ingeniero…"
+            style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);
+              border-radius:7px;background:var(--surface);color:var(--text-primary);font-size:13px">
+          <div id="cart-search-dd" style="display:none;position:absolute;top:100%;left:0;right:0;
+            background:var(--surface);border:1px solid var(--border);border-radius:7px;
+            max-height:220px;overflow-y:auto;z-index:200;box-shadow:0 4px 16px #0002;margin-top:2px"></div>
+        </div>
         <button id="cart-excel"
           style="padding:7px 14px;background:#16A34A;color:#fff;border:none;border-radius:7px;
             cursor:pointer;font-size:13px;font-weight:600">
@@ -399,11 +403,36 @@ function _bindUI(container) {
       if (_tabActiva === "config") _bindConfigUI(container);
     }));
 
-  // Búsqueda
-  container.querySelector("#cart-search")?.addEventListener("input", e => {
+  // Búsqueda con autocomplete de clientes
+  const cartSearch = container.querySelector("#cart-search");
+  const cartSearchDd = container.querySelector("#cart-search-dd");
+  cartSearch?.addEventListener("input", e => {
     _fBusq = e.target.value;
     _aplicarFiltros();
+    const q = norm(_fBusq);
+    if (q.length < 2 || !cartSearchDd) { if (cartSearchDd) cartSearchDd.style.display = "none"; return; }
+    const matches = _clientes
+      .filter(c => norm(c.nombre).includes(q) || norm(c.vendedor).includes(q))
+      .slice(0, 12);
+    if (!matches.length) { cartSearchDd.style.display = "none"; return; }
+    cartSearchDd.innerHTML = matches.map(c =>
+      `<div class="cart-dd-item" data-nombre="${esc(c.nombre)}"
+        style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);color:var(--text-primary)">
+        <span style="font-weight:600">${esc(c.nombre)}</span>
+        ${c.vendedor ? `<span style="color:#9CA3AF;font-size:11px;margin-left:6px">${esc(c.vendedor)}</span>` : ""}
+      </div>`).join("");
+    cartSearchDd.style.display = "block";
+    cartSearchDd.querySelectorAll(".cart-dd-item").forEach(el =>
+      el.addEventListener("mousedown", ev => {
+        ev.preventDefault();
+        cartSearch.value = el.dataset.nombre;
+        _fBusq = el.dataset.nombre;
+        cartSearchDd.style.display = "none";
+        _aplicarFiltros();
+      }));
   });
+  cartSearch?.addEventListener("blur",   () => setTimeout(() => { if (cartSearchDd) cartSearchDd.style.display = "none"; }, 150));
+  cartSearch?.addEventListener("keydown", e => { if (e.key === "Escape" && cartSearchDd) cartSearchDd.style.display = "none"; });
 
   // Filtros semáforo (pills)
   container.querySelectorAll(".cart-pill").forEach(btn =>

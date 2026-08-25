@@ -6,6 +6,7 @@ import {
   doc, updateDoc, serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { crearNotificacion } from "./notificaciones.js";
+import { norm } from "./app.js";
 
 const ROLES_APROBADOR = ["GERENTE", "ADMINISTRADOR", "SUPER_ADMIN"];
 
@@ -54,7 +55,12 @@ function _html() {
         <option value="APROBADO">Aprobados</option>
         <option value="RECHAZADO">Rechazados</option>
       </select>
-      <input id="g-alias" type="text" placeholder="Filtrar por alias…" />
+      <div style="position:relative">
+        <input id="g-alias" type="text" placeholder="Filtrar por alias…" style="width:160px" />
+        <div id="g-alias-dd" style="display:none;position:absolute;top:100%;left:0;right:0;
+          background:var(--surface);border:1px solid var(--border);border-radius:6px;
+          max-height:200px;overflow-y:auto;z-index:200;box-shadow:0 4px 16px #0002;margin-top:2px;min-width:160px"></div>
+      </div>
     </div>
   </div>
   <div id="gastos-resumen" class="gastos-resumen"></div>
@@ -109,11 +115,34 @@ function _bindFiltros() {
     _filtroStatus = e.target.value;
     _cargar();
   });
+  const gAlias = _container.querySelector("#g-alias");
+  const gAliasDd = _container.querySelector("#g-alias-dd");
   let timer;
-  _container.querySelector("#g-alias").addEventListener("input", e => {
+  gAlias?.addEventListener("input", e => {
     clearTimeout(timer);
-    timer = setTimeout(() => { _filtroAlias = e.target.value.trim().toLowerCase(); _render(_lastDocs); }, 300);
+    timer = setTimeout(() => { _filtroAlias = norm(e.target.value.trim()); _render(_lastDocs); }, 300);
+    const q = norm(e.target.value.trim());
+    if (q.length < 1 || !gAliasDd) { if (gAliasDd) gAliasDd.style.display = "none"; return; }
+    const aliases = [...new Set(_lastDocs.map(d => d.alias).filter(Boolean))];
+    const matches = aliases.filter(a => norm(a).includes(q)).slice(0, 12);
+    if (!matches.length) { gAliasDd.style.display = "none"; return; }
+    gAliasDd.innerHTML = matches.map(a =>
+      `<div class="g-dd-item" data-nombre="${a.replace(/"/g, '&quot;')}"
+        style="padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);color:var(--text-primary)">
+        ${a.replace(/</g, '&lt;')}
+      </div>`).join("");
+    gAliasDd.style.display = "block";
+    gAliasDd.querySelectorAll(".g-dd-item").forEach(el =>
+      el.addEventListener("mousedown", ev => {
+        ev.preventDefault();
+        gAlias.value = el.dataset.nombre;
+        _filtroAlias = norm(el.dataset.nombre);
+        gAliasDd.style.display = "none";
+        _render(_lastDocs);
+      }));
   });
+  gAlias?.addEventListener("blur",   () => setTimeout(() => { if (gAliasDd) gAliasDd.style.display = "none"; }, 150));
+  gAlias?.addEventListener("keydown", e => { if (e.key === "Escape" && gAliasDd) gAliasDd.style.display = "none"; });
 }
 
 // ─── Firestore ────────────────────────────────────────────────────────────────
@@ -137,7 +166,7 @@ function _render(docs) {
   if (!tbody) return;
 
   const filtrados = _filtroAlias
-    ? docs.filter(d => (d.alias || "").toLowerCase().includes(_filtroAlias))
+    ? docs.filter(d => norm(d.alias).includes(_filtroAlias))
     : docs;
 
   if (filtrados.length === 0) {

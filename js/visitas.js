@@ -3,7 +3,7 @@
 // ══════════════════════════════════════════════════════════════
 import { db }    from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc, logAudit } from "./app.js";
+import { esc, logAudit, norm } from "./app.js";
 import {
   collection, query, orderBy, onSnapshot, where,
   doc, updateDoc, addDoc, serverTimestamp, limit
@@ -139,9 +139,14 @@ function _html() {
 
       <!-- Toolbar -->
       <div class="vis-toolbar">
-        <input id="vis-search" type="search" placeholder="🔍 Buscar cliente o ingeniero…"
-          style="flex:1;min-width:220px;padding:7px 10px;border:1px solid var(--border);
-            border-radius:7px;background:var(--surface);color:var(--text-primary);font-size:13px">
+        <div style="position:relative;flex:1;min-width:220px">
+          <input id="vis-search" type="search" placeholder="🔍 Buscar cliente o ingeniero…"
+            style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid var(--border);
+              border-radius:7px;background:var(--surface);color:var(--text-primary);font-size:13px">
+          <div id="vis-search-dd" style="display:none;position:absolute;top:100%;left:0;right:0;
+            background:var(--surface);border:1px solid var(--border);border-radius:7px;
+            max-height:220px;overflow-y:auto;z-index:200;box-shadow:0 4px 16px #0002;margin-top:2px"></div>
+        </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           ${[
             ["TODOS",       "Todos",          "#6B7280"],
@@ -266,13 +271,12 @@ function _actualizarKPIs() {
 function _renderCalendario() {
   const tbody = document.getElementById("vis-tbody-cal");
   if (!tbody) return;
-  const q   = _busqueda.toLowerCase();
+  const q   = norm(_busqueda);
   const hoy = new Date(); hoy.setHours(0,0,0,0);
   const en7 = new Date(hoy); en7.setDate(en7.getDate() + 7);
 
   let lista = _clientes.filter(c => {
-    if (q && !(c.nombre||"").toLowerCase().includes(q) &&
-             !(c.vendedor||"").toLowerCase().includes(q)) return false;
+    if (q && !norm(c.nombre).includes(q) && !norm(c.vendedor).includes(q)) return false;
     const pv = toDate(c.proximaVisita);
     switch (_filtroFreq) {
       case "VENCIDAS":    return pv && pv < hoy;
@@ -393,11 +397,36 @@ function _bindUI(container) {
       if (_tabActiva === "solicitudes") _renderSolicitudes();
     }));
 
-  // Búsqueda
-  container.querySelector("#vis-search")?.addEventListener("input", e => {
+  // Búsqueda con autocomplete de clientes
+  const visSearch = container.querySelector("#vis-search");
+  const visSearchDd = container.querySelector("#vis-search-dd");
+  visSearch?.addEventListener("input", e => {
     _busqueda = e.target.value;
     _renderCalendario();
+    const q = norm(_busqueda);
+    if (q.length < 2 || !visSearchDd) { if (visSearchDd) visSearchDd.style.display = "none"; return; }
+    const matches = _clientes
+      .filter(c => norm(c.nombre).includes(q) || norm(c.vendedor).includes(q))
+      .slice(0, 12);
+    if (!matches.length) { visSearchDd.style.display = "none"; return; }
+    visSearchDd.innerHTML = matches.map(c =>
+      `<div class="vis-dd-item" data-nombre="${esc(c.nombre)}"
+        style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);color:var(--text-primary)">
+        <span style="font-weight:600">${esc(c.nombre)}</span>
+        ${c.vendedor ? `<span style="color:#9CA3AF;font-size:11px;margin-left:6px">${esc(c.vendedor)}</span>` : ""}
+      </div>`).join("");
+    visSearchDd.style.display = "block";
+    visSearchDd.querySelectorAll(".vis-dd-item").forEach(el =>
+      el.addEventListener("mousedown", ev => {
+        ev.preventDefault();
+        visSearch.value = el.dataset.nombre;
+        _busqueda = el.dataset.nombre;
+        visSearchDd.style.display = "none";
+        _renderCalendario();
+      }));
   });
+  visSearch?.addEventListener("blur",   () => setTimeout(() => { if (visSearchDd) visSearchDd.style.display = "none"; }, 150));
+  visSearch?.addEventListener("keydown", e => { if (e.key === "Escape" && visSearchDd) visSearchDd.style.display = "none"; });
 
   // Filtros de frecuencia
   container.querySelectorAll(".vis-filtro-btn").forEach(btn =>

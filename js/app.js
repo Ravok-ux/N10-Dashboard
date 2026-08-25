@@ -67,6 +67,17 @@ export function esc(str) {
   return String(str).replace(/[&<>"']/g, c => _escMap[c]);
 }
 
+// ── Normalizador de búsqueda ──────────────────────────────────
+// Usa esta función en filtros/autocompletes. Elimina tildes, iguala
+// mayúsculas, convierte ll→y (yeísmo) para búsqueda tolerante.
+export const norm = s =>
+  (s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/ll/g, "y")
+    .trim();
+
 // ── Auditoría ─────────────────────────────────────────────────
 // Escribe un evento a audit_log. Silencioso — nunca bloquea la UI.
 export async function logAudit(tipo, datos = {}) {

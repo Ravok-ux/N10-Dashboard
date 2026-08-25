@@ -6,7 +6,7 @@
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc, logAudit } from "./app.js";
+import { esc, logAudit, norm } from "./app.js";
 import {
   collection, doc, query, where, orderBy, limit,
   onSnapshot, addDoc, updateDoc, setDoc, getDocs, serverTimestamp
@@ -247,10 +247,10 @@ function _bindProductoAC(productos) {
   wrap.appendChild(dd);
 
   inp.addEventListener("input", () => {
-    const q = inp.value.toLowerCase();
+    const q = norm(inp.value);
     if (q.length < 2) { dd.style.display = "none"; return; }
     const matches = productos.filter(p =>
-      p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q)
+      norm(p.nombre).includes(q) || norm(p.codigo).includes(q)
     ).slice(0, 10);
     if (!matches.length) { dd.style.display = "none"; return; }
     dd.innerHTML = matches.map(p =>
@@ -342,15 +342,15 @@ function _actualizarKPIs(rows) {
 function _filtrados() {
   const etapa  = document.getElementById("crm-filtro-etapa")?.value || "";
   const ing    = document.getElementById("crm-filtro-ing")?.value   || "";
-  const buscar = (document.getElementById("crm-buscar")?.value || "").toLowerCase();
+  const buscar = norm(document.getElementById("crm-buscar")?.value || "");
   return _todosProspectos.filter(r => {
     if (etapa  && r.etapa       !== etapa) return false;
     if (ing) {
       const ingObj = _ingenieros.find(u => u.uid === ing);
       if (r.ingenieroId !== ing && r.ingenieroAlias !== (ingObj?.alias || ingObj?.uid || "")) return false;
     }
-    if (buscar && !(r.nombre||"").toLowerCase().includes(buscar)
-               && !(r.giro  ||"").toLowerCase().includes(buscar)) return false;
+    if (buscar && !norm(r.nombre).includes(buscar)
+               && !norm(r.giro).includes(buscar)) return false;
     return true;
   });
 }

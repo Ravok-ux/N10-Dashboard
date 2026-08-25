@@ -4,7 +4,7 @@
 
 import { db }    from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc }   from "./app.js";
+import { esc, norm } from "./app.js";
 import {
   collection, query, orderBy, limit, where,
   onSnapshot, addDoc, serverTimestamp, getDocs
@@ -271,10 +271,10 @@ function _render() {
   if (_filtroTipo !== "TODOS")
     todos = todos.filter(d => d.tipoAccion === _filtroTipo);
   if (_busqueda) {
-    const q = _busqueda.toLowerCase();
+    const q = norm(_busqueda);
     todos = todos.filter(d =>
-      [d.clienteNombre, d.cliente, d.alias, d.usuarioAlias, d.texto, d.descripcion]
-        .join(" ").toLowerCase().includes(q));
+      norm([d.clienteNombre, d.cliente, d.alias, d.usuarioAlias, d.texto, d.descripcion]
+        .join(" ")).includes(q));
   }
 
   const cntEl = document.getElementById("com-count");
@@ -360,13 +360,13 @@ function _bindUI(container) {
   const searchInput = container.querySelector("#com-search");
   const searchDd    = container.querySelector("#com-search-dd");
   searchInput?.addEventListener("input", e => {
-    _busqueda = e.target.value.toLowerCase();
+    _busqueda = e.target.value;
     _render();
     // Autocomplete de clientes desde caché
-    const q = _busqueda.trim();
+    const q = norm(_busqueda);
     if (q.length < 2 || !searchDd) { if (searchDd) searchDd.style.display = "none"; return; }
     const matches = _clientesCache
-      .filter(c => c.nombre.toLowerCase().includes(q) || c.clienteId.toLowerCase().includes(q))
+      .filter(c => norm(c.nombre).includes(q) || norm(c.clienteId).includes(q))
       .slice(0, 10);
     if (!matches.length) { searchDd.style.display = "none"; return; }
     searchDd.innerHTML = matches.map(c =>
@@ -380,7 +380,7 @@ function _bindUI(container) {
       el.addEventListener("mousedown", ev => {
         ev.preventDefault();
         searchInput.value = el.dataset.nombre;
-        _busqueda = el.dataset.nombre.toLowerCase();
+        _busqueda = el.dataset.nombre;
         searchDd.style.display = "none";
         _render();
       }));
@@ -444,11 +444,11 @@ function _bindClienteSearch(container) {
   };
 
   input.addEventListener("input", () => {
-    const q = input.value.trim().toLowerCase();
+    const q = norm(input.value.trim());
     hidden.value = input.value.trim();
     if (!q) { dd.style.display = "none"; return; }
     mostrar(_clientesCache.filter(c =>
-      c.nombre.toLowerCase().includes(q) || c.clienteId.toLowerCase().includes(q)));
+      norm(c.nombre).includes(q) || norm(c.clienteId).includes(q)));
   });
   input.addEventListener("blur",  () => setTimeout(() => { dd.style.display = "none"; }, 150));
   input.addEventListener("focus", () => { if (input.value.trim()) input.dispatchEvent(new Event("input")); });

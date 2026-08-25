@@ -5,7 +5,7 @@
 // ══════════════════════════════════════════════════════════════
 
 import { db } from "./firebase-config.js";
-import { esc } from "./app.js";
+import { esc, norm } from "./app.js";
 import { Sesion } from "./auth.js";
 import {
   collection, query, orderBy, onSnapshot, getDocs,
@@ -122,7 +122,7 @@ function _bindTabs() {
       else lista.forEach(c => _seleccionados.add(c.id));
       _renderListaClientes();
     },
-    filtrarClientes(q) { _filtroClientes = q.toLowerCase(); _renderListaClientes(); },
+    filtrarClientes(q) { _filtroClientes = norm(q); _renderListaClientes(); },
     abrirModalReasignar() { _abrirModalReasignar(); },
     cerrarModal() { document.getElementById("asig-modal").style.display = "none"; },
     confirmarTraspaso() { _confirmarTraspaso(); }
@@ -166,9 +166,9 @@ function _clientesDeIngeniero(alias) {
     const esPropio     = c.ingeniero === alias;
     const esCompartido = c.compartido === true && (c.ingenierosCompartidos || []).includes(alias);
     if (!esPropio && !esCompartido) return false;
-    return !q || (c.nombre||"").toLowerCase().includes(q) ||
-                 (c.zona||"").toLowerCase().includes(q) ||
-                 (c.ciudad||"").toLowerCase().includes(q);
+    return !q || norm(c.nombre).includes(q) ||
+                 norm(c.zona).includes(q) ||
+                 norm(c.ciudad).includes(q);
   });
 }
 
@@ -263,8 +263,8 @@ function _renderListaClientes() {
   const clientes = _selIngenieroOri === "__sin_asignar__"
     ? _clientes.filter(c => !c.ingeniero && (
         !_filtroClientes ||
-        (c.nombre||"").toLowerCase().includes(_filtroClientes) ||
-        (c.zona||"").toLowerCase().includes(_filtroClientes)
+        norm(c.nombre).includes(_filtroClientes) ||
+        norm(c.zona).includes(_filtroClientes)
       ))
     : _clientesDeIngeniero(_selIngenieroOri);
 

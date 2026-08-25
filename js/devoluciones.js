@@ -5,7 +5,7 @@
 
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc, logAudit } from "./app.js";
+import { esc, logAudit, norm } from "./app.js";
 import {
   collection, doc, addDoc, updateDoc, onSnapshot,
   query, orderBy, where, getDocs, serverTimestamp, limit
@@ -241,25 +241,30 @@ function _renderKPIs(devs) {
 // ── Autocomplete cliente en devolución ────────────────────────
 window.DevolucionesUI = {
   async _filtrarCliente(q) {
-    const dd = document.getElementById("dev-cli-dd");
-    if (!dd) return;
+    const dd    = document.getElementById("dev-cli-dd");
+    const input = document.getElementById("dev-cliente");
+    if (!dd || !input) return;
     const lista = await getClientes();
+    const qn    = norm(q);
     const filtrados = lista.filter(c =>
-      c.nombre.toLowerCase().includes(q.toLowerCase()) ||
-      c.clienteId.toLowerCase().includes(q.toLowerCase())
+      norm(c.nombre).includes(qn) || norm(c.clienteId).includes(qn)
     );
-    if (!q || !filtrados.length) { dd.style.display = "none"; return; }
+    if (!qn || !filtrados.length) { dd.style.display = "none"; return; }
     dd.innerHTML = filtrados.slice(0, 15).map(c =>
-      `<div style="padding:7px 10px;cursor:pointer;font-size:12px;color:var(--text-primary);border-bottom:1px solid var(--border)"
-        onmousedown="event.preventDefault()"
-        onclick="document.getElementById('dev-cliente').value='${esc(c.nombre)}';document.getElementById('dev-cli-dd').style.display='none'">
+      `<div class="dev-dd-item" data-nombre="${esc(c.nombre)}"
+        style="padding:7px 10px;cursor:pointer;font-size:12px;color:var(--text-primary);border-bottom:1px solid var(--border)">
         <span style="font-weight:600">${esc(c.nombre)}</span>
         ${c.clienteId ? `<span style="color:#9CA3AF;font-size:10px;margin-left:6px">${esc(c.clienteId)}</span>` : ""}
       </div>`
     ).join("");
     dd.style.display = "block";
-    document.getElementById("dev-cliente").onblur = () =>
-      setTimeout(() => { dd.style.display = "none"; }, 150);
+    dd.querySelectorAll(".dev-dd-item").forEach(el =>
+      el.addEventListener("mousedown", ev => {
+        ev.preventDefault();
+        input.value = el.dataset.nombre;
+        dd.style.display = "none";
+      }));
+    input.onblur = () => setTimeout(() => { dd.style.display = "none"; }, 150);
   }
 };
 

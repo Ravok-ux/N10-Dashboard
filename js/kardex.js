@@ -4,7 +4,7 @@
 
 import { db }    from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc }   from "./app.js";
+import { esc, norm } from "./app.js";
 import {
   collection, query, orderBy, limit, where,
   onSnapshot, getDocs, updateDoc, serverTimestamp
@@ -263,11 +263,11 @@ function _renderTabla() {
   const tbody = document.getElementById("kx-tbody");
   if (!tbody) return;
 
-  const q = _filtroProd.toLowerCase();
+  const q = norm(_filtroProd);
   let lista = _movimientos;
   if (_filtroTipo) lista = lista.filter(m => m.tipo === _filtroTipo);
-  if (q) lista = lista.filter(m => (m.nombreProducto||"").toLowerCase().includes(q) ||
-                                    (m.codigoN10||m.codigo||"").toLowerCase().includes(q));
+  if (q) lista = lista.filter(m => norm(m.nombreProducto).includes(q) ||
+                                    norm(m.codigoN10||m.codigo).includes(q));
 
   if (!lista.length) {
     const msg = _movimientos.length === 0
@@ -326,10 +326,10 @@ function _bindUI(container) {
     input.addEventListener("input", () => {
       _filtroProd = input.value.trim();
       _renderTabla();
-      const q = _filtroProd.toLowerCase();
+      const q = norm(_filtroProd);
       if (q.length < 2) { dd.style.display = "none"; return; }
       const matches = _productosCache
-        .filter(p => p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q))
+        .filter(p => norm(p.nombre).includes(q) || norm(p.codigo).includes(q))
         .slice(0, 12);
       if (!matches.length) { dd.style.display = "none"; return; }
       dd.innerHTML = matches.map(p =>

@@ -1,7 +1,7 @@
 // Cotizaciones — Panel web
 import { db } from './firebase-config.js';
 import { Sesion } from './auth.js';
-import { esc, logAudit } from './app.js';
+import { esc, logAudit, norm } from './app.js';
 import {
   collection, doc, addDoc, updateDoc, setDoc, getDoc,
   onSnapshot, query, orderBy, where, getDocs,
@@ -282,12 +282,12 @@ export const CotizacionesPanelModule = (() => {
   function _renderTabla() {
     const tbody = document.getElementById('cot-tbody');
     if (!tbody) return;
-    const q = _busqueda.toLowerCase();
+    const q = norm(_busqueda);
     const rows = _allDocs.filter(c =>
       !q ||
-      (c.folio||'').toLowerCase().includes(q) ||
-      (c.clienteNombre||'').toLowerCase().includes(q) ||
-      (c.ingenieroAlias||'').toLowerCase().includes(q)
+      norm(c.folio).includes(q) ||
+      norm(c.clienteNombre).includes(q) ||
+      norm(c.ingenieroAlias).includes(q)
     );
 
     if (!rows.length) {
