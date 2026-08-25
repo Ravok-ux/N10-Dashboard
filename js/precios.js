@@ -47,6 +47,8 @@ export const PreciosModule = {
     _unsubs = [];
     _todos = [];
     _busqueda = "";
+    PreciosModule._cleanupKey?.();
+    PreciosModule._cleanupKey = null;
   }
 };
 
@@ -232,7 +234,9 @@ function _bindBusqueda() {
   });
 
   input.addEventListener("blur", () => setTimeout(() => { dd.style.display = "none"; }, 150));
-  document.addEventListener("keydown", e => { if (e.key === "Escape") dd.style.display = "none"; });
+  const _onKey = e => { if (e.key === "Escape") dd.style.display = "none"; };
+  document.addEventListener("keydown", _onKey);
+  PreciosModule._cleanupKey = () => document.removeEventListener("keydown", _onKey);
 }
 
 function _setText(id, val) {
