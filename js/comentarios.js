@@ -445,7 +445,7 @@ function _bindClienteSearch(container) {
 
   input.addEventListener("input", () => {
     const q = norm(input.value.trim());
-    hidden.value = input.value.trim();
+    hidden.value = ""; // se asigna solo al seleccionar del dropdown
     if (!q) { dd.style.display = "none"; return; }
     mostrar(_clientesCache.filter(c =>
       norm(c.nombre).includes(q) || norm(c.clienteId).includes(q)));
