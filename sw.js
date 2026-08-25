@@ -1,7 +1,7 @@
 // Service Worker — N-10 ERP
 // Estrategia: Cache-first para assets estáticos, Network-first para index.html y datos dinámicos
 
-const CACHE_NAME = 'n10-erp-v113';
+const CACHE_NAME = 'n10-erp-v114';
 
 // index.html NUNCA se cachea aquí — siempre se sirve desde la red
 // para garantizar que cada deploy llegue sin necesitar cerrar tabs.
@@ -94,12 +94,6 @@ self.addEventListener('activate', event => {
         Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
       )
       .then(() => self.clients.claim())
-      .then(() => {
-        // Avisar a todas las tabs que hay una versión nueva
-        return self.clients.matchAll({ type: 'window' }).then(clients => {
-          clients.forEach(c => c.postMessage({ type: 'SW_UPDATED', version: CACHE_NAME }));
-        });
-      })
   );
 });
 

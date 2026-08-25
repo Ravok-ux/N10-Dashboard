@@ -22,33 +22,14 @@
     // Registro del Service Worker (PWA)
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(reg => {
-            // Detectar actualizaciones mientras la tab está abierta
-            reg.addEventListener('updatefound', () => {
-              const newSW = reg.installing;
-              if (!newSW) return;
-              newSW.addEventListener('statechange', () => {
-                if (newSW.state === 'activated') {
-                  // El nuevo SW ya tomó control: recargar silenciosamente
-                  window.location.reload();
-                }
-              });
-            });
-          })
-          .catch(() => {});
+        // Flag para recargar una sola vez por sesión al detectar nuevo SW
+        let _swReloading = false;
+        const _swReload = () => { if (!_swReloading) { _swReloading = true; window.location.reload(); } };
 
-        // Mensaje del SW cuando ya activó y reclamó clientes
-        navigator.serviceWorker.addEventListener('message', e => {
-          if (e.data?.type === 'SW_UPDATED') {
-            window.location.reload();
-          }
-        });
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
 
-        // Si el controller cambió (nuevo SW tomó control de una tab ya abierta)
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          window.location.reload();
-        });
+        // Un solo punto de recarga: cuando el controller efectivamente cambia
+        navigator.serviceWorker.addEventListener('controllerchange', _swReload);
       });
     }
   </script>
