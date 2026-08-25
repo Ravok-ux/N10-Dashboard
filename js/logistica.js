@@ -49,10 +49,13 @@ export const LogisticaModule = {
       </div>
 
       <!-- Tabs vista -->
-      <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border)">
-        <button class="log-tab active" data-tab="dia" style="padding:8px 20px;background:none;border:none;cursor:pointer;font-weight:700;font-size:13px;border-bottom:2px solid var(--primary);margin-bottom:-2px;color:var(--primary)">📋 Día</button>
-        <button class="log-tab" data-tab="semana" style="padding:8px 20px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-sec)">📅 Semana</button>
-        <button class="log-tab" data-tab="atrasados" style="padding:8px 20px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-sec)">⚠️ Atrasados</button>
+      <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border);flex-wrap:wrap">
+        <button class="log-tab active" data-tab="dia"         style="padding:8px 20px;background:none;border:none;cursor:pointer;font-weight:700;font-size:13px;border-bottom:2px solid var(--primary);margin-bottom:-2px;color:var(--primary)">📋 Día</button>
+        <button class="log-tab" data-tab="semana"             style="padding:8px 20px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-sec)">📅 Semana</button>
+        <button class="log-tab" data-tab="atrasados"          style="padding:8px 20px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-sec)">⚠️ Atrasados</button>
+        <button class="log-tab" data-tab="rutas"              style="padding:8px 20px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-sec)">🗺️ Rutas</button>
+        <button class="log-tab" data-tab="entregas"           style="padding:8px 20px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-sec)">📦 Entregas campo</button>
+        <button class="log-tab" data-tab="cumplimiento"       style="padding:8px 20px;background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-sec)">📊 Cumplimiento</button>
       </div>
 
       <!-- Vista día -->
@@ -149,6 +152,21 @@ export const LogisticaModule = {
         <div id="log-atrasados-content"></div>
       </div>
 
+      <!-- Vista rutas -->
+      <div id="log-tab-rutas" style="display:none">
+        <div id="log-rutas-content"></div>
+      </div>
+
+      <!-- Vista entregas campo -->
+      <div id="log-tab-entregas" style="display:none">
+        <div id="log-entregas-content"></div>
+      </div>
+
+      <!-- Vista cumplimiento -->
+      <div id="log-tab-cumplimiento" style="display:none">
+        <div id="log-cumplimiento-content"></div>
+      </div>
+
     </div>`;
 
     _cargarIngenieros().then(() => {
@@ -195,11 +213,17 @@ function _bindUI() {
       btn.style.color = "var(--primary)";
       btn.style.fontWeight = "700";
       const tab = btn.dataset.tab;
-      document.getElementById("log-tab-dia").style.display       = tab === "dia"       ? "" : "none";
-      document.getElementById("log-tab-semana").style.display    = tab === "semana"    ? "" : "none";
-      document.getElementById("log-tab-atrasados").style.display = tab === "atrasados" ? "" : "none";
-      if (tab === "semana")    _cargarVistaSemana();
-      if (tab === "atrasados") _cargarAtrasados();
+      document.getElementById("log-tab-dia").style.display          = tab === "dia"          ? "" : "none";
+      document.getElementById("log-tab-semana").style.display       = tab === "semana"       ? "" : "none";
+      document.getElementById("log-tab-atrasados").style.display    = tab === "atrasados"    ? "" : "none";
+      document.getElementById("log-tab-rutas").style.display        = tab === "rutas"        ? "" : "none";
+      document.getElementById("log-tab-entregas").style.display     = tab === "entregas"     ? "" : "none";
+      document.getElementById("log-tab-cumplimiento").style.display = tab === "cumplimiento" ? "" : "none";
+      if (tab === "semana")      _cargarVistaSemana();
+      if (tab === "atrasados")   _cargarAtrasados();
+      if (tab === "rutas")       _montarRutas();
+      if (tab === "entregas")    _montarEntregas();
+      if (tab === "cumplimiento")_montarCumplimiento();
     });
   });
 }
@@ -748,5 +772,750 @@ async function _generarVisitasSemana() {
     console.error("[GenerarSemana]", e);
   } finally {
     btn.disabled = false; btn.textContent = "📅 Generar semana";
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ALTO/69 — OPTIMIZACIÓN DE RUTAS
+// Ordena las visitas pendientes del día por proximidad geográfica
+// usando nearest-neighbor sobre coordenadas lat/lng de cada cliente
+// ══════════════════════════════════════════════════════════════
+async function _montarRutas() {
+  const wrap = document.getElementById("log-rutas-content");
+  if (!wrap) return;
+  const hoy = new Date().toISOString().slice(0,10);
+  wrap.innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px">
+      <h3 style="margin:0;font-size:15px;font-weight:800;flex:1">🗺️ Optimización de rutas del día</h3>
+      <select class="sel-sm" id="rut-filtro-ing">
+        <option value="">— Seleccionar ingeniero —</option>
+        ${_ingenieros.map(u => `<option value="${esc(u.uid)}">${esc(u.alias||u.uid)}</option>`).join("")}
+      </select>
+      <input type="date" class="sel-sm" id="rut-fecha" value="${hoy}">
+      <button class="btn-primary" id="rut-optimizar-btn">⚡ Calcular ruta óptima</button>
+      <button class="btn-outline" id="rut-maps-btn" style="display:none">🗺️ Abrir en Maps</button>
+    </div>
+    <div id="rut-resultado">
+      <div style="padding:32px;text-align:center;color:var(--text-sec);font-size:13px">
+        Selecciona un ingeniero y presiona <strong>Calcular ruta óptima</strong>
+      </div>
+    </div>`;
+
+  document.getElementById("rut-optimizar-btn")?.addEventListener("click", async () => {
+    const ingId = document.getElementById("rut-filtro-ing")?.value;
+    const fecha = document.getElementById("rut-fecha")?.value || hoy;
+    if (!ingId) { window.toast?.("Selecciona un ingeniero","warn"); return; }
+    await _calcularRutaOptima(ingId, fecha);
+  });
+}
+
+async function _calcularRutaOptima(ingId, fecha) {
+  const res = document.getElementById("rut-resultado");
+  if (!res) return;
+  res.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-sec)">Calculando ruta…</div>`;
+
+  try {
+    const [y,m,d] = fecha.split("-").map(Number);
+    const desdeTs = new Date(y,m-1,d,0,0,0).getTime();
+    const hastaTs = new Date(y,m-1,d,23,59,59).getTime();
+
+    // Visitas pendientes del día para el ingeniero
+    const vSnap = await getDocs(query(
+      collection(db,"visitas_programadas"),
+      where("ingenieroId","==",ingId),
+      where("fechaTs",">=",desdeTs), where("fechaTs","<=",hastaTs),
+      orderBy("fechaTs","asc"), limit(200)
+    ));
+    const visitas = vSnap.docs.map(d2 => ({ id: d2.id, ...d2.data() }));
+    if (!visitas.length) {
+      res.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-sec)">Sin visitas programadas para ese día</div>`;
+      return;
+    }
+
+    // Obtener coordenadas de cada cliente
+    const cIds = [...new Set(visitas.map(v => v.clienteId).filter(Boolean))];
+    const coordMap = {};
+    if (cIds.length) {
+      const cSnap = await getDocs(query(collection(db,"clientes"), where("activo","==",true), limit(600)));
+      cSnap.docs.forEach(d2 => {
+        const data = d2.data();
+        if (data.lat && data.lng) coordMap[d2.id] = { lat: data.lat, lng: data.lng };
+      });
+    }
+
+    // Nearest-neighbor desde punto de origen (0,0 = sin GPS → ordenar por ciudad/zona)
+    const conCoords = visitas.filter(v => coordMap[v.clienteId]);
+    const sinCoords = visitas.filter(v => !coordMap[v.clienteId]);
+
+    let rutaOrdenada = [];
+    if (conCoords.length > 1) {
+      const dist = (a, b) => {
+        const dLat = a.lat - b.lat, dLng = a.lng - b.lng;
+        return Math.sqrt(dLat*dLat + dLng*dLng);
+      };
+      let restantes = [...conCoords];
+      let actual = coordMap[restantes[0].clienteId];
+      while (restantes.length) {
+        let minIdx = 0, minD = Infinity;
+        restantes.forEach((v, i) => {
+          const c = coordMap[v.clienteId];
+          if (!c) return;
+          const d2 = dist(actual, c);
+          if (d2 < minD) { minD = d2; minIdx = i; }
+        });
+        const sel = restantes.splice(minIdx, 1)[0];
+        rutaOrdenada.push(sel);
+        actual = coordMap[sel.clienteId] || actual;
+      }
+    } else {
+      rutaOrdenada = conCoords;
+    }
+    rutaOrdenada = [...rutaOrdenada, ...sinCoords];
+
+    // Construir URL Google Maps waypoints
+    const waypoints = rutaOrdenada
+      .map(v => coordMap[v.clienteId])
+      .filter(Boolean)
+      .map(c => `${c.lat},${c.lng}`);
+    const mapsUrl = waypoints.length >= 2
+      ? `https://www.google.com/maps/dir/${waypoints.join("/")}`
+      : waypoints.length === 1
+      ? `https://www.google.com/maps/search/?api=1&query=${waypoints[0]}`
+      : "";
+
+    const mapsBtn = document.getElementById("rut-maps-btn");
+    if (mapsBtn && mapsUrl) {
+      mapsBtn.style.display = "";
+      mapsBtn.onclick = () => window.open(mapsUrl, "_blank");
+    }
+
+    // Calcular distancia total estimada (grados → km aprox)
+    let kmTotal = 0;
+    for (let i = 1; i < rutaOrdenada.length; i++) {
+      const a = coordMap[rutaOrdenada[i-1].clienteId];
+      const b = coordMap[rutaOrdenada[i].clienteId];
+      if (a && b) {
+        const dLat = (a.lat - b.lat) * 111;
+        const dLng = (a.lng - b.lng) * 111 * Math.cos(a.lat * Math.PI / 180);
+        kmTotal += Math.sqrt(dLat*dLat + dLng*dLng);
+      }
+    }
+
+    const ing = _ingenieros.find(u => u.uid === ingId);
+    res.innerHTML = `
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+        <div class="kpi-card" style="border-left-color:#7C3AED">
+          <div class="kpi-icon">📍</div>
+          <div class="kpi-val">${rutaOrdenada.length}</div>
+          <div class="kpi-label">Paradas</div>
+        </div>
+        <div class="kpi-card" style="border-left-color:#1D4ED8">
+          <div class="kpi-icon">🛣️</div>
+          <div class="kpi-val">${kmTotal > 0 ? kmTotal.toFixed(1)+" km" : "—"}</div>
+          <div class="kpi-label">Dist. estimada</div>
+        </div>
+        <div class="kpi-card" style="border-left-color:#D97706">
+          <div class="kpi-icon">⏱️</div>
+          <div class="kpi-val">${kmTotal > 0 ? Math.round(kmTotal / 40 * 60) + " min" : "—"}</div>
+          <div class="kpi-label">Tiempo aprox.</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:10px;font-size:12px;color:var(--text-sec)">
+        Ruta optimizada para <strong style="color:var(--text-primary)">${esc(ing?.alias||ingId)}</strong> — ${esc(fecha)}
+        ${sinCoords.length ? `<span style="color:#D97706"> · ${sinCoords.length} sin coordenadas (al final)</span>` : ""}
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${rutaOrdenada.map((v, i) => {
+          const coords = coordMap[v.clienteId];
+          const sinGps = !coords;
+          return `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;
+            border:1px solid var(--border);border-radius:10px;background:var(--surface-2)">
+            <div style="width:28px;height:28px;border-radius:50%;background:#7C3AED;color:#fff;
+              font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;
+              flex-shrink:0">${i+1}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;font-size:13px">${esc(v.clienteNombre||"–")}</div>
+              <div style="font-size:11px;color:#64748B">${esc(v.clienteDireccion||"")}</div>
+              ${sinGps ? `<div style="font-size:10px;color:#D97706">⚠️ Sin coordenadas GPS</div>` : ""}
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <span class="badge ${v.status==="COMPLETADA"?"badge-green":v.status==="OMITIDA"?"badge-gray":"badge-amber"}">
+                ${v.status}
+              </span>
+              ${coords ? `<br><a href="https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}"
+                target="_blank" rel="noopener"
+                style="font-size:10px;color:#2563EB;text-decoration:none;margin-top:3px;display:inline-block">
+                📍 Maps</a>` : ""}
+            </div>
+          </div>`;
+        }).join("")}
+      </div>`;
+  } catch(e) {
+    res.innerHTML = `<div style="padding:16px;color:#DC2626">${esc(e.message)}</div>`;
+    console.error("[Rutas]", e);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// MEDIO/72 — REGISTRO DE ENTREGAS EN CAMPO
+// Colección: entregas_campo
+// Al registrar, crea AJUSTE_SALIDA en movimientos_stock
+// ══════════════════════════════════════════════════════════════
+function _montarEntregas() {
+  const wrap = document.getElementById("log-entregas-content");
+  if (!wrap) return;
+  const hoy    = new Date().toISOString().slice(0,10);
+  const hace7  = new Date(Date.now()-7*86400000).toISOString().slice(0,10);
+  wrap.innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px">
+      <h3 style="margin:0;font-size:15px;font-weight:800;flex:1">📦 Entregas en campo</h3>
+      <button class="btn-primary" id="ent-nueva-btn">+ Registrar entrega</button>
+    </div>
+
+    <div class="kpi-row" style="margin-bottom:16px">
+      <div class="kpi-card" style="border-left-color:#16A34A">
+        <div class="kpi-icon">📦</div><div class="kpi-val" id="ent-kpi-total">–</div>
+        <div class="kpi-label">Entregas</div>
+      </div>
+      <div class="kpi-card" style="border-left-color:#2563EB">
+        <div class="kpi-icon">📏</div><div class="kpi-val" id="ent-kpi-unidades">–</div>
+        <div class="kpi-label">Unidades entregadas</div>
+      </div>
+      <div class="kpi-card" style="border-left-color:#7C3AED">
+        <div class="kpi-icon">💰</div><div class="kpi-val" id="ent-kpi-importe">–</div>
+        <div class="kpi-label">Importe estimado</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <select class="sel-sm" id="ent-filtro-ing">
+        <option value="">Todos los ingenieros</option>
+        ${_ingenieros.map(u => `<option value="${esc(u.uid)}">${esc(u.alias||u.uid)}</option>`).join("")}
+      </select>
+      <span style="font-size:11px;color:var(--text-sec)">Desde</span>
+      <input type="date" class="sel-sm" id="ent-desde" value="${hace7}">
+      <span style="font-size:11px;color:var(--text-sec)">Hasta</span>
+      <input type="date" class="sel-sm" id="ent-hasta" value="${hoy}">
+      <button class="btn-outline" id="ent-filtrar">Filtrar</button>
+    </div>
+
+    <div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr>
+          <th>FECHA</th><th>INGENIERO</th><th>CLIENTE</th>
+          <th>PRODUCTOS</th><th style="text-align:right">IMPORTE</th><th>NOTAS</th>
+        </tr></thead>
+        <tbody id="ent-body">
+          <tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-sec)">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Modal nueva entrega -->
+    <div class="modal-overlay hidden" id="ent-modal">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;
+        width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,0,0,.5);overflow:hidden;
+        display:flex;flex-direction:column">
+        <div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+          <span style="font-size:22px">📦</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:800">Registrar entrega en campo</div>
+            <div style="font-size:11px;color:#64748B">Genera automáticamente un movimiento de salida de inventario</div>
+          </div>
+          <button id="ent-modal-close" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748B">✕</button>
+        </div>
+        <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:70vh">
+
+          <!-- Ingeniero y cliente -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <label style="font-size:10px;font-weight:700;color:#64748B;display:block;margin-bottom:5px">INGENIERO</label>
+              <select class="form-input" id="ent-ing" style="width:100%">
+                <option value="">— Seleccionar —</option>
+                ${_ingenieros.map(u => `<option value="${esc(u.uid)}" data-alias="${esc(u.alias||u.uid)}">${esc(u.alias||u.uid)}</option>`).join("")}
+              </select>
+            </div>
+            <div>
+              <label style="font-size:10px;font-weight:700;color:#64748B;display:block;margin-bottom:5px">VISITA ASOCIADA (opcional)</label>
+              <select class="form-input" id="ent-visita" style="width:100%">
+                <option value="">— Sin vincular —</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;color:#64748B;display:block;margin-bottom:5px">CLIENTE</label>
+            <input class="form-input" id="ent-cliente" type="text" placeholder="Nombre del cliente" style="width:100%">
+          </div>
+
+          <!-- Productos -->
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase;margin-bottom:8px">
+              Productos entregados
+            </div>
+            <div id="ent-prod-rows" style="display:flex;flex-direction:column;gap:6px"></div>
+            <button id="ent-add-prod" type="button"
+              style="margin-top:8px;padding:6px 14px;border:1px dashed var(--border);border-radius:7px;
+                background:transparent;color:#64748B;font-size:11px;cursor:pointer;width:100%">
+              + Agregar producto
+            </button>
+          </div>
+
+          <div>
+            <label style="font-size:10px;font-weight:700;color:#64748B;display:block;margin-bottom:5px">NOTAS</label>
+            <input class="form-input" id="ent-notas" type="text" placeholder="Observaciones…" style="width:100%">
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--border)">
+          <button id="ent-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);
+            background:transparent;color:#94A3B8;font-size:12px;cursor:pointer">Cancelar</button>
+          <button id="ent-guardar" style="padding:8px 22px;border-radius:8px;border:none;
+            background:#16A34A;color:#fff;font-size:12px;font-weight:700;cursor:pointer">✔ Registrar entrega</button>
+        </div>
+      </div>
+    </div>`;
+
+  // ── Catálogo de inventario para el buscador de productos ──
+  let _cataloEnt = [];
+  async function _cargarCatalogoEnt() {
+    if (_cataloEnt.length) return;
+    const { getDocs: gd2, collection: col2, orderBy: ob2, query: q2 } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const snap = await gd2(q2(col2(db,"inventario"), ob2("nombre")));
+    _cataloEnt = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  let _entProdCount = 0;
+
+  function _agregarFilaProd() {
+    const idx = _entProdCount++;
+    const row = document.createElement("div");
+    row.dataset.prodIdx = idx;
+    row.style.cssText = "display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center";
+    row.innerHTML = `
+      <div style="position:relative">
+        <input type="text" placeholder="Buscar producto…" data-search="${idx}"
+          style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+            font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
+        <div data-lista="${idx}" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;
+          background:var(--surface);border:1px solid var(--border);border-radius:6px;
+          max-height:140px;overflow-y:auto;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
+        <input type="hidden" data-prod-id="${idx}">
+        <input type="hidden" data-prod-nom="${idx}">
+        <input type="hidden" data-prod-costo="${idx}">
+      </div>
+      <input type="number" placeholder="Cant." min="1" step="1" data-cant="${idx}"
+        style="width:70px;padding:7px 8px;border:1px solid var(--border);border-radius:6px;
+          font-size:12px;background:var(--surface);color:var(--text-primary);text-align:center">
+      <span style="font-size:11px;color:#64748B" data-total-label="${idx}">$0</span>
+      <button type="button" data-del="${idx}"
+        style="background:none;border:none;cursor:pointer;color:#DC2626;font-size:16px;padding:2px 4px">✕</button>`;
+    document.getElementById("ent-prod-rows")?.appendChild(row);
+
+    const searchInp = row.querySelector(`[data-search="${idx}"]`);
+    const listaEl   = row.querySelector(`[data-lista="${idx}"]`);
+    const cantInp   = row.querySelector(`[data-cant="${idx}"]`);
+    const totalLbl  = row.querySelector(`[data-total-label="${idx}"]`);
+    const prodIdInp = row.querySelector(`[data-prod-id="${idx}"]`);
+    const prodNomInp= row.querySelector(`[data-prod-nom="${idx}"]`);
+    const costoInp  = row.querySelector(`[data-prod-costo="${idx}"]`);
+
+    searchInp?.addEventListener("focus", async () => {
+      await _cargarCatalogoEnt();
+      _renderListaProd(listaEl, searchInp.value, idx, prodIdInp, prodNomInp, costoInp, searchInp, totalLbl, cantInp);
+    });
+    searchInp?.addEventListener("input", () => {
+      _renderListaProd(listaEl, searchInp.value, idx, prodIdInp, prodNomInp, costoInp, searchInp, totalLbl, cantInp);
+    });
+    cantInp?.addEventListener("input", () => {
+      const c = parseFloat(cantInp.value||"0");
+      const p = parseFloat(costoInp?.value||"0");
+      if (totalLbl) totalLbl.textContent = "$" + (c*p).toLocaleString("es-MX",{maximumFractionDigits:0});
+    });
+    row.querySelector(`[data-del="${idx}"]`)?.addEventListener("click", () => row.remove());
+    document.addEventListener("click", e => {
+      if (!listaEl?.contains(e.target) && e.target !== searchInp) listaEl && (listaEl.style.display="none");
+    });
+  }
+
+  function _renderListaProd(listaEl, term, idx, prodIdInp, prodNomInp, costoInp, searchInp, totalLbl, cantInp) {
+    if (!listaEl) return;
+    const { norm: nrm } = { norm: s => (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"") };
+    const t = nrm(term);
+    const matches = _cataloEnt.filter(p => !t || nrm(p.nombre||"").includes(t)).slice(0,25);
+    if (!matches.length) { listaEl.style.display="none"; return; }
+    listaEl.innerHTML = matches.map((p,i) =>
+      `<div data-i="${i}" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);
+        display:flex;justify-content:space-between"
+        onmouseenter="this.style.background='var(--surface-2)'"
+        onmouseleave="this.style.background='transparent'">
+        <div>
+          <div style="font-size:12px;font-weight:600">${esc(p.nombre||"")}</div>
+          <div style="font-size:10px;color:#64748B">Stock: ${p.stockActual??0} · $${p.costo||0}</div>
+        </div>
+      </div>`).join("");
+    listaEl.querySelectorAll("[data-i]").forEach(el => {
+      el.addEventListener("click", () => {
+        const p = matches[parseInt(el.dataset.i)];
+        if (prodIdInp)  prodIdInp.value  = p.id;
+        if (prodNomInp) prodNomInp.value = p.nombre;
+        if (costoInp)   costoInp.value   = p.costo || 0;
+        if (searchInp)  searchInp.value  = p.nombre;
+        const c = parseFloat(cantInp?.value||"1");
+        if (totalLbl)   totalLbl.textContent = "$" + (c*(p.costo||0)).toLocaleString("es-MX",{maximumFractionDigits:0});
+        listaEl.style.display="none";
+      });
+    });
+    listaEl.style.display="block";
+  }
+
+  document.getElementById("ent-add-prod")?.addEventListener("click", _agregarFilaProd);
+  _agregarFilaProd(); // fila inicial
+
+  // ── Cargar visitas del ingeniero para vincular ──
+  document.getElementById("ent-ing")?.addEventListener("change", async () => {
+    const ingId = document.getElementById("ent-ing")?.value;
+    const sel   = document.getElementById("ent-visita");
+    if (!sel) return;
+    sel.innerHTML = `<option value="">— Sin vincular —</option>`;
+    if (!ingId) return;
+    try {
+      const hoyTs = new Date(); hoyTs.setHours(0,0,0,0);
+      const snap  = await getDocs(query(
+        collection(db,"visitas_programadas"),
+        where("ingenieroId","==",ingId),
+        where("fechaTs",">=",hoyTs.getTime()),
+        where("fechaTs","<=",hoyTs.getTime()+86399999),
+        orderBy("fechaTs","asc"), limit(50)
+      ));
+      snap.docs.forEach(d2 => {
+        const v = d2.data();
+        const opt = document.createElement("option");
+        opt.value = d2.id;
+        opt.textContent = v.clienteNombre||d2.id;
+        opt.dataset.cliente = v.clienteNombre||"";
+        sel.appendChild(opt);
+      });
+    } catch {}
+  });
+
+  // Auto-rellenar cliente al elegir visita
+  document.getElementById("ent-visita")?.addEventListener("change", () => {
+    const sel = document.getElementById("ent-visita");
+    const opt = sel?.selectedOptions[0];
+    const cli = document.getElementById("ent-cliente");
+    if (cli && opt?.dataset.cliente) cli.value = opt.dataset.cliente;
+  });
+
+  // ── Modal lifecycle ──
+  const cerrar = () => document.getElementById("ent-modal")?.classList.add("hidden");
+  document.getElementById("ent-nueva-btn")?.addEventListener("click", () => {
+    document.getElementById("ent-modal")?.classList.remove("hidden");
+  });
+  document.getElementById("ent-modal-close")?.addEventListener("click", cerrar);
+  document.getElementById("ent-cancel")?.addEventListener("click", cerrar);
+  document.getElementById("ent-modal")?.addEventListener("click", e => {
+    if (e.target === document.getElementById("ent-modal")) cerrar();
+  });
+
+  // ── Guardar entrega ──
+  document.getElementById("ent-guardar")?.addEventListener("click", async () => {
+    const ingId    = document.getElementById("ent-ing")?.value;
+    const ingAlias = document.getElementById("ent-ing")?.selectedOptions[0]?.dataset.alias || "";
+    const visitaId = document.getElementById("ent-visita")?.value || "";
+    const cliente  = document.getElementById("ent-cliente")?.value.trim();
+    const notas    = document.getElementById("ent-notas")?.value.trim();
+
+    if (!ingId)    { window.toast?.("Selecciona un ingeniero","warn"); return; }
+    if (!cliente)  { window.toast?.("Ingresa el nombre del cliente","warn"); return; }
+
+    // Recopilar filas de productos
+    const rows2 = [...document.querySelectorAll("#ent-prod-rows > div")];
+    const productos = rows2.map(row => {
+      const idx2 = row.dataset.prodIdx;
+      return {
+        productoId:  row.querySelector(`[data-prod-id="${idx2}"]`)?.value || "",
+        nombre:      row.querySelector(`[data-prod-nom="${idx2}"]`)?.value || "",
+        costo:       parseFloat(row.querySelector(`[data-prod-costo="${idx2}"]`)?.value||"0"),
+        cantidad:    parseFloat(row.querySelector(`[data-cant="${idx2}"]`)?.value||"0"),
+      };
+    }).filter(p => p.productoId && p.cantidad > 0);
+
+    if (!productos.length) { window.toast?.("Agrega al menos un producto con cantidad","warn"); return; }
+
+    const btn = document.getElementById("ent-guardar");
+    btn.disabled = true; btn.textContent = "Guardando…";
+    try {
+      const { addDoc: ad, collection: col, doc: dc, setDoc: sd, getDoc: gd2 } =
+        await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+
+      const importe = productos.reduce((s,p) => s + p.cantidad * p.costo, 0);
+      const entregaRef = await ad(col(db,"entregas_campo"), {
+        ingenieroId: ingId, ingenieroAlias: ingAlias,
+        visitaId: visitaId || null,
+        clienteNombre: cliente, notas: notas||"",
+        productos, importe,
+        registradoPor: Sesion.alias, _ts: Date.now()
+      });
+
+      // Crear movimientos de stock por cada producto
+      for (const p of productos) {
+        try {
+          const invSnap = await gd2(dc(db,"inventario",p.productoId));
+          const stockAntes = invSnap.exists() ? (invSnap.data().stockActual ?? 0) : 0;
+          const stockDespues = Math.max(0, stockAntes - p.cantidad);
+          await ad(col(db,"movimientos_stock"), {
+            productoId: p.productoId, nombreProducto: p.nombre,
+            tipo: "SALIDA", cantidad: p.cantidad,
+            stockAntes, stockDespues,
+            motivo: `Entrega campo — ${cliente}`,
+            quienRegistro: Sesion.alias, _ts: Date.now()
+          });
+          await sd(dc(db,"inventario",p.productoId), { stockActual: stockDespues, _ts: Date.now() }, { merge:true });
+        } catch(eStock) { console.warn("[Entrega stock]", eStock.message); }
+      }
+
+      // Si tiene visita vinculada, marcarla como COMPLETADA
+      if (visitaId) {
+        try {
+          const { updateDoc: upd2, doc: dc2 } =
+            await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+          await upd2(dc2(db,"visitas_programadas",visitaId), {
+            status:"COMPLETADA", checkInTs:Date.now(), completadaEn:Date.now(),
+            notas:`Entrega campo ref: ${entregaRef.id}`
+          });
+        } catch {}
+      }
+
+      window.toast?.("Entrega registrada y stock actualizado","success");
+      cerrar();
+      _cargarEntregas();
+    } catch(e) { window.toast?.("Error: " + e.message,"error"); }
+    finally { btn.disabled=false; btn.textContent="✔ Registrar entrega"; }
+  });
+
+  // ── Escuchar entregas ──
+  let _entUnsub = null;
+  function _cargarEntregas() {
+    _entUnsub?.();
+    const ingId  = document.getElementById("ent-filtro-ing")?.value || "";
+    const desde  = document.getElementById("ent-desde")?.value;
+    const hasta  = document.getElementById("ent-hasta")?.value;
+    const [dy,dm,dd] = (desde||"").split("-").map(Number);
+    const [hy,hm,hd] = (hasta||"").split("-").map(Number);
+    const desdeTs = desde ? new Date(dy,dm-1,dd,0,0,0).getTime() : Date.now()-7*86400000;
+    const hastaTs = hasta ? new Date(hy,hm-1,hd,23,59,59).getTime() : Date.now();
+
+    let cs = [where("_ts",">=",desdeTs), where("_ts","<=",hastaTs),
+      orderBy("_ts","desc"), limit(300)];
+    if (ingId) cs = [where("ingenieroId","==",ingId), ...cs];
+    const q = query(collection(db,"entregas_campo"), ...cs);
+
+    const tbody = document.getElementById("ent-body");
+    const fmtMXN = v => Number(v||0).toLocaleString("es-MX",{style:"currency",currency:"MXN"});
+
+    _entUnsub = onSnapshot(q, snap => {
+      const rows = snap.docs.map(d2 => ({ id: d2.id, ...d2.data() }));
+      const unidades = rows.reduce((s,r) => s + r.productos.reduce((s2,p) => s2+p.cantidad,0), 0);
+      const importe  = rows.reduce((s,r) => s + (r.importe||0), 0);
+      const el = id => document.getElementById(id);
+      if (el("ent-kpi-total"))    el("ent-kpi-total").textContent    = rows.length;
+      if (el("ent-kpi-unidades")) el("ent-kpi-unidades").textContent = unidades;
+      if (el("ent-kpi-importe"))  el("ent-kpi-importe").textContent  = fmtMXN(importe);
+
+      if (!tbody) return;
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-sec)">Sin entregas en el período</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = rows.map(r => `<tr>
+        <td style="font-size:11px;white-space:nowrap">${fmtFecha(r._ts)}</td>
+        <td style="font-size:12px">${esc(r.ingenieroAlias||"–")}</td>
+        <td style="font-weight:600">${esc(r.clienteNombre||"–")}</td>
+        <td style="font-size:11px;max-width:200px">
+          ${(r.productos||[]).map(p =>
+            `<span style="display:inline-block;background:var(--surface-2);border:1px solid var(--border);
+              border-radius:5px;padding:1px 6px;margin:1px;font-size:10px">
+              ${esc(p.nombre)} ×${p.cantidad}</span>`).join("")}
+        </td>
+        <td style="text-align:right;font-weight:700">${fmtMXN(r.importe)}</td>
+        <td style="font-size:11px;color:var(--text-sec)">${esc(r.notas||"–")}</td>
+      </tr>`).join("");
+    }, err => console.error("[Entregas]", err));
+    _unsubs.push(_entUnsub);
+  }
+  document.getElementById("ent-filtrar")?.addEventListener("click", _cargarEntregas);
+  document.getElementById("ent-filtro-ing")?.addEventListener("change", _cargarEntregas);
+  _cargarEntregas();
+}
+
+// ══════════════════════════════════════════════════════════════
+// MEDIO/65 — DASHBOARD DE CUMPLIMIENTO MENSUAL
+// ══════════════════════════════════════════════════════════════
+function _montarCumplimiento() {
+  const wrap = document.getElementById("log-cumplimiento-content");
+  if (!wrap) return;
+  const ahora = new Date();
+  const mesActual = `${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,"0")}`;
+  wrap.innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px">
+      <h3 style="margin:0;font-size:15px;font-weight:800;flex:1">📊 Cumplimiento mensual</h3>
+      <input type="month" class="sel-sm" id="cum-mes" value="${mesActual}">
+      <button class="btn-primary" id="cum-calcular">Calcular</button>
+    </div>
+    <div id="cum-resultado">
+      <div style="padding:32px;text-align:center;color:var(--text-sec)">Selecciona un mes y presiona Calcular</div>
+    </div>`;
+
+  document.getElementById("cum-calcular")?.addEventListener("click", _calcularCumplimiento);
+}
+
+async function _calcularCumplimiento() {
+  const res = document.getElementById("cum-resultado");
+  if (!res) return;
+  const mes = document.getElementById("cum-mes")?.value || "";
+  if (!mes) { window.toast?.("Selecciona un mes","warn"); return; }
+  res.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-sec)">Calculando…</div>`;
+
+  try {
+    const [yr, mo] = mes.split("-").map(Number);
+    const inicio = new Date(yr, mo-1, 1, 0, 0, 0).getTime();
+    const fin    = new Date(yr, mo,   0, 23, 59, 59).getTime();
+
+    const snap = await getDocs(query(
+      collection(db,"visitas_programadas"),
+      where("fechaTs",">=",inicio), where("fechaTs","<=",fin),
+      orderBy("fechaTs","asc"), limit(3000)
+    ));
+    const visitas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    if (!visitas.length) {
+      res.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-sec)">Sin visitas programadas en ese mes</div>`;
+      return;
+    }
+
+    // Agrupar por ingeniero
+    const porIng = {};
+    visitas.forEach(v => {
+      const alias = v.ingenieroAlias || v.ingenieroId || "Sin asignar";
+      if (!porIng[alias]) porIng[alias] = { total:0, comp:0, omit:0, pend:0 };
+      porIng[alias].total++;
+      if (v.status === "COMPLETADA") porIng[alias].comp++;
+      else if (v.status === "OMITIDA") porIng[alias].pend++;
+      else porIng[alias].pend++;
+      if (v.status === "OMITIDA") porIng[alias].omit++;
+    });
+
+    const ings = Object.entries(porIng).sort((a,b) => {
+      const pA = a[1].total > 0 ? a[1].comp/a[1].total : 0;
+      const pB = b[1].total > 0 ? b[1].comp/b[1].total : 0;
+      return pB - pA;
+    });
+
+    const total  = visitas.length;
+    const comp   = visitas.filter(v => v.status==="COMPLETADA").length;
+    const omit   = visitas.filter(v => v.status==="OMITIDA").length;
+    const pend   = visitas.filter(v => v.status==="PENDIENTE").length;
+    const pct    = total > 0 ? Math.round(comp/total*100) : 0;
+
+    // Tendencia semanal (grupos de 7 días dentro del mes)
+    const semanas = [];
+    const diasMes = new Date(yr, mo, 0).getDate();
+    for (let s = 0; s < 5; s++) {
+      const desde = new Date(yr, mo-1, s*7+1).getTime();
+      const hasta = new Date(yr, mo-1, Math.min((s+1)*7, diasMes), 23, 59, 59).getTime();
+      const del   = visitas.filter(v => v.fechaTs >= desde && v.fechaTs <= hasta);
+      const c     = del.filter(v => v.status==="COMPLETADA").length;
+      if (del.length) semanas.push({ label:`S${s+1}`, total:del.length, comp:c, pct: del.length ? Math.round(c/del.length*100) : 0 });
+    }
+
+    // SVG tendencia semanal
+    const svgW = 400, svgH = 100, pad = 30;
+    const nSem = semanas.length || 1;
+    const xStep = (svgW - pad*2) / Math.max(nSem-1, 1);
+    const pts = semanas.map((s,i) => ({ x: pad + i*xStep, y: svgH - pad - (s.pct/100)*(svgH-pad*2) }));
+    const polyline = pts.map(p => `${p.x},${p.y}`).join(" ");
+    const area = `${pts[0]?.x},${svgH-pad} ` + polyline + ` ${pts[pts.length-1]?.x},${svgH-pad}`;
+    const svgLinea = semanas.length >= 2 ? `
+      <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%;max-width:400px;height:auto" role="img" aria-label="Tendencia semanal">
+        <polygon points="${area}" fill="#6366F120"/>
+        <polyline points="${polyline}" fill="none" stroke="#6366F1" stroke-width="2" stroke-linejoin="round"/>
+        ${pts.map((p,i) => `
+          <circle cx="${p.x}" cy="${p.y}" r="4" fill="#6366F1"/>
+          <text x="${p.x}" y="${p.y-7}" text-anchor="middle" font-size="9" fill="currentColor">${semanas[i].pct}%</text>
+          <text x="${p.x}" y="${svgH-pad+12}" text-anchor="middle" font-size="9" fill="#94A3B8">${semanas[i].label}</text>`).join("")}
+      </svg>` : `<div style="font-size:11px;color:#94A3B8">Datos insuficientes para tendencia</div>`;
+
+    res.innerHTML = `
+      <!-- KPIs globales -->
+      <div class="kpi-row" style="margin-bottom:20px">
+        <div class="kpi-card" style="border-left-color:#6366F1">
+          <div class="kpi-icon">📋</div><div class="kpi-val">${total}</div>
+          <div class="kpi-label">Programadas</div>
+        </div>
+        <div class="kpi-card" style="border-left-color:#16A34A">
+          <div class="kpi-icon">✅</div><div class="kpi-val">${comp}</div>
+          <div class="kpi-label">Completadas</div>
+        </div>
+        <div class="kpi-card" style="border-left-color:#DC2626">
+          <div class="kpi-icon">⏳</div><div class="kpi-val">${pend}</div>
+          <div class="kpi-label">Pendientes</div>
+        </div>
+        <div class="kpi-card" style="border-left-color:#94A3B8">
+          <div class="kpi-icon">–</div><div class="kpi-val">${omit}</div>
+          <div class="kpi-label">Omitidas</div>
+        </div>
+        <div class="kpi-card" style="border-left-color:#1D4ED8">
+          <div class="kpi-icon">📊</div>
+          <div class="kpi-val" style="color:${pct>=80?"#16A34A":pct>=60?"#D97706":"#DC2626"}">${pct}%</div>
+          <div class="kpi-label">% Cumplimiento</div>
+        </div>
+      </div>
+
+      <!-- Tendencia semanal -->
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;
+        padding:16px;margin-bottom:20px">
+        <div style="font-size:12px;font-weight:700;margin-bottom:10px">📈 Tendencia semanal — % completadas</div>
+        ${svgLinea}
+      </div>
+
+      <!-- Tabla por ingeniero -->
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">Cumplimiento por ingeniero</div>
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead><tr>
+            <th>INGENIERO</th>
+            <th style="text-align:right">PROGRAMADAS</th>
+            <th style="text-align:right">COMPLETADAS</th>
+            <th style="text-align:right">OMITIDAS</th>
+            <th>% CUMPLIMIENTO</th>
+          </tr></thead>
+          <tbody>
+            ${ings.map(([alias, d]) => {
+              const p2 = d.total > 0 ? Math.round(d.comp/d.total*100) : 0;
+              const col2 = p2 >= 80 ? "#16A34A" : p2 >= 60 ? "#D97706" : "#DC2626";
+              return `<tr>
+                <td style="font-weight:700">${esc(alias)}</td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums">${d.total}</td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums;color:#16A34A">${d.comp}</td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums;color:#94A3B8">${d.omit}</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="flex:1;height:7px;border-radius:4px;background:var(--border)">
+                      <div style="height:7px;border-radius:4px;background:${col2};width:${p2}%;max-width:100%;transition:width .3s"></div>
+                    </div>
+                    <span style="font-weight:800;font-size:12px;color:${col2};min-width:35px;text-align:right">${p2}%</span>
+                  </div>
+                </td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    res.innerHTML = `<div style="padding:16px;color:#DC2626">${esc(e.message)}</div>`;
+    console.error("[Cumplimiento]", e);
   }
 }

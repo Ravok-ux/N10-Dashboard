@@ -18,8 +18,11 @@ const fmtFecha = ts => ts
   : "—";
 
 const TABS = [
-  { id:"stock",       label:"📦 Stock actual"  },
-  { id:"movimientos", label:"🔄 Movimientos"   },
+  { id:"stock",       label:"📦 Stock actual"    },
+  { id:"movimientos", label:"🔄 Movimientos"     },
+  { id:"conteo",      label:"📋 Conteo físico"   },
+  { id:"alertas",     label:"🔔 Alertas mín/máx" },
+  { id:"mermas",      label:"🗑️ Mermas"           },
 ];
 
 let _tab    = "stock";
@@ -62,8 +65,11 @@ function _puedeEditar() { return Sesion.esSuperAdmin?.() || ["GERENTE","ADMINIST
 function _activarTab(tab) {
   _tab = tab;
   _unsubs.forEach(u => u?.()); _unsubs = [];
-  if (tab === "stock")        _montarStock();
+  if (tab === "stock")            _montarStock();
   else if (tab === "movimientos") _montarMovimientos();
+  else if (tab === "conteo")      _montarConteoFisico();
+  else if (tab === "alertas")     _montarAlertas();
+  else if (tab === "mermas")      _montarMermas();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -727,4 +733,814 @@ function _exportXlsx(rows) {
   XLSX.utils.book_append_sheet(wb, ws, "Inventario");
   XLSX.writeFile(wb, `N10-inventario-${new Date().toISOString().slice(0,10)}.xlsx`);
   window.toast?.("Exportando Excel…","info");
+}
+
+// ══════════════════════════════════════════════════════════════
+// CONTEO FÍSICO CÍCLICO  (Alto / 73)
+// Colección: conteos_fisicos
+// ══════════════════════════════════════════════════════════════
+function _montarConteoFisico() {
+  if (!_puedeEditar()) {
+    document.getElementById("inv-content").innerHTML =
+      `<div style="padding:40px;text-align:center;color:var(--text-sec)">Solo GERENTE o ADMINISTRADOR pueden gestionar conteos.</div>`;
+    return;
+  }
+  document.getElementById("inv-content").innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px">
+      <h3 style="margin:0;font-size:15px;font-weight:800;flex:1">📋 Conteo físico cíclico</h3>
+      <button class="btn-primary" id="cnt-nuevo-btn">+ Nuevo conteo</button>
+    </div>
+
+    <!-- Vista: lista de conteos o form de conteo activo -->
+    <div id="cnt-vista-lista">
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead><tr>
+            <th>FECHA</th><th>ESTADO</th><th>PRODUCTOS</th>
+            <th>DIFERENCIAS</th><th>REGISTRÓ</th><th></th>
+          </tr></thead>
+          <tbody id="cnt-lista-body">
+            <tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-sec)">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Form conteo activo (oculto al inicio) -->
+    <div id="cnt-vista-form" style="display:none">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+        <button id="cnt-back-btn" style="padding:6px 12px;border:1px solid var(--border);
+          background:transparent;border-radius:7px;cursor:pointer;font-size:12px;color:var(--text-sec)">
+          ← Volver
+        </button>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:800" id="cnt-form-titulo">Conteo — </div>
+          <div style="font-size:11px;color:var(--text-sec)">Ingresa el conteo real de cada producto y aplica los ajustes</div>
+        </div>
+        <button id="cnt-aplicar-btn" style="padding:8px 18px;border-radius:8px;border:none;
+          background:#16A34A;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+          ✔ Cerrar y aplicar ajustes
+        </button>
+      </div>
+
+      <div style="margin-bottom:10px;font-size:12px;color:var(--text-sec)">
+        <strong style="color:var(--text-primary)" id="cnt-resumen-difs">—</strong> productos con diferencia
+      </div>
+
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead><tr>
+            <th>PRODUCTO</th><th style="text-align:right">STOCK SISTEMA</th>
+            <th style="text-align:right;width:130px">CONTEO REAL</th>
+            <th style="text-align:right">DIFERENCIA</th><th>ESTADO</th>
+          </tr></thead>
+          <tbody id="cnt-form-body"></tbody>
+        </table>
+      </div>
+    </div>`;
+
+  // ── Historial de conteos ───────────────────────────────────
+  let _conteoActivo = null;
+  let _conteoItems  = [];   // [{productoId, nombre, stockSistema, stockConteo}]
+
+  const { getDocs: gd2, query: q2, collection: col2, orderBy: ob2, limit: lim2, addDoc: ad2, doc: dc2, updateDoc: upd2 } =
+    { getDocs: null, query: null, collection: null, orderBy: null, limit: null, addDoc: null, doc: null, updateDoc: null };
+
+  async function _cargarHistorial() {
+    const { getDocs, query: qry, collection: colRef, orderBy: oby, limit: lmt } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const tbody = document.getElementById("cnt-lista-body");
+    if (!tbody) return;
+    try {
+      const snap = await getDocs(qry(colRef(db, "conteos_fisicos"), oby("_ts","desc"), lmt(30)));
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (!docs.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-sec)">
+          Sin conteos registrados. Crea el primero con <strong>+ Nuevo conteo</strong>.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = docs.map(c => {
+        const prods   = c.productos?.length ?? 0;
+        const difs    = (c.productos||[]).filter(p => p.diferencia !== 0).length;
+        const estado  = c.estado === "CERRADO"
+          ? `<span class="badge" style="background:#DCFCE7;color:#15803D">CERRADO</span>`
+          : `<span class="badge badge-amber">ABIERTO</span>`;
+        const accion  = c.estado === "ABIERTO"
+          ? `<button class="btn-sm btn-outline cnt-open-btn" data-id="${esc(c.id)}">Continuar ▶</button>`
+          : `<button class="btn-sm" style="padding:4px 8px;font-size:10px;background:var(--surface-2);
+              border:1px solid var(--border);border-radius:5px;cursor:pointer"
+              data-id="${esc(c.id)}" class="cnt-ver-btn">Ver detalle</button>`;
+        return `<tr>
+          <td style="font-size:11px;white-space:nowrap">${fmtFecha(c._ts)}</td>
+          <td>${estado}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums">${prods}</td>
+          <td style="text-align:right;font-weight:700;color:${difs>0?"#D97706":"#16A34A"}">${difs}</td>
+          <td style="font-size:11px;color:var(--text-sec)">${esc(c.quienCreo||"–")}</td>
+          <td>${accion}</td>
+        </tr>`;
+      }).join("");
+      tbody.querySelectorAll(".cnt-open-btn,.cnt-ver-btn").forEach(btn => {
+        btn.addEventListener("click", () => _abrirConteo(docs.find(d => d.id === btn.dataset.id)));
+      });
+    } catch(e) { console.error("[Conteo]", e); }
+  }
+  _cargarHistorial();
+
+  // ── Nuevo conteo ───────────────────────────────────────────
+  document.getElementById("cnt-nuevo-btn")?.addEventListener("click", async () => {
+    if (!_allRows.length) { window.toast?.("Carga el tab Stock primero","warning"); return; }
+    const { addDoc: ad, collection: colRef, doc: dc, serverTimestamp: st } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const productos = _allRows.map(r => ({
+      productoId: r.id, nombre: r.nombre||"",
+      stockSistema: r.stockActual ?? 0, stockConteo: null, diferencia: 0
+    }));
+    try {
+      const ref = await ad(colRef(db, "conteos_fisicos"), {
+        estado: "ABIERTO", productos,
+        quienCreo: Sesion.alias, _ts: Date.now()
+      });
+      logAudit("CONTEO_CREADO", { conteoId: ref.id, productos: productos.length });
+      _conteoActivo = { id: ref.id, estado:"ABIERTO", productos, quienCreo: Sesion.alias, _ts: Date.now() };
+      _conteoItems  = productos.map(p => ({ ...p }));
+      _renderFormConteo(false);
+    } catch(e) { window.toast?.("Error: " + e.message,"error"); }
+  });
+
+  function _abrirConteo(c) {
+    _conteoActivo = c;
+    _conteoItems  = (c.productos||[]).map(p => ({ ...p }));
+    _renderFormConteo(c.estado === "CERRADO");
+  }
+
+  function _renderFormConteo(soloLectura) {
+    document.getElementById("cnt-vista-lista").style.display = "none";
+    document.getElementById("cnt-vista-form").style.display  = "";
+    document.getElementById("cnt-form-titulo").textContent =
+      `Conteo — ${fmtFecha(_conteoActivo._ts)} ${soloLectura?"(cerrado)":""}`;
+    document.getElementById("cnt-aplicar-btn").style.display = soloLectura ? "none" : "";
+
+    const tbody = document.getElementById("cnt-form-body");
+    if (!tbody) return;
+    _actualizarResumen();
+
+    tbody.innerHTML = _conteoItems.map((p, i) => {
+      const dif = (p.stockConteo ?? p.stockSistema) - p.stockSistema;
+      const difColor = dif > 0 ? "#16A34A" : dif < 0 ? "#DC2626" : "var(--text-sec)";
+      const badge = dif === 0
+        ? `<span class="badge" style="background:#F1F5F9;color:#64748B">Sin diferencia</span>`
+        : dif > 0
+        ? `<span class="badge" style="background:#DCFCE7;color:#15803D">Sobrante ▲</span>`
+        : `<span class="badge badge-red">Faltante ▼</span>`;
+      return `<tr>
+        <td style="font-weight:600">${esc(p.nombre)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${p.stockSistema}</td>
+        <td style="text-align:right">
+          ${soloLectura
+            ? `<span style="font-weight:700">${p.stockConteo ?? "–"}</span>`
+            : `<input type="number" min="0" step="1" value="${p.stockConteo ?? ""}"
+                data-cnt-idx="${i}"
+                style="width:90px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;
+                  text-align:right;background:var(--surface);color:var(--text-primary);
+                  font-size:13px;font-weight:700;font-variant-numeric:tabular-nums"
+                placeholder="${p.stockSistema}">`}
+        </td>
+        <td style="text-align:right;font-weight:800;color:${difColor};font-variant-numeric:tabular-nums"
+          data-dif-idx="${i}">
+          ${dif === 0 ? "0" : (dif > 0 ? "+" : "") + dif}
+        </td>
+        <td>${badge}</td>
+      </tr>`;
+    }).join("");
+
+    if (!soloLectura) {
+      tbody.querySelectorAll("input[data-cnt-idx]").forEach(inp => {
+        inp.addEventListener("input", () => {
+          const i = parseInt(inp.dataset.cntIdx);
+          const v = inp.value === "" ? null : parseFloat(inp.value);
+          _conteoItems[i].stockConteo = v;
+          const dif = (v ?? _conteoItems[i].stockSistema) - _conteoItems[i].stockSistema;
+          _conteoItems[i].diferencia  = dif;
+          const difEl = tbody.querySelector(`[data-dif-idx="${i}"]`);
+          if (difEl) {
+            difEl.textContent = dif === 0 ? "0" : (dif > 0 ? "+" : "") + dif;
+            difEl.style.color  = dif > 0 ? "#16A34A" : dif < 0 ? "#DC2626" : "var(--text-sec)";
+          }
+          _actualizarResumen();
+        });
+      });
+    }
+  }
+
+  function _actualizarResumen() {
+    const difs = _conteoItems.filter(p => p.diferencia !== 0).length;
+    const el = document.getElementById("cnt-resumen-difs");
+    if (el) el.textContent = difs;
+  }
+
+  document.getElementById("cnt-back-btn")?.addEventListener("click", () => {
+    document.getElementById("cnt-vista-lista").style.display = "";
+    document.getElementById("cnt-vista-form").style.display  = "none";
+    _cargarHistorial();
+  });
+
+  document.getElementById("cnt-aplicar-btn")?.addEventListener("click", async () => {
+    const conDif = _conteoItems.filter(p => p.stockConteo !== null && p.diferencia !== 0);
+    if (!conDif.length) { window.toast?.("Sin diferencias para ajustar","info"); return; }
+    if (!confirm(`¿Aplicar ${conDif.length} ajuste(s) al inventario y cerrar el conteo?`)) return;
+
+    const btn = document.getElementById("cnt-aplicar-btn");
+    btn.disabled = true; btn.textContent = "Aplicando…";
+    try {
+      const { addDoc: ad, collection: colRef, doc: dc, updateDoc: upd, setDoc: sd } =
+        await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+
+      for (const p of conDif) {
+        const nuevo = (p.stockConteo ?? p.stockSistema);
+        await ad(colRef(db, "movimientos_stock"), {
+          productoId: p.productoId, nombreProducto: p.nombre,
+          tipo: "AJUSTE_INVENTARIO", cantidad: Math.abs(p.diferencia),
+          stockAntes: p.stockSistema, stockDespues: nuevo,
+          motivo: `Conteo físico ${fmtFecha(_conteoActivo._ts)}`,
+          quienRegistro: Sesion.alias, _ts: Date.now()
+        });
+        await sd(dc(db, "inventario", p.productoId), { stockActual: nuevo, _ts: Date.now() }, { merge: true });
+      }
+
+      const productosActualizados = _conteoItems.map(p => ({
+        ...p, stockConteo: p.stockConteo ?? p.stockSistema,
+        diferencia: (p.stockConteo ?? p.stockSistema) - p.stockSistema
+      }));
+      await upd(dc(db, "conteos_fisicos", _conteoActivo.id), {
+        estado: "CERRADO", productos: productosActualizados,
+        quienCerro: Sesion.alias, fechaCierre: Date.now()
+      });
+      logAudit("CONTEO_CERRADO", { conteoId: _conteoActivo.id, ajustes: conDif.length });
+      window.toast?.(`Conteo cerrado. ${conDif.length} ajuste(s) aplicado(s)`, "success");
+      document.getElementById("cnt-vista-lista").style.display = "";
+      document.getElementById("cnt-vista-form").style.display  = "none";
+      _cargarHistorial();
+    } catch(e) { window.toast?.("Error: " + e.message, "error"); }
+    finally { btn.disabled = false; btn.textContent = "✔ Cerrar y aplicar ajustes"; }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// ALERTAS MÍN/MÁX  (Alto / 76)
+// Lee inventario; permite configurar stockMaximo por producto
+// ══════════════════════════════════════════════════════════════
+function _montarAlertas() {
+  document.getElementById("inv-content").innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+      <h3 style="margin:0;font-size:15px;font-weight:800;flex:1">🔔 Alertas de stock mín/máx</h3>
+      <input type="text" class="sel-sm" id="alr-buscar" placeholder="Buscar…" style="width:180px">
+    </div>
+
+    <div class="kpi-row" style="margin-bottom:16px">
+      <div class="kpi-card" style="border-left-color:#DC2626">
+        <div class="kpi-icon">🔴</div><div class="kpi-val" id="alr-kpi-bajo">–</div>
+        <div class="kpi-label">Bajo mínimo</div>
+      </div>
+      <div class="kpi-card" style="border-left-color:#7C3AED">
+        <div class="kpi-icon">🟣</div><div class="kpi-val" id="alr-kpi-sobre">–</div>
+        <div class="kpi-label">Sobre máximo</div>
+      </div>
+      <div class="kpi-card" style="border-left-color:#16A34A">
+        <div class="kpi-icon">✅</div><div class="kpi-val" id="alr-kpi-ok">–</div>
+        <div class="kpi-label">En rango</div>
+      </div>
+      <div class="kpi-card" style="border-left-color:#94A3B8">
+        <div class="kpi-icon">⚙️</div><div class="kpi-val" id="alr-kpi-sinmax">–</div>
+        <div class="kpi-label">Sin máximo config.</div>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr>
+          <th>PRODUCTO</th>
+          <th style="text-align:right">STOCK</th>
+          <th style="text-align:right">MÍN</th>
+          <th style="text-align:right">MÁX</th>
+          <th>ALERTA</th>
+          <th>NIVEL</th>
+          ${_puedeEditar() ? "<th>CONFIG</th>" : ""}
+        </tr></thead>
+        <tbody id="alr-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Modal configurar máximo -->
+    <div class="modal-overlay hidden" id="alr-modal">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;
+        width:100%;max-width:420px;box-shadow:0 24px 64px rgba(0,0,0,.5);overflow:hidden">
+        <div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+          <span style="font-size:22px">📏</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:800" id="alr-modal-nom">Configurar límites</div>
+            <div style="font-size:11px;color:#64748B">Stock mínimo y máximo por producto</div>
+          </div>
+          <button id="alr-modal-close" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748B">✕</button>
+        </div>
+        <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+          <input type="hidden" id="alr-prod-id">
+          <div style="display:flex;gap:12px">
+            <div style="flex:1">
+              <label style="font-size:10px;color:#94A3B8;font-weight:700;display:block;margin-bottom:5px">Stock MÍNIMO</label>
+              <input class="form-input" type="number" id="alr-minimo" min="0" step="1" placeholder="0"
+                style="text-align:center;font-weight:700;font-size:16px">
+            </div>
+            <div style="flex:1">
+              <label style="font-size:10px;color:#94A3B8;font-weight:700;display:block;margin-bottom:5px">Stock MÁXIMO</label>
+              <input class="form-input" type="number" id="alr-maximo" min="0" step="1" placeholder="0"
+                style="text-align:center;font-weight:700;font-size:16px">
+            </div>
+          </div>
+          <p style="font-size:11px;color:#64748B;margin:0">
+            El sistema mostrará alertas cuando el stock salga de este rango.
+          </p>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--border)">
+          <button id="alr-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);
+            background:transparent;color:#94A3B8;font-size:12px;cursor:pointer">Cancelar</button>
+          <button id="alr-guardar" style="padding:8px 22px;border-radius:8px;border:none;
+            background:#6366F1;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+
+  let _alrRows = [];
+  const cerrarAlrModal = () => document.getElementById("alr-modal")?.classList.add("hidden");
+
+  function _renderAlertas(rows) {
+    const bajo   = rows.filter(r => (r.stockActual??0) > 0 && (r.stockActual??0) <= (r.stockMinimo||0));
+    const cero   = rows.filter(r => (r.stockActual??0) <= 0);
+    const sobre  = rows.filter(r => r.stockMaximo > 0 && (r.stockActual??0) > r.stockMaximo);
+    const sinMax = rows.filter(r => !(r.stockMaximo > 0));
+    const ok     = rows.filter(r => !bajo.includes(r) && !cero.includes(r) && !sobre.includes(r));
+    const el = id => document.getElementById(id);
+    if (el("alr-kpi-bajo"))   el("alr-kpi-bajo").textContent   = bajo.length + cero.length;
+    if (el("alr-kpi-sobre"))  el("alr-kpi-sobre").textContent  = sobre.length;
+    if (el("alr-kpi-ok"))     el("alr-kpi-ok").textContent     = ok.length;
+    if (el("alr-kpi-sinmax")) el("alr-kpi-sinmax").textContent = sinMax.length;
+
+    const tbody = document.getElementById("alr-body");
+    if (!tbody) return;
+    const sorted = [...rows].sort((a,b) => {
+      const alertaA = _nivelAlerta(a), alertaB = _nivelAlerta(b);
+      const ord = { CRITICO:0, BAJO_MIN:1, SOBRE_MAX:2, OK:3, SIN_MAX:4 };
+      return (ord[alertaA]??9) - (ord[alertaB]??9);
+    });
+    tbody.innerHTML = sorted.map(r => {
+      const stock  = r.stockActual ?? 0;
+      const min    = r.stockMinimo ?? 0;
+      const max    = r.stockMaximo ?? 0;
+      const alerta = _nivelAlerta(r);
+      const badge  = {
+        CRITICO:   `<span class="badge badge-red">🔴 SIN STOCK</span>`,
+        BAJO_MIN:  `<span class="badge badge-amber">⚠️ BAJO MÍN</span>`,
+        SOBRE_MAX: `<span class="badge" style="background:#F3E8FF;color:#7C3AED">🟣 SOBRE MÁX</span>`,
+        OK:        `<span class="badge" style="background:#DCFCE7;color:#15803D">✅ OK</span>`,
+        SIN_MAX:   `<span class="badge" style="background:#F1F5F9;color:#64748B">⚙️ Sin máx</span>`,
+      }[alerta] || "";
+      const pct    = max > 0 ? Math.min(100, Math.round(stock/max*100)) : (min > 0 ? Math.min(100,Math.round(stock/min*100)) : 50);
+      const barCol = alerta === "CRITICO" ? "#DC2626" : alerta === "BAJO_MIN" ? "#D97706" : alerta === "SOBRE_MAX" ? "#7C3AED" : "#16A34A";
+      const maxLbl = max > 0 ? max : `<span style="color:#94A3B8;font-style:italic">—</span>`;
+      const cfg    = _puedeEditar()
+        ? `<button class="btn-sm btn-outline alr-cfg-btn"
+             data-id="${esc(r.id)}" data-nom="${esc(r.nombre||"")}"
+             data-min="${min}" data-max="${max}">⚙️ Config</button>`
+        : "";
+      return `<tr>
+        <td style="font-weight:600">${esc(r.nombre||"–")}</td>
+        <td style="text-align:right;font-weight:800;font-size:15px;font-variant-numeric:tabular-nums">${stock}</td>
+        <td style="text-align:right;color:var(--text-sec);font-variant-numeric:tabular-nums">${min}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${maxLbl}</td>
+        <td>${badge}</td>
+        <td>
+          <div style="height:6px;border-radius:3px;background:var(--border);width:80px">
+            <div style="height:6px;border-radius:3px;background:${barCol};width:${pct}%;max-width:100%;transition:width .3s"></div>
+          </div>
+          <div style="font-size:9px;color:var(--text-sec);margin-top:2px">${pct}% del máx</div>
+        </td>
+        ${_puedeEditar() ? `<td>${cfg}</td>` : ""}
+      </tr>`;
+    }).join("");
+
+    tbody.querySelectorAll(".alr-cfg-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.getElementById("alr-prod-id").value = btn.dataset.id;
+        document.getElementById("alr-modal-nom").textContent = btn.dataset.nom;
+        document.getElementById("alr-minimo").value = btn.dataset.min || "";
+        document.getElementById("alr-maximo").value = btn.dataset.max || "";
+        document.getElementById("alr-modal")?.classList.remove("hidden");
+      });
+    });
+  }
+
+  function _nivelAlerta(r) {
+    const stock = r.stockActual ?? 0;
+    const min   = r.stockMinimo ?? 0;
+    const max   = r.stockMaximo ?? 0;
+    if (stock <= 0) return "CRITICO";
+    if (min > 0 && stock <= min) return "BAJO_MIN";
+    if (max > 0 && stock > max)  return "SOBRE_MAX";
+    if (max <= 0) return "SIN_MAX";
+    return "OK";
+  }
+
+  const q = query(collection(db, "inventario"), orderBy("nombre"), limit(500));
+  _unsubs.push(onSnapshot(q, snap => {
+    _alrRows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _renderAlertas(_alrRows);
+  }, err => console.error("[Alertas]", err)));
+
+  document.getElementById("alr-buscar")?.addEventListener("input", e => {
+    const t = norm(e.target.value);
+    _renderAlertas(t ? _alrRows.filter(r => norm(r.nombre||"").includes(t)) : _alrRows);
+  });
+
+  document.getElementById("alr-modal-close")?.addEventListener("click", cerrarAlrModal);
+  document.getElementById("alr-cancel")?.addEventListener("click", cerrarAlrModal);
+  document.getElementById("alr-modal")?.addEventListener("click", e => {
+    if (e.target === document.getElementById("alr-modal")) cerrarAlrModal();
+  });
+
+  document.getElementById("alr-guardar")?.addEventListener("click", async () => {
+    const prodId = document.getElementById("alr-prod-id")?.value;
+    const minVal = parseFloat(document.getElementById("alr-minimo")?.value || "0");
+    const maxVal = parseFloat(document.getElementById("alr-maximo")?.value || "0");
+    if (!prodId) return;
+    if (maxVal > 0 && minVal > maxVal) { window.toast?.("El máximo debe ser mayor que el mínimo","error"); return; }
+    const btn = document.getElementById("alr-guardar");
+    btn.disabled = true; btn.textContent = "Guardando…";
+    try {
+      await setDoc(doc(db, "inventario", prodId), { stockMinimo: minVal, stockMaximo: maxVal, _ts: Date.now() }, { merge: true });
+      logAudit("CONFIG_STOCK_LIMITES", { productoId: prodId, stockMinimo: minVal, stockMaximo: maxVal });
+      window.toast?.("Límites guardados","success");
+      cerrarAlrModal();
+    } catch(e) { window.toast?.("Error: " + e.message,"error"); }
+    finally { btn.disabled = false; btn.textContent = "Guardar"; }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// MERMAS  (Medio / 62)
+// Tipo formal: MERMA — subtipo: ROTURA / DERRAME / VENCIMIENTO / PERDIDA / OTRO
+// Escribe a movimientos_stock con tipo:"MERMA" y campo motivoMerma
+// ══════════════════════════════════════════════════════════════
+function _montarMermas() {
+  const hoy   = new Date().toISOString().slice(0,10);
+  const hace30 = new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  document.getElementById("inv-content").innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+      <h3 style="margin:0;font-size:15px;font-weight:800;flex:1">🗑️ Mermas y ajustes</h3>
+      ${_puedeEditar() ? `<button class="btn-primary" id="mrm-nueva-btn">+ Registrar merma</button>` : ""}
+    </div>
+
+    <div class="kpi-row" style="margin-bottom:16px">
+      <div class="kpi-card" style="border-left-color:#DC2626">
+        <div class="kpi-icon">🗑️</div><div class="kpi-val" id="mrm-kpi-total">–</div>
+        <div class="kpi-label">Mermas este mes</div>
+      </div>
+      <div class="kpi-card" style="border-left-color:#D97706">
+        <div class="kpi-icon">📦</div><div class="kpi-val" id="mrm-kpi-unidades">–</div>
+        <div class="kpi-label">Unidades perdidas</div>
+      </div>
+      <div class="kpi-card" style="border-left-color:#7C3AED">
+        <div class="kpi-icon">💸</div><div class="kpi-val" id="mrm-kpi-valor">–</div>
+        <div class="kpi-label">Valor estimado</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <select class="sel-sm" id="mrm-tipo-fil">
+        <option value="">Todos los motivos</option>
+        <option value="ROTURA">Rotura</option>
+        <option value="DERRAME">Derrame</option>
+        <option value="VENCIMIENTO">Vencimiento</option>
+        <option value="PERDIDA">Pérdida</option>
+        <option value="OTRO">Otro</option>
+      </select>
+      <span style="font-size:11px;color:var(--text-sec)">Desde</span>
+      <input type="date" class="sel-sm" id="mrm-desde" value="${hace30}">
+      <span style="font-size:11px;color:var(--text-sec)">Hasta</span>
+      <input type="date" class="sel-sm" id="mrm-hasta" value="${hoy}">
+      <button class="btn-primary" id="mrm-filtrar">Filtrar</button>
+      <button id="mrm-xlsx-btn" style="padding:7px 12px;background:var(--accent);color:#fff;
+        border:none;border-radius:6px;cursor:pointer;font-size:13px">⬇️ Excel</button>
+    </div>
+
+    <div style="overflow-x:auto">
+      <table class="data-table">
+        <thead><tr>
+          <th>FECHA</th><th>PRODUCTO</th><th>MOTIVO</th>
+          <th style="text-align:right">CANT.</th>
+          <th style="text-align:right">STOCK ANTES</th>
+          <th style="text-align:right">STOCK DESPUÉS</th>
+          <th>OBSERVACIONES</th><th>REGISTRÓ</th>
+        </tr></thead>
+        <tbody id="mrm-body">
+          <tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text-sec)">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Modal nueva merma -->
+    <div class="modal-overlay hidden" id="mrm-modal">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;
+        width:100%;max-width:500px;box-shadow:0 24px 64px rgba(0,0,0,.5);overflow:hidden;
+        display:flex;flex-direction:column">
+        <div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+          <span style="font-size:22px">🗑️</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:800">Registrar merma</div>
+            <div style="font-size:11px;color:#64748B">Rotura · Derrame · Vencimiento · Pérdida</div>
+          </div>
+          <button id="mrm-modal-close" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748B">✕</button>
+        </div>
+        <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:70vh">
+
+          <!-- Tipo de merma -->
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase;
+              letter-spacing:.08em;margin-bottom:8px">Motivo de la merma</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+              ${[
+                { v:"ROTURA",      ico:"💥", lbl:"Rotura"     },
+                { v:"DERRAME",     ico:"💧", lbl:"Derrame"    },
+                { v:"VENCIMIENTO", ico:"📅", lbl:"Vencimiento"},
+                { v:"PERDIDA",     ico:"❓", lbl:"Pérdida"    },
+                { v:"OTRO",        ico:"📝", lbl:"Otro"       },
+              ].map((op,i) => `
+                <button type="button" data-mrm-motivo="${op.v}"
+                  onclick="window._mrmSelMotivo('${op.v}')"
+                  style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;
+                    border-radius:8px;cursor:pointer;border:1.5px solid ${i===0?"#DC2626":"var(--border)"};
+                    background:${i===0?"#FEF2F2":"transparent"};transition:border-color .15s,background .15s">
+                  <span style="font-size:18px">${op.ico}</span>
+                  <span class="mrm-motivo-lbl" style="font-size:10px;font-weight:700;
+                    color:${i===0?"#DC2626":"var(--text-sec)"}">${op.lbl}</span>
+                </button>`).join("")}
+            </div>
+            <input type="hidden" id="mrm-motivo-val" value="ROTURA">
+          </div>
+
+          <!-- Producto buscador -->
+          <div style="background:var(--surface-2);border:1px solid var(--border);
+            border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase">Producto</div>
+            <div style="position:relative">
+              <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none">🔍</span>
+              <input type="text" id="mrm-prod-search" placeholder="Buscar producto…" autocomplete="off"
+                style="width:100%;padding:8px 10px 8px 32px;border:1px solid var(--border);
+                  border-radius:8px;background:var(--surface);color:var(--text-primary);font-size:12px;box-sizing:border-box">
+              <div id="mrm-prod-lista" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
+                background:var(--surface);border:1px solid var(--border);border-radius:8px;
+                max-height:160px;overflow-y:auto;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
+            </div>
+            <div id="mrm-prod-chip" style="display:none;align-items:center;gap:10px;
+              background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:10px 12px">
+              <div style="flex:1">
+                <div style="font-size:12px;font-weight:700;color:var(--text-primary)" id="mrm-chip-nom">—</div>
+                <div style="font-size:11px;color:#64748B" id="mrm-chip-stock">Stock sistema: —</div>
+              </div>
+              <button type="button" onclick="window._mrmLimpiarProd()"
+                style="background:none;border:none;cursor:pointer;color:#64748B;font-size:16px">✕</button>
+            </div>
+            <input type="hidden" id="mrm-prod-id">
+            <input type="hidden" id="mrm-prod-nom">
+            <input type="hidden" id="mrm-prod-stock">
+          </div>
+
+          <!-- Cantidad y observaciones -->
+          <div style="display:flex;gap:10px">
+            <div style="flex:0.7">
+              <label style="font-size:10px;color:#94A3B8;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">
+                Cantidad merma
+              </label>
+              <input class="form-input" type="number" id="mrm-cantidad" min="1" step="1" placeholder="0"
+                style="width:100%;font-size:16px;font-weight:700;text-align:center">
+            </div>
+            <div style="flex:1.3">
+              <label style="font-size:10px;color:#94A3B8;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">
+                Observaciones
+              </label>
+              <input class="form-input" type="text" id="mrm-obs" placeholder="Lote, folio, descripción…" style="width:100%">
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--border)">
+          <button id="mrm-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);
+            background:transparent;color:#94A3B8;font-size:12px;cursor:pointer">Cancelar</button>
+          <button id="mrm-guardar" style="padding:8px 22px;border-radius:8px;border:none;
+            background:#DC2626;color:#fff;font-size:12px;font-weight:700;cursor:pointer">✔ Registrar merma</button>
+        </div>
+      </div>
+    </div>`;
+
+  // ── Motivo selector ────────────────────────────────────────
+  window._mrmSelMotivo = (val) => {
+    document.getElementById("mrm-motivo-val").value = val;
+    document.querySelectorAll("[data-mrm-motivo]").forEach(btn => {
+      const sel = btn.dataset.mrmMotivo === val;
+      btn.style.borderColor = sel ? "#DC2626" : "var(--border)";
+      btn.style.background  = sel ? "#FEF2F2" : "transparent";
+      btn.querySelector(".mrm-motivo-lbl").style.color = sel ? "#DC2626" : "var(--text-sec)";
+    });
+  };
+
+  // ── Autocomplete producto ──────────────────────────────────
+  let _mrmCatalogo = [];
+  async function _cargarCatalogoMrm() {
+    if (_mrmCatalogo.length) return;
+    const { getDocs, query: q2, collection: c2, orderBy: o2 } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const snap = await getDocs(q2(c2(db, "inventario"), o2("nombre")));
+    _mrmCatalogo = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  function _mrmRenderLista(term) {
+    const listaEl = document.getElementById("mrm-prod-lista");
+    if (!listaEl) return;
+    const t = norm(term);
+    const matches = _mrmCatalogo.filter(p => !t || norm(p.nombre||"").includes(t)).slice(0,30);
+    if (!matches.length) {
+      listaEl.innerHTML = `<div style="padding:12px;font-size:12px;color:#64748B;text-align:center">Sin resultados</div>`;
+      listaEl.style.display = "block"; return;
+    }
+    listaEl.innerHTML = matches.map((p,i) => `
+      <div data-mrm-idx="${i}" style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);
+        display:flex;justify-content:space-between;align-items:center"
+        onmouseenter="this.style.background='#FEF2F220'" onmouseleave="this.style.background='transparent'">
+        <div>
+          <div style="font-size:12px;font-weight:600">${esc(p.nombre||"")}</div>
+          <div style="font-size:10px;color:#64748B">Stock: ${p.stockActual??0} ${p.unidad||"pza"}</div>
+        </div>
+      </div>`).join("");
+    listaEl.querySelectorAll("[data-mrm-idx]").forEach(el => {
+      el.addEventListener("click", () => {
+        const p = matches[parseInt(el.dataset.mrmIdx)];
+        document.getElementById("mrm-prod-id").value    = p.id;
+        document.getElementById("mrm-prod-nom").value   = p.nombre;
+        document.getElementById("mrm-prod-stock").value = p.stockActual ?? 0;
+        document.getElementById("mrm-chip-nom").textContent   = p.nombre;
+        document.getElementById("mrm-chip-stock").textContent = `Stock sistema: ${p.stockActual??0} ${p.unidad||"pza"}`;
+        document.getElementById("mrm-prod-chip").style.display   = "flex";
+        document.getElementById("mrm-prod-search").style.display = "none";
+        listaEl.style.display = "none";
+      });
+    });
+    listaEl.style.display = "block";
+  }
+
+  window._mrmLimpiarProd = () => {
+    document.getElementById("mrm-prod-id").value    = "";
+    document.getElementById("mrm-prod-nom").value   = "";
+    document.getElementById("mrm-prod-stock").value = "";
+    document.getElementById("mrm-prod-chip").style.display   = "none";
+    document.getElementById("mrm-prod-search").style.display = "";
+    document.getElementById("mrm-prod-search").value = "";
+    document.getElementById("mrm-prod-search").focus();
+  };
+
+  const mrmSearch = document.getElementById("mrm-prod-search");
+  mrmSearch?.addEventListener("focus", async () => { await _cargarCatalogoMrm(); _mrmRenderLista(mrmSearch.value); });
+  mrmSearch?.addEventListener("input", () => _mrmRenderLista(mrmSearch.value));
+  document.addEventListener("click", e => {
+    const lista = document.getElementById("mrm-prod-lista");
+    if (lista && !lista.contains(e.target) && e.target !== mrmSearch) lista.style.display = "none";
+  });
+
+  // ── Modal lifecycle ────────────────────────────────────────
+  const cerrarMrmModal = () => {
+    document.getElementById("mrm-modal")?.classList.add("hidden");
+    window._mrmLimpiarProd?.();
+    document.getElementById("mrm-cantidad").value = "";
+    document.getElementById("mrm-obs").value = "";
+    window._mrmSelMotivo?.("ROTURA");
+  };
+
+  document.getElementById("mrm-nueva-btn")?.addEventListener("click", () => {
+    window._mrmSelMotivo("ROTURA");
+    document.getElementById("mrm-modal")?.classList.remove("hidden");
+    _cargarCatalogoMrm();
+  });
+  document.getElementById("mrm-modal-close")?.addEventListener("click", cerrarMrmModal);
+  document.getElementById("mrm-cancel")?.addEventListener("click", cerrarMrmModal);
+  document.getElementById("mrm-modal")?.addEventListener("click", e => {
+    if (e.target === document.getElementById("mrm-modal")) cerrarMrmModal();
+  });
+
+  // ── Guardar merma ──────────────────────────────────────────
+  document.getElementById("mrm-guardar")?.addEventListener("click", async () => {
+    const prodId   = document.getElementById("mrm-prod-id")?.value.trim();
+    const prodNom  = document.getElementById("mrm-prod-nom")?.value.trim();
+    const stockAnt = parseFloat(document.getElementById("mrm-prod-stock")?.value || "0");
+    const motivo   = document.getElementById("mrm-motivo-val")?.value || "OTRO";
+    const cant     = parseFloat(document.getElementById("mrm-cantidad")?.value || "0");
+    const obs      = document.getElementById("mrm-obs")?.value.trim();
+
+    if (!prodId) { window.toast?.("Selecciona un producto","error"); return; }
+    if (cant <= 0) { window.toast?.("La cantidad debe ser mayor a 0","error"); return; }
+    if (cant > stockAnt) { window.toast?.(`Solo hay ${stockAnt} en stock. Ajusta la cantidad.`,"error"); return; }
+
+    const btn = document.getElementById("mrm-guardar");
+    btn.disabled = true; btn.textContent = "Guardando…";
+    try {
+      const stockDespues = Math.max(0, stockAnt - cant);
+      await addDoc(collection(db, "movimientos_stock"), {
+        productoId: prodId, nombreProducto: prodNom,
+        tipo: "MERMA", motivoMerma: motivo, cantidad: cant,
+        stockAntes: stockAnt, stockDespues,
+        motivo: obs || motivo,
+        quienRegistro: Sesion.alias, _ts: Date.now()
+      });
+      await setDoc(doc(db, "inventario", prodId), { stockActual: stockDespues, _ts: Date.now() }, { merge: true });
+      logAudit("MERMA_REGISTRADA", { productoId: prodId, productoNombre: prodNom, motivoMerma: motivo, cantidad: cant, stockAntes: stockAnt, stockDespues });
+      window.toast?.("Merma registrada","success");
+      cerrarMrmModal();
+      _escucharMermas();
+    } catch(e) { window.toast?.("Error: " + e.message,"error"); }
+    finally { btn.disabled = false; btn.textContent = "✔ Registrar merma"; }
+  });
+
+  // ── Historial de mermas ───────────────────────────────────
+  let _mrmRowsCache = [];
+
+  function _escucharMermas() {
+    _unsubs.forEach(u => u?.()); _unsubs = [];
+    const tipoFil = document.getElementById("mrm-tipo-fil")?.value || "";
+    const desde   = document.getElementById("mrm-desde")?.value;
+    const hasta   = document.getElementById("mrm-hasta")?.value;
+    const [dy,dm,dd] = (desde||"").split("-").map(Number);
+    const [hy,hm,hd] = (hasta||"").split("-").map(Number);
+    const desdeTs = desde ? new Date(dy,dm-1,dd,0,0,0).getTime() : Date.now()-30*86400000;
+    const hastaTs = hasta ? new Date(hy,hm-1,hd,23,59,59).getTime() : Date.now();
+
+    let cs = [where("tipo","==","MERMA"), where("_ts",">=",desdeTs), where("_ts","<=",hastaTs),
+      orderBy("_ts","desc"), limit(500)];
+    const q = query(collection(db, "movimientos_stock"), ...cs);
+
+    const MOTIVO_ICON = { ROTURA:"💥", DERRAME:"💧", VENCIMIENTO:"📅", PERDIDA:"❓", OTRO:"📝" };
+    const MOTIVO_LBL  = { ROTURA:"Rotura", DERRAME:"Derrame", VENCIMIENTO:"Vencimiento", PERDIDA:"Pérdida", OTRO:"Otro" };
+
+    _unsubs.push(onSnapshot(q, snap => {
+      let rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (tipoFil) rows = rows.filter(r => r.motivoMerma === tipoFil);
+      _mrmRowsCache = rows;
+
+      // KPIs
+      const mes0 = new Date(); mes0.setDate(1); mes0.setHours(0,0,0,0);
+      const delMes = rows.filter(r => r._ts >= mes0.getTime());
+      const unidades = delMes.reduce((s,r) => s + (r.cantidad||0), 0);
+      const el = id => document.getElementById(id);
+      if (el("mrm-kpi-total"))    el("mrm-kpi-total").textContent   = delMes.length;
+      if (el("mrm-kpi-unidades")) el("mrm-kpi-unidades").textContent = unidades;
+      // Valor: buscamos en _allRows
+      const valorMes = delMes.reduce((s,r) => {
+        const prod = _allRows.find(p => p.id === r.productoId);
+        return s + (r.cantidad||0) * (prod?.costo||0);
+      }, 0);
+      if (el("mrm-kpi-valor")) el("mrm-kpi-valor").textContent = fmtMXN(valorMes);
+
+      const tbody = document.getElementById("mrm-body");
+      if (!tbody) return;
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text-sec)">Sin mermas registradas en el período</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = rows.map(r => `<tr>
+        <td style="font-size:11px;white-space:nowrap">${fmtFecha(r._ts)}</td>
+        <td style="font-weight:600">${esc(r.nombreProducto||r.productoId||"–")}</td>
+        <td>
+          <span style="font-size:13px">${MOTIVO_ICON[r.motivoMerma]||"📝"}</span>
+          <span style="font-size:11px;margin-left:4px">${MOTIVO_LBL[r.motivoMerma]||esc(r.motivoMerma||"–")}</span>
+        </td>
+        <td style="text-align:right;font-weight:700;color:#DC2626;font-variant-numeric:tabular-nums">${r.cantidad??""}</td>
+        <td style="text-align:right;color:var(--text-sec);font-variant-numeric:tabular-nums">${r.stockAntes??""}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${r.stockDespues??""}</td>
+        <td style="font-size:11px;color:var(--text-sec);max-width:180px">${esc(r.motivo||"–")}</td>
+        <td style="font-size:11px">${esc(r.quienRegistro||"sistema")}</td>
+      </tr>`).join("");
+    }, err => console.error("[Mermas]", err)));
+  }
+
+  document.getElementById("mrm-filtrar")?.addEventListener("click", _escucharMermas);
+  document.getElementById("mrm-xlsx-btn")?.addEventListener("click", () => {
+    if (!_mrmRowsCache.length) { window.toast?.("Sin datos","warning"); return; }
+    const MOTIVO_LBL = { ROTURA:"Rotura", DERRAME:"Derrame", VENCIMIENTO:"Vencimiento", PERDIDA:"Pérdida", OTRO:"Otro" };
+    const h = ["Fecha","Producto","Motivo","Cantidad","Stock antes","Stock después","Observaciones","Registró"];
+    const d = _mrmRowsCache.map(r => [
+      fmtFecha(r._ts), r.nombreProducto||"", MOTIVO_LBL[r.motivoMerma]||r.motivoMerma||"",
+      r.cantidad??0, r.stockAntes??0, r.stockDespues??0, r.motivo||"", r.quienRegistro||""
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([h,...d]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Mermas");
+    XLSX.writeFile(wb, `N10-mermas-${new Date().toISOString().slice(0,10)}.xlsx`);
+    window.toast?.("Exportando Excel…","info");
+  });
+
+  _escucharMermas();
 }

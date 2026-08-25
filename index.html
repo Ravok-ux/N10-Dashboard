@@ -22,7 +22,33 @@
     // Registro del Service Worker (PWA)
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => {
+            // Detectar actualizaciones mientras la tab está abierta
+            reg.addEventListener('updatefound', () => {
+              const newSW = reg.installing;
+              if (!newSW) return;
+              newSW.addEventListener('statechange', () => {
+                if (newSW.state === 'activated') {
+                  // El nuevo SW ya tomó control: recargar silenciosamente
+                  window.location.reload();
+                }
+              });
+            });
+          })
+          .catch(() => {});
+
+        // Mensaje del SW cuando ya activó y reclamó clientes
+        navigator.serviceWorker.addEventListener('message', e => {
+          if (e.data?.type === 'SW_UPDATED') {
+            window.location.reload();
+          }
+        });
+
+        // Si el controller cambió (nuevo SW tomó control de una tab ya abierta)
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          window.location.reload();
+        });
       });
     }
   </script>
@@ -198,6 +224,9 @@
         <a class="sb-item" href="#" data-view="logistica">
           <span class="sb-icon">🚗</span> Logística de visitas
         </a>
+        <a class="sb-item" href="#" data-view="agroquimico">
+          <span class="sb-icon">🌿</span> Agroquímico
+        </a>
         <a class="sb-item" href="#" data-view="juridico" id="sb-juridico">
           <span class="sb-icon">⚖️</span> Jurídico
         </a>
@@ -240,6 +269,9 @@
         </a>
         <a class="sb-item" href="#" data-view="config_intereses">
           <span class="sb-icon">📊</span> Tasas de interés
+        </a>
+        <a class="sb-item" href="#" data-view="bi_analytics">
+          <span class="sb-icon">🧠</span> BI &amp; Analytics
         </a>
         <a class="sb-item" href="#" data-view="reportes">
           <span class="sb-icon">📈</span> Reportes
@@ -354,6 +386,7 @@
       <div class="view" id="view-reabasto"></div>
       <div class="view" id="view-crm"></div>
       <div class="view" id="view-logistica"></div>
+      <div class="view" id="view-agroquimico"></div>
       <div class="view" id="view-chat"></div>
       <div class="view" id="view-rh"></div>
       <div class="view" id="view-auditoria"></div>
@@ -374,6 +407,7 @@
       <div class="view" id="view-mi_rh"></div>
       <div class="view" id="view-juridico"></div>
       <div class="view" id="view-reportes_custom"></div>
+      <div class="view" id="view-bi_analytics"></div>
       <div class="view" id="view-caja"></div>
       <div class="view" id="view-gastos"></div>
     </div>

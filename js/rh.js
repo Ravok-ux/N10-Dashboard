@@ -18,10 +18,12 @@ const fmtHora  = ts => ts ? new Date(typeof ts === "number" ? ts : ts.toMillis?.
   .toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }) : "—";
 
 const TABS = [
-  { id: "asistencia", label: "📅 Asistencia"  },
-  { id: "vacaciones", label: "🏖️ Vacaciones"  },
-  { id: "anticipos",  label: "💵 Anticipos"   },
-  { id: "nomina",     label: "💼 Nómina"      },
+  { id: "asistencia",  label: "📅 Asistencia"    },
+  { id: "vacaciones",  label: "🏖️ Vacaciones"    },
+  { id: "anticipos",   label: "💵 Anticipos"     },
+  { id: "nomina",      label: "💼 Nómina"        },
+  { id: "evaluacion",  label: "⭐ Evaluación"    },
+  { id: "reclutamiento", label: "🧑‍💼 Reclutamiento" },
 ];
 
 let _tabActiva  = "asistencia";
@@ -80,10 +82,12 @@ function _bindTabs() {
 function _activarTab(tab) {
   _tabActiva = tab;
   _unsubs.forEach(u => u?.()); _unsubs = [];
-  if (tab === "asistencia") _montarAsistencia();
-  else if (tab === "vacaciones") _montarVacaciones();
-  else if (tab === "anticipos")  _montarAnticipos();
-  else if (tab === "nomina")     _montarNomina();
+  if (tab === "asistencia")    _montarAsistencia();
+  else if (tab === "vacaciones")   _montarVacaciones();
+  else if (tab === "anticipos")    _montarAnticipos();
+  else if (tab === "nomina")       _montarNomina();
+  else if (tab === "evaluacion")   _montarEvaluacion();
+  else if (tab === "reclutamiento") _montarReclutamiento();
 }
 
 // ── Cargar lista de usuarios ──────────────────────────────────
@@ -110,10 +114,17 @@ function _montarAsistencia() {
 
   content.innerHTML = `
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+      <select class="sel-sm" id="asi-vista">
+        <option value="dia">Vista por día</option>
+        <option value="mes">Resumen mensual</option>
+      </select>
       <select class="sel-sm" id="asi-filtro-uid">${_optUsuarios()}</select>
       <input type="date" class="sel-sm" id="asi-filtro-fecha"
         value="${new Date().toISOString().slice(0,10)}">
+      <input type="month" class="sel-sm hidden" id="asi-filtro-mes"
+        value="${new Date().toISOString().slice(0,7)}">
       <button class="btn-primary" id="asi-reg-btn">+ Registrar asistencia</button>
+      <button id="asi-xlsx-btn" style="padding:7px 12px;background:#16A34A;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">⬇️ Excel</button>
     </div>
 
     <!-- KPIs del día -->
@@ -207,6 +218,14 @@ function _montarAsistencia() {
   document.getElementById("asi-guardar")?.addEventListener("click", _guardarAsistencia);
   document.getElementById("asi-filtro-uid")?.addEventListener("change", _escucharAsistencia);
   document.getElementById("asi-filtro-fecha")?.addEventListener("change", _escucharAsistencia);
+  document.getElementById("asi-filtro-mes")?.addEventListener("change", _escucharAsistencia);
+  document.getElementById("asi-xlsx-btn")?.addEventListener("click", _exportarAsistencia);
+  document.getElementById("asi-vista")?.addEventListener("change", e => {
+    const esMes = e.target.value === "mes";
+    document.getElementById("asi-filtro-fecha")?.classList.toggle("hidden", esMes);
+    document.getElementById("asi-filtro-mes")?.classList.toggle("hidden", !esMes);
+    _escucharAsistencia();
+  });
 
   _escucharAsistencia();
 }
@@ -214,10 +233,20 @@ function _montarAsistencia() {
 function _escucharAsistencia() {
   _unsubs.forEach(u => u?.()); _unsubs = [];
   const uid   = document.getElementById("asi-filtro-uid")?.value;
-  const fecha = document.getElementById("asi-filtro-fecha")?.value || new Date().toISOString().slice(0,10);
-  const [y,m,d] = fecha.split("-").map(Number);
-  const desde = new Date(y,m-1,d,0,0,0).getTime();
-  const hasta = new Date(y,m-1,d,23,59,59).getTime();
+  const vista = document.getElementById("asi-vista")?.value || "dia";
+
+  let desde, hasta;
+  if (vista === "mes") {
+    const mes = document.getElementById("asi-filtro-mes")?.value || new Date().toISOString().slice(0,7);
+    const [y,m] = mes.split("-").map(Number);
+    desde = new Date(y,m-1,1,0,0,0).getTime();
+    hasta = new Date(y,m,0,23,59,59).getTime();
+  } else {
+    const fecha = document.getElementById("asi-filtro-fecha")?.value || new Date().toISOString().slice(0,10);
+    const [y,m,d] = fecha.split("-").map(Number);
+    desde = new Date(y,m-1,d,0,0,0).getTime();
+    hasta = new Date(y,m-1,d,23,59,59).getTime();
+  }
 
   let q = query(collection(db, "rh_asistencia"),
     where("fechaTs", ">=", desde), where("fechaTs", "<=", hasta),
@@ -229,12 +258,65 @@ function _escucharAsistencia() {
 
   const unsub = onSnapshot(q, snap => {
     const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    _renderAsistencia(rows);
+    const vista = document.getElementById("asi-vista")?.value || "dia";
+    if (vista === "mes") _renderResumenMensual(rows);
+    else _renderAsistencia(rows);
   }, err => console.error("[RH-Asistencia]", err));
   _unsubs.push(unsub);
 }
 
+function _renderResumenMensual(rows) {
+  // Agrupar por usuario y contar presentes/ausentes/tardanzas
+  const porUid = {};
+  _usuarios.forEach(u => { porUid[u.uid] = { alias:u.alias||u.uid, pres:0, aus:0, tard:0, perm:0, vac:0 }; });
+  rows.forEach(r => {
+    if (!porUid[r.uid]) porUid[r.uid] = { alias:r.alias||r.uid, pres:0, aus:0, tard:0, perm:0, vac:0 };
+    if (r.status === "PRESENTE")   porUid[r.uid].pres++;
+    if (r.status === "AUSENTE")    porUid[r.uid].aus++;
+    if (r.status === "TARDANZA")   porUid[r.uid].tard++;
+    if (r.status === "PERMISO")    porUid[r.uid].perm++;
+    if (r.status === "VACACIONES") porUid[r.uid].vac++;
+  });
+  const totalDias = rows.length ? Math.max(...Object.values(porUid).map(u => u.pres+u.aus+u.tard+u.perm+u.vac), 1) : 1;
+  const filas = Object.values(porUid).map(u => {
+    const total = u.pres+u.aus+u.tard+u.perm+u.vac;
+    const pct   = total ? Math.round(u.pres/total*100) : 0;
+    const col   = pct>=80?"#16A34A":pct>=60?"#D97706":"#DC2626";
+    return `<tr>
+      <td style="font-weight:600">${esc(u.alias)}</td>
+      <td style="text-align:center;color:#16A34A;font-weight:700">${u.pres}</td>
+      <td style="text-align:center;color:#DC2626">${u.aus}</td>
+      <td style="text-align:center;color:#D97706">${u.tard}</td>
+      <td style="text-align:center;color:#6366F1">${u.perm}</td>
+      <td style="text-align:center;color:#A855F7">${u.vac}</td>
+      <td style="text-align:center;font-weight:700;color:${col}">${pct}%</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-sec)">Sin registros</td></tr>`;
+
+  const tbody = document.getElementById("asi-body");
+  const thead = tbody?.closest("table")?.querySelector("thead tr");
+  if (thead) thead.innerHTML = `<th>INGENIERO</th><th>✅ Presentes</th><th>❌ Ausentes</th><th>⏰ Tardanzas</th><th>🟡 Permisos</th><th>🟣 Vacaciones</th><th>% Asistencia</th>`;
+  if (tbody) tbody.innerHTML = filas;
+}
+
+let _asiRowsCache = [];
+function _exportarAsistencia() {
+  if (!_asiRowsCache.length) { window.toast?.("Sin datos para exportar","warning"); return; }
+  const h = ["Ingeniero","Fecha","Check-in","Check-out","Horas","Status","Notas"];
+  const d = _asiRowsCache.map(r => [
+    r.alias||"", r.fecha||"", r.checkIn||"", r.checkOut||"",
+    r.checkIn && r.checkOut ? ((r.checkOutTs-r.checkInTs)/3600000).toFixed(1) : "",
+    r.status||"", r.notas||""
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([h,...d]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Asistencia");
+  XLSX.writeFile(wb, `N10-asistencia-${new Date().toISOString().slice(0,10)}.xlsx`);
+  window.toast?.("Excel generado","info");
+}
+
 function _renderAsistencia(rows) {
+  _asiRowsCache = rows;
   const presentes  = rows.filter(r => r.status === "PRESENTE").length;
   const ausentes   = rows.filter(r => r.status === "AUSENTE").length;
   const tardanzas  = rows.filter(r => r.status === "TARDANZA").length;
@@ -309,6 +391,14 @@ function _montarVacaciones() {
 
   content.innerHTML = `
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+      <select class="sel-sm" id="vac-filtro-tipo">
+        <option value="">Todos los tipos</option>
+        <option value="VACACIONES">Vacaciones</option>
+        <option value="PERMISO_GOCE">Permiso con goce</option>
+        <option value="PERMISO_SIN_GOCE">Permiso sin goce</option>
+        <option value="INCAPACIDAD_IMSS">Incapacidad IMSS</option>
+        <option value="INCAPACIDAD_LABORAL">Incapacidad laboral</option>
+      </select>
       <select class="sel-sm" id="vac-filtro-status">
         <option value="">Todos los estados</option>
         <option value="PENDIENTE">Pendiente</option>
@@ -316,18 +406,27 @@ function _montarVacaciones() {
         <option value="RECHAZADA">Rechazada</option>
       </select>
       <button class="btn-primary" id="vac-nueva-btn">+ Nueva solicitud</button>
+      <button id="vac-saldo-btn" style="padding:7px 12px;background:var(--surface);border:1px solid var(--border);color:var(--text-primary);border-radius:6px;cursor:pointer;font-size:13px">📊 Saldo de días</button>
+    </div>
+
+    <div id="vac-saldo-panel" class="hidden" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">
+      <b style="font-size:13px">Saldo de días de vacaciones por empleado</b>
+      <table class="data-table" id="vac-saldo-table" style="margin-top:10px">
+        <thead><tr><th>Ingeniero</th><th style="text-align:right">Días disponibles</th><th style="text-align:right">Usados</th><th style="text-align:right">Saldo</th><th>Acción</th></tr></thead>
+        <tbody id="vac-saldo-body"><tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text-sec)">Cargando…</td></tr></tbody>
+      </table>
     </div>
 
     <table class="data-table">
       <thead>
         <tr>
-          <th>INGENIERO</th><th>DESDE</th><th>HASTA</th><th>DÍAS</th>
+          <th>INGENIERO</th><th>TIPO</th><th>DESDE</th><th>HASTA</th><th>DÍAS</th>
           <th>MOTIVO</th><th>STATUS</th><th>SOLICITADA</th>
           ${puedeApr ? "<th>ACCIÓN</th>" : ""}
         </tr>
       </thead>
       <tbody id="vac-body">
-        <tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text-sec)">Cargando…</td></tr>
+        <tr><td colspan="9" style="padding:24px;text-align:center;color:var(--text-sec)">Cargando…</td></tr>
       </tbody>
     </table>
 
@@ -343,6 +442,16 @@ function _montarVacaciones() {
             <label class="form-label">Ingeniero</label>
             <select class="form-input" id="vac-uid">${_optUsuarios()}</select>
           </div>
+          <div class="form-group">
+            <label class="form-label">Tipo de ausencia</label>
+            <select class="form-input" id="vac-tipo">
+              <option value="VACACIONES">🏖️ Vacaciones anuales</option>
+              <option value="PERMISO_GOCE">✅ Permiso con goce de sueldo</option>
+              <option value="PERMISO_SIN_GOCE">⚠️ Permiso sin goce de sueldo</option>
+              <option value="INCAPACIDAD_IMSS">🏥 Incapacidad IMSS</option>
+              <option value="INCAPACIDAD_LABORAL">🤕 Incapacidad laboral</option>
+            </select>
+          </div>
           <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
             <div class="form-group">
               <label class="form-label">Fecha inicio</label>
@@ -352,6 +461,10 @@ function _montarVacaciones() {
               <label class="form-label">Fecha fin</label>
               <input class="form-input" type="date" id="vac-hasta">
             </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Folio IMSS / Documento (opcional)</label>
+            <input class="form-input" type="text" id="vac-folio" placeholder="Folio de incapacidad o referencia">
           </div>
           <div class="form-group">
             <label class="form-label">Motivo / notas</label>
@@ -373,15 +486,24 @@ function _montarVacaciones() {
     document.getElementById("vac-modal")?.classList.add("hidden"));
   document.getElementById("vac-guardar")?.addEventListener("click", _guardarVacacion);
   document.getElementById("vac-filtro-status")?.addEventListener("change", _escucharVacaciones);
+  document.getElementById("vac-filtro-tipo")?.addEventListener("change", _escucharVacaciones);
+  document.getElementById("vac-saldo-btn")?.addEventListener("click", () => {
+    const panel = document.getElementById("vac-saldo-panel");
+    panel?.classList.toggle("hidden");
+    if (!panel?.classList.contains("hidden")) _cargarSaldosVacaciones();
+  });
 
   _escucharVacaciones();
 }
 
 function _escucharVacaciones() {
   _unsubs.forEach(u => u?.()); _unsubs = [];
-  const st = document.getElementById("vac-filtro-status")?.value;
-  let q = query(collection(db, "rh_vacaciones"), orderBy("_ts", "desc"), limit(200));
-  if (st) q = query(collection(db, "rh_vacaciones"), where("status", "==", st), orderBy("_ts", "desc"), limit(200));
+  const st   = document.getElementById("vac-filtro-status")?.value;
+  const tipo = document.getElementById("vac-filtro-tipo")?.value;
+  let constraints = [orderBy("_ts","desc"), limit(300)];
+  if (st)   constraints = [where("status","==",st), ...constraints];
+  if (tipo) constraints = [where("tipo","==",tipo), ...constraints];
+  let q = query(collection(db, "rh_vacaciones"), ...constraints);
 
   const unsub = onSnapshot(q, snap => {
     const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -399,6 +521,11 @@ function _renderVacaciones(rows) {
     tbody.innerHTML = `<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text-sec)">Sin solicitudes</td></tr>`;
     return;
   }
+  const TIPO_LABEL = {
+    VACACIONES:"🏖️ Vacaciones", PERMISO_GOCE:"✅ C/ goce",
+    PERMISO_SIN_GOCE:"⚠️ S/ goce", INCAPACIDAD_IMSS:"🏥 IMSS",
+    INCAPACIDAD_LABORAL:"🤕 Laboral"
+  };
   tbody.innerHTML = rows.map(r => {
     const dias = r.desdeTs && r.hastaTs
       ? Math.round((r.hastaTs - r.desdeTs) / 86400000) + 1 : "–";
@@ -408,6 +535,7 @@ function _renderVacaciones(rows) {
       : `<span style="font-size:11px;color:var(--text-sec)">${r.aprobadaPor || r.rechazadaPor || "—"}</span>`;
     return `<tr>
       <td><b>${esc(r.alias || "–")}</b></td>
+      <td style="font-size:12px">${esc(TIPO_LABEL[r.tipo] || r.tipo || "—")}</td>
       <td>${fmtFecha(r.desdeTs)}</td>
       <td>${fmtFecha(r.hastaTs)}</td>
       <td style="text-align:center">${dias}</td>
@@ -429,10 +557,56 @@ function _renderVacaciones(rows) {
   }
 }
 
+async function _cargarSaldosVacaciones() {
+  const tbody = document.getElementById("vac-saldo-body");
+  if (!tbody) return;
+  try {
+    const snap = await getDocs(query(collection(db,"rh_vacaciones"), where("status","==","APROBADA"), where("tipo","==","VACACIONES"), limit(500)));
+    const diasUsados = {};
+    snap.docs.forEach(d => {
+      const r = d.data();
+      const dias = r.desdeTs && r.hastaTs ? Math.round((r.hastaTs-r.desdeTs)/86400000)+1 : 0;
+      if (!diasUsados[r.uid]) diasUsados[r.uid] = 0;
+      diasUsados[r.uid] += dias;
+    });
+    tbody.innerHTML = _usuarios.map(u => {
+      const disponibles = u.diasVacaciones || 15;
+      const usados      = diasUsados[u.uid] || 0;
+      const saldo       = disponibles - usados;
+      const col         = saldo>7?"#16A34A":saldo>0?"#D97706":"#DC2626";
+      return `<tr>
+        <td style="font-weight:600">${esc(u.alias||u.uid)}</td>
+        <td style="text-align:right">${disponibles}</td>
+        <td style="text-align:right;color:#DC2626">${usados}</td>
+        <td style="text-align:right;font-weight:700;color:${col}">${saldo}</td>
+        <td>
+          <button class="btn-sm btn-outline" data-uid="${u.uid}" data-alias="${esc(u.alias)}" data-dias="${disponibles}" data-act="editar-dias">✏️ Editar</button>
+        </td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text-sec)">Sin empleados</td></tr>`;
+
+    tbody.querySelectorAll("[data-act='editar-dias']").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const dias = parseInt(await window.promptModal({ title:`Días de vacaciones — ${btn.dataset.alias}`, label:"Días disponibles al año", placeholder:"15" }) || "");
+        if (isNaN(dias) || dias < 0) return;
+        await updateDoc(doc(db,"usuarios",btn.dataset.uid), { diasVacaciones: dias }).catch(e => window.toast?.(e.message,"error"));
+        const u = _usuarios.find(x => x.uid===btn.dataset.uid);
+        if (u) u.diasVacaciones = dias;
+        _cargarSaldosVacaciones();
+        window.toast?.("Saldo actualizado","success");
+      });
+    });
+  } catch(e) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#DC2626">${esc(e.message)}</td></tr>`;
+  }
+}
+
 async function _guardarVacacion() {
   const uid    = document.getElementById("vac-uid")?.value;
+  const tipo   = document.getElementById("vac-tipo")?.value || "VACACIONES";
   const desde  = document.getElementById("vac-desde")?.value;
   const hasta  = document.getElementById("vac-hasta")?.value;
+  const folio  = document.getElementById("vac-folio")?.value.trim();
   const motivo = document.getElementById("vac-motivo")?.value.trim();
   if (!uid || !desde || !hasta) { window.toast?.("Completa todos los campos", "error"); return; }
   const usuario = _usuarios.find(u => u.uid === uid);
@@ -445,8 +619,8 @@ async function _guardarVacacion() {
   btn.disabled = true; btn.textContent = "Enviando…";
   try {
     await addDoc(collection(db, "rh_vacaciones"), {
-      uid, alias: usuario?.alias || uid, desde, hasta, desdeTs, hastaTs,
-      motivo, status: "PENDIENTE", solicitadaPor: Sesion.alias,
+      uid, alias: usuario?.alias || uid, tipo, desde, hasta, desdeTs, hastaTs,
+      folio: folio || "", motivo, status: "PENDIENTE", solicitadaPor: Sesion.alias,
       timestamp: serverTimestamp(), _ts: Date.now()
     });
     window.toast?.("Solicitud enviada", "success");
@@ -940,4 +1114,545 @@ function _exportarNomina() {
   XLSX.utils.book_append_sheet(wb, ws, "Nómina");
   XLSX.writeFile(wb, `N10-nomina-${desde}-${hasta}.xlsx`);
   window.toast?.("Exportando Excel…","info");
+}
+
+// ══════════════════════════════════════════════════════════════
+// EVALUACIÓN DE DESEMPEÑO
+// Ciclo 360°: 5 criterios con calificación 1-5 + promedio
+// Colecciones: rh_evaluaciones
+// ══════════════════════════════════════════════════════════════
+const CRITERIOS = [
+  { id:"metas",      label:"🎯 Cumplimiento de metas de venta" },
+  { id:"puntual",    label:"⏰ Puntualidad y asistencia"       },
+  { id:"actitud",    label:"😊 Actitud y proactividad"         },
+  { id:"equipo",     label:"🤝 Trabajo en equipo"              },
+  { id:"conocim",    label:"🌱 Conocimiento técnico / producto" },
+];
+
+function _montarEvaluacion() {
+  const puedeApr = _puedeAprobar();
+  const content  = document.getElementById("rh-content");
+  content.innerHTML = `
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+      <select class="sel-sm" id="ev-filtro-uid">${_optUsuarios()}</select>
+      ${puedeApr ? `<button class="btn-primary" id="ev-nueva-btn">+ Nueva evaluación</button>` : ""}
+    </div>
+
+    <table class="data-table">
+      <thead><tr>
+        <th>INGENIERO</th><th>PERÍODO</th>
+        ${CRITERIOS.map(c => `<th title="${c.label}" style="text-align:center">${c.id.slice(0,5)}</th>`).join("")}
+        <th style="text-align:center">PROM.</th><th>COMENTARIO</th><th>EVALUADOR</th><th>FECHA</th>
+      </tr></thead>
+      <tbody id="ev-body">
+        <tr><td colspan="${7+CRITERIOS.length}" style="padding:24px;text-align:center;color:var(--text-sec)">Cargando…</td></tr>
+      </tbody>
+    </table>
+
+    <!-- Modal evaluación -->
+    <div class="modal-overlay hidden" id="ev-modal">
+      <div class="modal-box" style="max-width:520px">
+        <div class="modal-hdr">
+          <span class="modal-title">Nueva evaluación de desempeño</span>
+          <button class="modal-close" id="ev-modal-close">✕</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label class="form-label">Ingeniero</label>
+              <select class="form-input" id="ev-uid">${_optUsuarios()}</select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Período evaluado</label>
+              <input class="form-input" type="text" id="ev-periodo" placeholder="Q2 2026 / Sem 1 2026">
+            </div>
+          </div>
+
+          <div style="background:var(--surface2);border-radius:8px;padding:14px">
+            <p style="font-size:12px;color:var(--text-sec);margin-bottom:12px">
+              Califica del <b>1</b> (deficiente) al <b>5</b> (excelente) cada criterio:
+            </p>
+            ${CRITERIOS.map(c => `
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+                <label style="flex:1;font-size:13px">${c.label}</label>
+                <div style="display:flex;gap:4px" id="stars-${c.id}">
+                  ${[1,2,3,4,5].map(n =>
+                    `<button type="button" class="ev-star" data-crit="${c.id}" data-val="${n}"
+                      style="width:30px;height:30px;border-radius:50%;border:2px solid var(--border);background:var(--surface);
+                        cursor:pointer;font-size:16px;line-height:1">⭐</button>`
+                  ).join("")}
+                </div>
+                <span class="ev-star-val" id="val-${c.id}" style="width:16px;text-align:center;font-weight:700;color:var(--text-sec)">—</span>
+              </div>`
+            ).join("")}
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Comentarios generales</label>
+            <textarea class="form-input" id="ev-comentario" rows="3" placeholder="Fortalezas, áreas de mejora, objetivos próximo período…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-outline" id="ev-cancel">Cancelar</button>
+          <button class="btn-primary" id="ev-guardar">Guardar evaluación</button>
+        </div>
+      </div>
+    </div>`;
+
+  if (puedeApr) {
+    document.getElementById("ev-nueva-btn")?.addEventListener("click", () => {
+      // Reset estrellas
+      CRITERIOS.forEach(c => {
+        document.querySelectorAll(`[data-crit="${c.id}"]`).forEach(btn => btn.style.background = "var(--surface)");
+        const valEl = document.getElementById(`val-${c.id}`);
+        if (valEl) valEl.textContent = "—";
+      });
+      document.getElementById("ev-modal")?.classList.remove("hidden");
+    });
+  }
+  document.getElementById("ev-modal-close")?.addEventListener("click", () =>
+    document.getElementById("ev-modal")?.classList.add("hidden"));
+  document.getElementById("ev-cancel")?.addEventListener("click", () =>
+    document.getElementById("ev-modal")?.classList.add("hidden"));
+  document.getElementById("ev-guardar")?.addEventListener("click", _guardarEvaluacion);
+  document.getElementById("ev-filtro-uid")?.addEventListener("change", _escucharEvaluaciones);
+
+  // Interacción estrellas
+  document.getElementById("ev-modal")?.addEventListener("click", e => {
+    const btn = e.target.closest(".ev-star");
+    if (!btn) return;
+    const { crit, val } = btn.dataset;
+    const n = parseInt(val);
+    document.querySelectorAll(`[data-crit="${crit}"]`).forEach((b, i) => {
+      b.style.background = i < n ? "#FBBF24" : "var(--surface)";
+    });
+    const valEl = document.getElementById(`val-${crit}`);
+    if (valEl) { valEl.textContent = n; valEl.style.color = "var(--text-primary)"; }
+  });
+
+  _escucharEvaluaciones();
+}
+
+function _escucharEvaluaciones() {
+  _unsubs.forEach(u => u?.()); _unsubs = [];
+  const uid = document.getElementById("ev-filtro-uid")?.value;
+  let q = query(collection(db,"rh_evaluaciones"), orderBy("_ts","desc"), limit(200));
+  if (uid) q = query(collection(db,"rh_evaluaciones"), where("uid","==",uid), orderBy("_ts","desc"), limit(200));
+  const unsub = onSnapshot(q, snap => {
+    _renderEvaluaciones(snap.docs.map(d => ({ id:d.id, ...d.data() })));
+  }, err => console.error("[RH-Eval]",err));
+  _unsubs.push(unsub);
+}
+
+function _renderEvaluaciones(rows) {
+  const tbody = document.getElementById("ev-body");
+  if (!tbody) return;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="${7+CRITERIOS.length}" style="padding:24px;text-align:center;color:var(--text-sec)">Sin evaluaciones</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const califs = CRITERIOS.map(c => r.calificaciones?.[c.id] || 0);
+    const prom   = califs.reduce((s,v)=>s+v,0)/CRITERIOS.length;
+    const col    = prom>=4?"#16A34A":prom>=3?"#D97706":"#DC2626";
+    const stars  = (n) => "⭐".repeat(Math.round(n)) || "—";
+    return `<tr>
+      <td style="font-weight:600">${esc(r.alias||"—")}</td>
+      <td style="font-size:12px">${esc(r.periodo||"—")}</td>
+      ${califs.map(v => `<td style="text-align:center;font-weight:600;color:${v>=4?"#16A34A":v>=3?"#D97706":"#DC2626"}">${v||"—"}</td>`).join("")}
+      <td style="text-align:center;font-weight:800;font-size:16px;color:${col}">${prom.toFixed(1)}</td>
+      <td style="font-size:12px;color:var(--text-sec);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.comentario||"—")}</td>
+      <td style="font-size:11px;color:var(--text-sec)">${esc(r.evaluadoPor||"—")}</td>
+      <td style="font-size:11px;color:var(--text-sec)">${fmtFecha(r._ts)}</td>
+    </tr>`;
+  }).join("");
+}
+
+async function _guardarEvaluacion() {
+  const uid      = document.getElementById("ev-uid")?.value;
+  const periodo  = document.getElementById("ev-periodo")?.value.trim();
+  const coment   = document.getElementById("ev-comentario")?.value.trim();
+  if (!uid || !periodo) { window.toast?.("Selecciona ingeniero y período","error"); return; }
+
+  const calificaciones = {};
+  for (const c of CRITERIOS) {
+    const val = parseInt(document.getElementById(`val-${c.id}`)?.textContent || "0");
+    if (!val) { window.toast?.(`Califica el criterio: ${c.label}`,"warning"); return; }
+    calificaciones[c.id] = val;
+  }
+
+  const usuario = _usuarios.find(u => u.uid === uid);
+  const btn = document.getElementById("ev-guardar");
+  btn.disabled = true; btn.textContent = "Guardando…";
+  try {
+    await addDoc(collection(db,"rh_evaluaciones"), {
+      uid, alias: usuario?.alias||uid, periodo,
+      calificaciones, comentario: coment,
+      evaluadoPor: Sesion.alias,
+      timestamp: serverTimestamp(), _ts: Date.now()
+    });
+    window.toast?.("Evaluación guardada","success");
+    document.getElementById("ev-modal")?.classList.add("hidden");
+  } catch(e) { window.toast?.(e.message,"error"); }
+  finally { btn.disabled=false; btn.textContent="Guardar evaluación"; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RECLUTAMIENTO & ONBOARDING
+// Vacantes → Candidatos → Pipeline → Checklist alta empleado
+// Colecciones: rh_vacantes, rh_candidatos
+// ══════════════════════════════════════════════════════════════
+const PIPELINE = ["Postulado","Entrevista","Prueba técnica","Oferta enviada","Contratado","Rechazado"];
+const PIPELINE_COL = {
+  "Postulado":"badge-gray","Entrevista":"badge-blue","Prueba técnica":"badge-amber",
+  "Oferta enviada":"badge-yellow","Contratado":"badge-green","Rechazado":"badge-red"
+};
+const CHECKLIST_ITEMS = [
+  "Contrato firmado","Alta IMSS registrada","Credencial / INE entregada",
+  "Comprobante domicilio","RFC y CURP en expediente","Cuenta bancaria registrada",
+  "Celular de empresa asignado","Acceso al sistema creado","Ruta y zona asignada",
+  "Inducción completada","Primer checkin de campo"
+];
+
+let _vacantes = [];
+
+function _montarReclutamiento() {
+  const puedeApr = _puedeAprobar();
+  const content  = document.getElementById("rh-content");
+  content.innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+      <select class="sel-sm" id="rec-vista">
+        <option value="vacantes">📋 Vacantes</option>
+        <option value="candidatos">👤 Candidatos</option>
+        <option value="onboarding">✅ Onboarding</option>
+      </select>
+      <div id="rec-acciones"></div>
+    </div>
+    <div id="rec-content"></div>`;
+
+  document.getElementById("rec-vista")?.addEventListener("change", e => _activarVistaRec(e.target.value));
+  _activarVistaRec("vacantes");
+}
+
+function _activarVistaRec(vista) {
+  const puedeApr = _puedeAprobar();
+  const accEl = document.getElementById("rec-acciones");
+  if (accEl) {
+    accEl.innerHTML = vista === "vacantes"
+      ? (puedeApr ? `<button class="btn-primary" id="rec-nueva-vac">+ Nueva vacante</button>` : "")
+      : vista === "candidatos"
+      ? `<button class="btn-primary" id="rec-nuevo-cand">+ Agregar candidato</button>`
+      : "";
+  }
+  if (vista === "vacantes")    _mostrarVacantes();
+  if (vista === "candidatos")  _mostrarCandidatos();
+  if (vista === "onboarding")  _mostrarOnboarding();
+}
+
+// ── Vacantes ───────────────────────────────────────────────────
+function _mostrarVacantes() {
+  _unsubs.forEach(u => u?.()); _unsubs = [];
+  const el = document.getElementById("rec-content");
+  el.innerHTML = `
+    <table class="data-table">
+      <thead><tr><th>PUESTO</th><th>ZONA</th><th>SALARIO PROPUESTO</th><th>STATUS</th><th>CREADA</th><th>ACCIÓN</th></tr></thead>
+      <tbody id="vac-list-body"><tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-sec)">Cargando…</td></tr></tbody>
+    </table>
+
+    <!-- Modal nueva vacante -->
+    <div class="modal-overlay hidden" id="rec-vac-modal">
+      <div class="modal-box" style="max-width:420px">
+        <div class="modal-hdr">
+          <span class="modal-title">Nueva vacante</span>
+          <button class="modal-close" id="rec-vac-close">✕</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+          <div class="form-group">
+            <label class="form-label">Puesto</label>
+            <input class="form-input" type="text" id="rec-puesto" placeholder="Ingeniero agrónomo, Recuperador de cartera…">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label class="form-label">Zona</label>
+              <input class="form-input" type="text" id="rec-zona-vac" placeholder="Norte, Sur…">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Salario semanal propuesto</label>
+              <input class="form-input" type="number" id="rec-salario" min="0" step="50" placeholder="0.00">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descripción / requisitos</label>
+            <textarea class="form-input" id="rec-desc" rows="3" placeholder="Experiencia requerida, estudios, disponibilidad…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-outline" id="rec-vac-cancel">Cancelar</button>
+          <button class="btn-primary" id="rec-vac-guardar">Crear vacante</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("rec-nueva-vac")?.addEventListener("click", () =>
+    document.getElementById("rec-vac-modal")?.classList.remove("hidden"));
+  document.getElementById("rec-vac-close")?.addEventListener("click", () =>
+    document.getElementById("rec-vac-modal")?.classList.add("hidden"));
+  document.getElementById("rec-vac-cancel")?.addEventListener("click", () =>
+    document.getElementById("rec-vac-modal")?.classList.add("hidden"));
+  document.getElementById("rec-vac-guardar")?.addEventListener("click", _crearVacante);
+
+  const unsub = onSnapshot(
+    query(collection(db,"rh_vacantes"), orderBy("_ts","desc"), limit(100)),
+    snap => {
+      _vacantes = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      const tbody = document.getElementById("vac-list-body");
+      if (!tbody) return;
+      tbody.innerHTML = _vacantes.map(v => `<tr>
+        <td style="font-weight:600">${esc(v.puesto||"—")}</td>
+        <td>${esc(v.zona||"—")}</td>
+        <td>${fmtMXN(v.salario)}/sem</td>
+        <td><span class="badge ${v.status==="ABIERTA"?"badge-green":v.status==="CUBIERTA"?"badge-purple":"badge-gray"}">${esc(v.status||"ABIERTA")}</span></td>
+        <td style="font-size:11px;color:var(--text-sec)">${fmtFecha(v._ts)}</td>
+        <td>
+          ${_puedeAprobar() ? `<button class="btn-sm btn-outline" data-id="${v.id}" data-act="cerrar">✓ Cubrir</button>` : ""}
+        </td>
+      </tr>`).join("") || `<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-sec)">Sin vacantes</td></tr>`;
+
+      tbody.querySelectorAll("[data-act='cerrar']").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          await updateDoc(doc(db,"rh_vacantes",btn.dataset.id), { status:"CUBIERTA" }).catch(e => window.toast?.(e.message,"error"));
+          window.toast?.("Vacante marcada como cubierta","success");
+        });
+      });
+    }, err => console.error("[RH-Vacantes]",err)
+  );
+  _unsubs.push(unsub);
+}
+
+async function _crearVacante() {
+  const puesto  = document.getElementById("rec-puesto")?.value.trim();
+  const zona    = document.getElementById("rec-zona-vac")?.value.trim();
+  const salario = parseFloat(document.getElementById("rec-salario")?.value||"0");
+  const desc    = document.getElementById("rec-desc")?.value.trim();
+  if (!puesto) { window.toast?.("Ingresa el nombre del puesto","error"); return; }
+  const btn = document.getElementById("rec-vac-guardar");
+  btn.disabled=true; btn.textContent="Creando…";
+  try {
+    await addDoc(collection(db,"rh_vacantes"), {
+      puesto, zona, salario, descripcion: desc,
+      status:"ABIERTA", creadoPor: Sesion.alias,
+      timestamp: serverTimestamp(), _ts: Date.now()
+    });
+    window.toast?.("Vacante creada","success");
+    document.getElementById("rec-vac-modal")?.classList.add("hidden");
+  } catch(e) { window.toast?.(e.message,"error"); }
+  finally { btn.disabled=false; btn.textContent="Crear vacante"; }
+}
+
+// ── Candidatos ─────────────────────────────────────────────────
+function _mostrarCandidatos() {
+  _unsubs.forEach(u => u?.()); _unsubs = [];
+  const el = document.getElementById("rec-content");
+  el.innerHTML = `
+    <div style="margin-bottom:12px">
+      <select class="sel-sm" id="cand-filtro-vac">
+        <option value="">Todas las vacantes</option>
+        ${_vacantes.map(v => `<option value="${v.id}">${esc(v.puesto)}</option>`).join("")}
+      </select>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>CANDIDATO</th><th>VACANTE</th><th>ETAPA</th><th>TELÉFONO</th><th>NOTAS</th><th>ACCIÓN</th></tr></thead>
+      <tbody id="cand-body"><tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-sec)">Cargando…</td></tr></tbody>
+    </table>
+
+    <!-- Modal candidato -->
+    <div class="modal-overlay hidden" id="cand-modal">
+      <div class="modal-box" style="max-width:420px">
+        <div class="modal-hdr">
+          <span class="modal-title">Agregar candidato</span>
+          <button class="modal-close" id="cand-close">✕</button>
+        </div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+          <div class="form-group">
+            <label class="form-label">Nombre completo</label>
+            <input class="form-input" type="text" id="cand-nombre" placeholder="Nombre del candidato">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label class="form-label">Vacante</label>
+              <select class="form-input" id="cand-vacante-id">
+                <option value="">Sin vacante</option>
+                ${_vacantes.filter(v=>v.status==="ABIERTA").map(v=>`<option value="${v.id}">${esc(v.puesto)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Teléfono</label>
+              <input class="form-input" type="tel" id="cand-tel" placeholder="10 dígitos">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notas</label>
+            <textarea class="form-input" id="cand-notas" rows="2" placeholder="Fuente, referencias, experiencia…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-outline" id="cand-cancel">Cancelar</button>
+          <button class="btn-primary" id="cand-guardar">Agregar</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("rec-nuevo-cand")?.addEventListener("click", () =>
+    document.getElementById("cand-modal")?.classList.remove("hidden"));
+  document.getElementById("cand-close")?.addEventListener("click", () =>
+    document.getElementById("cand-modal")?.classList.add("hidden"));
+  document.getElementById("cand-cancel")?.addEventListener("click", () =>
+    document.getElementById("cand-modal")?.classList.add("hidden"));
+  document.getElementById("cand-guardar")?.addEventListener("click", _crearCandidato);
+  document.getElementById("cand-filtro-vac")?.addEventListener("change", () => _escucharCandidatos());
+  _escucharCandidatos();
+}
+
+function _escucharCandidatos() {
+  _unsubs.filter((_, i) => i > 0).forEach(u => u?.());  // mantener solo primera unsub de vacantes
+  const vacId = document.getElementById("cand-filtro-vac")?.value;
+  let q = query(collection(db,"rh_candidatos"), orderBy("_ts","desc"), limit(200));
+  if (vacId) q = query(collection(db,"rh_candidatos"), where("vacanteId","==",vacId), orderBy("_ts","desc"), limit(200));
+  const unsub = onSnapshot(q, snap => {
+    const rows = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    const tbody = document.getElementById("cand-body");
+    if (!tbody) return;
+    tbody.innerHTML = rows.map(r => {
+      const v = _vacantes.find(x => x.id===r.vacanteId);
+      const opts = PIPELINE.map(p => `<option value="${p}" ${r.etapa===p?"selected":""}>${p}</option>`).join("");
+      return `<tr>
+        <td style="font-weight:600">${esc(r.nombre||"—")}</td>
+        <td style="font-size:12px">${esc(v?.puesto||r.vacanteId||"—")}</td>
+        <td><span class="badge ${PIPELINE_COL[r.etapa]||"badge-gray"}">${esc(r.etapa||"Postulado")}</span></td>
+        <td style="font-size:12px">${esc(r.telefono||"—")}</td>
+        <td style="font-size:12px;color:var(--text-sec);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.notas||"—")}</td>
+        <td>
+          <select class="sel-sm" style="font-size:11px" data-id="${r.id}" data-act="etapa">${opts}</select>
+        </td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-sec)">Sin candidatos</td></tr>`;
+
+    tbody.querySelectorAll("[data-act='etapa']").forEach(sel => {
+      sel.addEventListener("change", async () => {
+        await updateDoc(doc(db,"rh_candidatos",sel.dataset.id), { etapa: sel.value })
+          .catch(e => window.toast?.(e.message,"error"));
+        if (sel.value === "Contratado") {
+          window.toast?.("✅ Candidato contratado — recuerda crear el checklist de onboarding","success");
+        }
+      });
+    });
+  }, err => console.error("[RH-Candidatos]",err));
+  _unsubs.push(unsub);
+}
+
+async function _crearCandidato() {
+  const nombre   = document.getElementById("cand-nombre")?.value.trim();
+  const vacanteId= document.getElementById("cand-vacante-id")?.value;
+  const telefono = document.getElementById("cand-tel")?.value.trim();
+  const notas    = document.getElementById("cand-notas")?.value.trim();
+  if (!nombre) { window.toast?.("Ingresa el nombre del candidato","error"); return; }
+  const btn = document.getElementById("cand-guardar");
+  btn.disabled=true; btn.textContent="Guardando…";
+  try {
+    await addDoc(collection(db,"rh_candidatos"), {
+      nombre, vacanteId, telefono, notas, etapa:"Postulado",
+      registradoPor: Sesion.alias, timestamp: serverTimestamp(), _ts: Date.now()
+    });
+    window.toast?.("Candidato agregado","success");
+    document.getElementById("cand-modal")?.classList.add("hidden");
+  } catch(e) { window.toast?.(e.message,"error"); }
+  finally { btn.disabled=false; btn.textContent="Agregar"; }
+}
+
+// ── Onboarding ─────────────────────────────────────────────────
+function _mostrarOnboarding() {
+  _unsubs.forEach(u => u?.()); _unsubs = [];
+  const el = document.getElementById("rec-content");
+  el.innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
+      <select class="sel-sm" id="ob-uid">${_optUsuarios("", false)}</select>
+      <button class="btn-primary" id="ob-crear-btn">+ Nuevo checklist</button>
+    </div>
+    <div id="ob-list"></div>`;
+
+  document.getElementById("ob-uid")?.addEventListener("change", _escucharOnboarding);
+  document.getElementById("ob-crear-btn")?.addEventListener("click", _crearOnboarding);
+  _escucharOnboarding();
+}
+
+function _escucharOnboarding() {
+  _unsubs.forEach(u => u?.()); _unsubs = [];
+  const uid = document.getElementById("ob-uid")?.value;
+  let q = query(collection(db,"rh_onboarding"), orderBy("_ts","desc"), limit(50));
+  if (uid) q = query(collection(db,"rh_onboarding"), where("uid","==",uid), orderBy("_ts","desc"), limit(50));
+
+  const unsub = onSnapshot(q, snap => {
+    const rows = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    const el   = document.getElementById("ob-list");
+    if (!el) return;
+    if (!rows.length) {
+      el.innerHTML = `<p style="color:var(--text-sec);padding:24px;text-align:center">Sin checklists de onboarding</p>`;
+      return;
+    }
+    el.innerHTML = rows.map(r => {
+      const items = r.items || CHECKLIST_ITEMS.map(t => ({ texto:t, completado:false }));
+      const done  = items.filter(i=>i.completado).length;
+      const pct   = Math.round(done/items.length*100);
+      const col   = pct===100?"#16A34A":pct>=50?"#D97706":"#DC2626";
+      const itemsHtml = items.map((it,idx) => `
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:5px 0;border-bottom:1px solid var(--border)">
+          <input type="checkbox" ${it.completado?"checked":""} data-doc="${r.id}" data-idx="${idx}">
+          <span style="font-size:13px;${it.completado?"text-decoration:line-through;color:var(--text-sec)":""}">${esc(it.texto)}</span>
+        </label>`).join("");
+      return `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div>
+              <span style="font-weight:700;font-size:14px">${esc(r.alias||r.uid)}</span>
+              <span style="font-size:11px;color:var(--text-sec);margin-left:8px">Alta: ${fmtFecha(r._ts)}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="background:var(--surface2);border-radius:4px;height:8px;width:100px">
+                <div style="background:${col};height:100%;width:${pct}%;border-radius:4px"></div>
+              </div>
+              <span style="font-weight:700;color:${col}">${pct}%</span>
+            </div>
+          </div>
+          <div>${itemsHtml}</div>
+        </div>`;
+    }).join("");
+
+    // Checkboxes
+    el.querySelectorAll("[data-doc][data-idx]").forEach(cb => {
+      cb.addEventListener("change", async () => {
+        const { doc: docId, idx } = cb.dataset;
+        const row = rows.find(r => r.id===docId);
+        if (!row) return;
+        const items = [...(row.items || CHECKLIST_ITEMS.map(t=>({ texto:t, completado:false })))];
+        items[parseInt(idx)].completado = cb.checked;
+        await updateDoc(doc(db,"rh_onboarding",docId), { items }).catch(e => window.toast?.(e.message,"error"));
+      });
+    });
+  }, err => console.error("[RH-Onboarding]",err));
+  _unsubs.push(unsub);
+}
+
+async function _crearOnboarding() {
+  const uid = document.getElementById("ob-uid")?.value;
+  if (!uid) { window.toast?.("Selecciona el empleado","error"); return; }
+  const ya = _vacantes; // reuse check
+  const usuario = _usuarios.find(u => u.uid===uid);
+  try {
+    await addDoc(collection(db,"rh_onboarding"), {
+      uid, alias: usuario?.alias||uid,
+      items: CHECKLIST_ITEMS.map(t => ({ texto:t, completado:false })),
+      creadoPor: Sesion.alias, timestamp: serverTimestamp(), _ts: Date.now()
+    });
+    window.toast?.("Checklist de onboarding creado","success");
+  } catch(e) { window.toast?.(e.message,"error"); }
 }

@@ -72,6 +72,8 @@ const fmtDt = d => {
 let _unsub      = null;
 let _clientes   = [];
 let _filtrados  = [];
+let _abcMap     = {};  // clienteDocId → 'A'|'B'|'C'
+let _abcCargado = false;
 
 // ── Filtros activos ───────────────────────────────────────────
 let _fBusqueda  = "";
@@ -96,6 +98,7 @@ export const ClientesModule = {
     _unsub = null;
     _clientes = [];
     _filtrados = [];
+    _abcMap = {}; _abcCargado = false;
     _fBusqueda = ""; _fSegmento = "TODOS"; _fIngeniero = "TODOS";
     _fEstado = "TODOS"; _fSaldo = "TODOS"; _detalleId = null;
   }
@@ -113,6 +116,7 @@ function _html() {
       ${_kpi("cli-k-saldo",  "SALDO TOTAL",    "#2563EB")}
       ${_kpi("cli-k-visita", "CON VISITA HOY", "#7C3AED")}
       ${_kpi("cli-k-segs",   "SEGMENTOS",      "#D97706")}
+      ${_kpi("cli-k-abc-a",  "CLIENTES A",     "#B45309")}
     </div>
 
     <!-- Barra de controles -->
@@ -177,6 +181,14 @@ function _html() {
       <button onclick="ClientesUI.importarExcel()" style="padding:7px 12px;background:#0E7490;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">⬆️ Importar</button>
       <input id="cli-file-input" type="file" accept=".xlsx" style="display:none"
         onchange="ClientesUI._onFileSelected(this)">
+
+      <!-- ABC -->
+      <button onclick="ClientesUI.recalcularABC()"
+        style="padding:7px 12px;background:var(--surface-2);color:#B45309;
+          border:1px solid #FDE68A;border-radius:6px;cursor:pointer;font-size:13px"
+        title="Clasificar clientes A/B/C por volumen de compra">
+        🏅 ABC
+      </button>
 
       <!-- Nuevo cliente -->
       <button onclick="ClientesUI.nuevoCliente()"
@@ -578,6 +590,8 @@ function _bindUI() {
       if (file) { _importarExcel(file); input.value = ""; }
     },
     nuevoCliente() { _abrirFormCliente(null); },
+    recalcularABC() { _abcCargado = false; _calcularABC(); },
+    nuevaVisita(clienteId) { _abrirFormVisita(clienteId); },
     cerrarFormCliente() {
       const m = document.getElementById("cli-form-modal");
       if (m) m.style.display = "none";
@@ -716,6 +730,10 @@ function _renderKPIs() {
   const segs = new Set(_clientes.map(c => c.segmento).filter(Boolean)).size;
   set("cli-k-segs")(segs.toLocaleString("es-MX"));
 
+  const abcA = Object.values(_abcMap).filter(v => v === "A").length;
+  set("cli-k-abc-a")(abcA > 0 ? abcA.toLocaleString("es-MX") : "–");
+  if (!_abcCargado) _calcularABC();
+
   const cnt = document.getElementById("cli-count-txt");
   if (cnt) cnt.textContent = `${_filtrados.length} de ${_clientes.length} clientes`;
 }
@@ -733,11 +751,20 @@ function _renderTabla() {
   }
 
   tbody.innerHTML = _filtrados.map((c, i) => {
-    const saldo  = Number(c.saldo)  || 0;
-    const activo = c.activo !== false;
+    const saldo   = Number(c.saldo)  || 0;
+    const activo  = c.activo !== false;
+    const limite  = Number(c.limiteCredito) || 0;
+    const abcLetra = _abcMap[c.id] || "";
 
     const saldoColor = saldo > 0 ? "#DC2626" : "#16A34A";
     const saldoTxt   = saldo > 0 ? fmt.format(saldo) : "—";
+    const creditoPct = limite > 0 ? Math.min(100, Math.round(saldo / limite * 100)) : 0;
+    const creditoCol = creditoPct >= 90 ? "#DC2626" : creditoPct >= 70 ? "#D97706" : "#16A34A";
+    const abcBadge  = abcLetra
+      ? `<span style="font-size:9px;font-weight:800;padding:1px 5px;border-radius:4px;
+          background:${abcLetra==="A"?"#FEF3C7":abcLetra==="B"?"#DBEAFE":"#F1F5F9"};
+          color:${abcLetra==="A"?"#B45309":abcLetra==="B"?"#1D4ED8":"#64748B"};
+          margin-left:4px;vertical-align:middle">${abcLetra}</span>` : "";
 
     const segBg = _segColor(c.segmento);
 
@@ -748,7 +775,7 @@ function _renderTabla() {
         ${esc(c.clienteId || "—")}
       </td>
       <td style="padding:10px 14px">
-        <div style="font-weight:700;font-size:12px;color:var(--text-primary)">${esc(c.nombre || "—")}</div>
+        <div style="font-weight:700;font-size:12px;color:var(--text-primary)">${esc(c.nombre || "—")}${abcBadge}</div>
         ${c.telefono ? `<div style="font-size:11px;color:#6B7280">${esc(c.telefono)}</div>` : ""}
         ${c.ciudad || c.colonia ? `<div style="font-size:10px;color:#9CA3AF">${esc([c.colonia,c.ciudad].filter(Boolean).join(", "))}</div>` : ""}
       </td>
@@ -760,7 +787,13 @@ function _renderTabla() {
       </td>
       <td style="padding:10px 14px;font-size:12px;color:var(--text-sec)">${esc(c.ingeniero || "—")}</td>
       <td style="padding:10px 14px;font-size:11px;color:#6B7280">${esc(c.zona || "—")}</td>
-      <td style="padding:10px 14px;text-align:right;font-size:12px;font-weight:700;color:${saldoColor}">${saldoTxt}</td>
+      <td style="padding:10px 14px;text-align:right;font-size:12px;font-weight:700;color:${saldoColor}">
+        ${saldoTxt}
+        ${limite > 0 ? `<div style="margin-top:3px;height:4px;border-radius:2px;background:var(--border);width:60px;margin-left:auto">
+          <div style="height:4px;border-radius:2px;background:${creditoCol};width:${creditoPct}%;max-width:100%"></div>
+        </div>
+        <div style="font-size:9px;color:${creditoCol};margin-top:1px;font-weight:600">${creditoPct}% crédito</div>` : ""}
+      </td>
       <td style="padding:10px 14px;text-align:center;font-size:11px;color:#6B7280">${fmtDt(c.ultimaVisita)}</td>
       <td style="padding:10px 14px;text-align:center">
         <span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:9px;
@@ -857,17 +890,58 @@ async function _abrirDetalle(id) {
       ${_campo("🏙 Ciudad", [c.colonia, c.ciudad].filter(Boolean).join(", ") || null)}
       ${_campo("🏠 Dirección", [c.calle, c.numExt ? `#${c.numExt}` : null].filter(Boolean).join(" ") || c.direccion || null)}
       ${_campo("📅 Última visita", fmtDt(c.ultimaVisita))}
+      ${c.tipo        ? _campo("🏗 Tipo de instalación", c.tipo)        : ""}
+      ${c.tipoCultivo ? _campo("🌱 Tipo de cultivo",     c.tipoCultivo) : ""}
     </div>
 
-    <!-- Saldo -->
-    <div style="background:${saldo>0?"#FEF2F2":"#F0FDF4"};border:1px solid ${saldo>0?"#FECACA":"#BBF7D0"};
-      border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
-      <span style="font-size:12px;font-weight:600;color:${saldo>0?"#DC2626":"#16A34A"}">
-        ${saldo > 0 ? "⚠️ Saldo pendiente" : "✅ Sin saldo pendiente"}
-      </span>
-      <span style="font-size:18px;font-weight:800;color:${saldo>0?"#DC2626":"#16A34A"}">
-        ${saldo > 0 ? fmt.format(saldo) : "$0.00"}
-      </span>
+    <!-- Saldo / Línea de crédito (Medio/56) -->
+    ${(() => {
+      const lim = Number(c.limiteCredito) || 0;
+      const pct = lim > 0 ? Math.min(100, Math.round(saldo / lim * 100)) : 0;
+      const col = pct >= 90 ? "#DC2626" : pct >= 70 ? "#D97706" : "#16A34A";
+      const abcL = _abcMap[c.id] || "";
+      return `
+      <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;
+        margin-bottom:16px;background:var(--surface-2)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${lim>0?8:0}px">
+          <div>
+            <span style="font-size:12px;font-weight:600;color:${saldo>0?"#DC2626":"#16A34A"}">
+              ${saldo > 0 ? "⚠️ Saldo pendiente" : "✅ Sin saldo"}
+            </span>
+            ${abcL ? `<span style="font-size:11px;font-weight:800;margin-left:8px;padding:2px 8px;border-radius:6px;
+              background:${abcL==="A"?"#FEF3C7":abcL==="B"?"#DBEAFE":"#F1F5F9"};
+              color:${abcL==="A"?"#B45309":abcL==="B"?"#1D4ED8":"#64748B"}">
+              Cliente ${abcL}
+            </span>` : ""}
+          </div>
+          <span style="font-size:18px;font-weight:800;color:${saldo>0?"#DC2626":"#16A34A"}">
+            ${saldo > 0 ? fmt.format(saldo) : "$0.00"}
+          </span>
+        </div>
+        ${lim > 0 ? `
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:#64748B;margin-bottom:4px">
+            <span>Línea de crédito: <strong style="color:var(--text-primary)">${fmt.format(lim)}</strong></span>
+            <span style="color:${col};font-weight:700">${pct}% utilizado</span>
+          </div>
+          <div style="height:7px;border-radius:4px;background:var(--border)">
+            <div style="height:7px;border-radius:4px;background:${col};width:${pct}%;max-width:100%;transition:width .3s"></div>
+          </div>
+          ${pct >= 90 ? `<div style="font-size:10px;color:#DC2626;font-weight:700;margin-top:4px">
+            ⚠️ Límite de crédito casi agotado — revisar antes de nuevos pedidos</div>` : ""}
+        </div>` : `
+        <div style="font-size:10px;color:#94A3B8;margin-top:2px">Sin línea de crédito configurada</div>`}
+      </div>`;
+    })()}
+
+    <!-- Pedidos recientes (Alto/74) -->
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:700;color:var(--text-primary)">🧾 Pedidos recientes</span>
+      </div>
+      <div id="cli-pedidos-recientes" style="font-size:12px;color:var(--text-sec);text-align:center;padding:12px">
+        Cargando…
+      </div>
     </div>
 
     <!-- Ubicaciones -->
@@ -902,6 +976,21 @@ async function _abrirDetalle(id) {
         : ""}
     </div>
 
+    <!-- Log de visitas (Bajo/44) -->
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:700;color:var(--text-primary)">📅 Seguimiento de visitas</span>
+        <button onclick="ClientesUI.nuevaVisita('${esc(c.id)}')"
+          style="padding:4px 12px;border:1px solid #7C3AED;border-radius:6px;
+            background:transparent;color:#7C3AED;font-size:11px;font-weight:700;cursor:pointer">
+          + Nueva
+        </button>
+      </div>
+      <div id="cli-visitas-log" style="font-size:12px;color:var(--text-sec);text-align:center;padding:12px">
+        Cargando…
+      </div>
+    </div>
+
     <!-- Acciones -->
     <div style="display:flex;gap:10px;justify-content:space-between;align-items:center">
       <button onclick="ClientesUI.verFotos('${esc(c.id)}','${esc(c.nombre||'')}')"
@@ -928,8 +1017,10 @@ async function _abrirDetalle(id) {
       </div>
     </div>`;
 
-  // Cargar ubicaciones de la subcolección (asíncrono, tras renderizar el modal)
+  // Cargar secciones asíncronas tras renderizar el modal
   _cargarUbicaciones(id);
+  _cargarPedidosRecientes(id, c);
+  _cargarVisitasLog(id);
 }
 
 function _campo(label, valor) {
@@ -1752,6 +1843,253 @@ async function _guardarUbicacion() {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "Guardar ubicación"; }
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ALTO/74 — Historial de pedidos del cliente en la ficha
+// ══════════════════════════════════════════════════════════════
+async function _cargarPedidosRecientes(clienteDocId, cliente) {
+  const el = document.getElementById("cli-pedidos-recientes");
+  if (!el) return;
+  try {
+    const cid = cliente?.clienteId;
+    const nom = cliente?.nombre || "";
+    let q2;
+    if (cid) {
+      q2 = query(collection(db, "pedidos"),
+        where("clienteId","==", cid),
+        orderBy("_ts","desc"), limit(8));
+    } else {
+      q2 = query(collection(db, "pedidos"),
+        where("clienteNombre","==", nom),
+        orderBy("_ts","desc"), limit(8));
+    }
+    const snap = await getDocs(q2);
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    if (!rows.length) {
+      el.innerHTML = `<div style="text-align:center;padding:12px;color:#94A3B8;font-size:11px;
+        border:1px dashed var(--border);border-radius:8px">Sin pedidos registrados</div>`;
+      return;
+    }
+    const fmtTs = ts => ts
+      ? new Date(typeof ts==="number"?ts:ts.toMillis?.()??ts)
+          .toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})
+      : "—";
+    const ESTADO = { CONFIRMADO:"🟡 Conf.",ENTREGADO:"🟢 Entregado",CANCELADO:"🔴 Cancel.",
+      EN_PROCESO:"🔵 En proceso",PENDIENTE:"⚪ Pendiente" };
+    el.innerHTML = `<div style="overflow-x:auto">
+      <table class="data-table" style="font-size:11px">
+        <thead><tr>
+          <th>FECHA</th><th>FOLIO</th>
+          <th style="text-align:right">TOTAL</th>
+          <th>ESTADO</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r => `<tr>
+            <td style="white-space:nowrap">${fmtTs(r._ts||r.fechaCreacion)}</td>
+            <td style="font-family:monospace;font-size:10px">${esc(r.folio||r.id?.slice(-6)||"–")}</td>
+            <td style="text-align:right;font-weight:700">${fmt.format(r.total||r.importe||0)}</td>
+            <td>${ESTADO[r.estado]||esc(r.estado||"–")}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
+  } catch(e) {
+    const el2 = document.getElementById("cli-pedidos-recientes");
+    if (el2) el2.innerHTML = `<div style="color:#DC2626;font-size:11px;padding:8px">
+      Error al cargar pedidos: ${esc(e.message)}</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// BAJO/44 — Log de visitas estructurado
+// Subcolección: clientes/{id}/visitas_log
+// ══════════════════════════════════════════════════════════════
+async function _cargarVisitasLog(clienteDocId) {
+  const el = document.getElementById("cli-visitas-log");
+  if (!el) return;
+  try {
+    const { getDocs: gd, collection: col, orderBy: ob, query: q2, limit: lmt } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const snap = await gd(q2(col(db, "clientes", clienteDocId, "visitas_log"), ob("_ts","desc"), lmt(5)));
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!rows.length) {
+      el.innerHTML = `<div style="text-align:center;padding:12px;color:#94A3B8;font-size:11px;
+        border:1px dashed var(--border);border-radius:8px">Sin visitas registradas</div>`;
+      return;
+    }
+    const fmtTs = ts => ts
+      ? new Date(typeof ts==="number"?ts:ts.toMillis?.()??ts)
+          .toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"})
+      : "—";
+    const TIPO_ICON = { Visita:"🤝", Llamada:"📞", WhatsApp:"💬", Email:"📧", Virtual:"💻", Otro:"📋" };
+    el.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">
+      ${rows.map(r => `
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--surface-2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span style="font-size:16px">${TIPO_ICON[r.tipo]||"📋"}</span>
+            <span style="font-size:11px;font-weight:700;color:var(--text-primary)">${esc(r.tipo||"Visita")}</span>
+            <span style="font-size:10px;color:#94A3B8;margin-left:auto">${fmtTs(r._ts)}</span>
+          </div>
+          ${r.objetivo ? `<div style="font-size:11px;color:#64748B;margin-bottom:2px">
+            <strong>Objetivo:</strong> ${esc(r.objetivo)}</div>` : ""}
+          ${r.resultado ? `<div style="font-size:11px;color:var(--text-primary)">
+            <strong>Resultado:</strong> ${esc(r.resultado)}</div>` : ""}
+          ${r.proximaCita ? `<div style="font-size:10px;color:#7C3AED;margin-top:3px">
+            📅 Próxima cita: ${esc(r.proximaCita)}</div>` : ""}
+          <div style="font-size:10px;color:#94A3B8;margin-top:3px">Por ${esc(r.quienRegistro||"–")}</div>
+        </div>`).join("")}
+    </div>`;
+  } catch(e) {
+    const el2 = document.getElementById("cli-visitas-log");
+    if (el2) el2.innerHTML = `<div style="color:#DC2626;font-size:11px;padding:8px">
+      Error: ${esc(e.message)}</div>`;
+  }
+}
+
+function _abrirFormVisita(clienteDocId) {
+  // Mini-modal inline para registrar una visita
+  const TIPOS = ["Visita","Llamada","WhatsApp","Email","Virtual","Otro"];
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2100;display:flex;align-items:center;justify-content:center;padding:16px";
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:14px;width:460px;max-width:100%;
+      border:1px solid var(--border);box-shadow:0 24px 64px rgba(0,0,0,.4);overflow:hidden">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+        <span style="font-size:18px">📅</span>
+        <div style="flex:1;font-size:13px;font-weight:800">Nueva visita / actividad</div>
+        <button id="_vis-close" style="background:none;border:none;cursor:pointer;font-size:18px;color:#64748B">✕</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase;margin-bottom:6px">Tipo de contacto</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${TIPOS.map((t,i) => `
+              <button type="button" data-vis-tipo="${t}" onclick="window._visSelTipo('${t}')"
+                style="padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;
+                  border:1.5px solid ${i===0?"#7C3AED":"var(--border)"};
+                  background:${i===0?"#F5F3FF":"transparent"};
+                  color:${i===0?"#7C3AED":"var(--text-sec)"}">
+                ${t}
+              </button>`).join("")}
+          </div>
+          <input type="hidden" id="_vis-tipo" value="${TIPOS[0]}">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;color:#64748B;display:block;margin-bottom:4px">Objetivo de la visita</label>
+          <input id="_vis-objetivo" type="text" placeholder="Presentar oferta, cobrar, seguimiento…"
+            style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;color:#64748B;display:block;margin-bottom:4px">Resultado</label>
+          <textarea id="_vis-resultado" rows="2" placeholder="Qué pasó, compromisos, acuerdos…"
+            style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box;resize:vertical"></textarea>
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;color:#64748B;display:block;margin-bottom:4px">Próxima cita / seguimiento</label>
+          <input id="_vis-proxima" type="text" placeholder="ej. 2026-09-15 o 'en 2 semanas'"
+            style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+              font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--border)">
+        <button id="_vis-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);
+          background:transparent;color:#94A3B8;font-size:12px;cursor:pointer">Cancelar</button>
+        <button id="_vis-guardar" style="padding:8px 22px;border-radius:8px;border:none;
+          background:#7C3AED;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Registrar visita</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  window._visSelTipo = (val) => {
+    document.getElementById("_vis-tipo").value = val;
+    overlay.querySelectorAll("[data-vis-tipo]").forEach(btn => {
+      const sel = btn.dataset.visTipo === val;
+      btn.style.borderColor = sel ? "#7C3AED" : "var(--border)";
+      btn.style.background  = sel ? "#F5F3FF" : "transparent";
+      btn.style.color       = sel ? "#7C3AED" : "var(--text-sec)";
+    });
+  };
+
+  const cerrar = () => { document.body.removeChild(overlay); delete window._visSelTipo; };
+  overlay.querySelector("#_vis-close").onclick  = cerrar;
+  overlay.querySelector("#_vis-cancel").onclick = cerrar;
+
+  overlay.querySelector("#_vis-guardar").addEventListener("click", async () => {
+    const tipo      = document.getElementById("_vis-tipo")?.value || "Visita";
+    const objetivo  = document.getElementById("_vis-objetivo")?.value.trim() || "";
+    const resultado = document.getElementById("_vis-resultado")?.value.trim() || "";
+    const proxima   = document.getElementById("_vis-proxima")?.value.trim() || "";
+    const btn = overlay.querySelector("#_vis-guardar");
+    btn.disabled = true; btn.textContent = "Guardando…";
+    try {
+      const { addDoc: ad, collection: col } =
+        await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      await ad(col(db, "clientes", clienteDocId, "visitas_log"), {
+        tipo, objetivo, resultado, proximaCita: proxima,
+        quienRegistro: window.Sesion?.alias ?? "web",
+        _ts: Date.now()
+      });
+      // También actualizar ultimaVisita en el cliente padre
+      await updateDoc(doc(db, "clientes", clienteDocId), { ultimaVisita: new Date() });
+      window.toast?.("Visita registrada","success");
+      cerrar();
+      _cargarVisitasLog(clienteDocId);
+    } catch(e) { window.toast?.("Error: " + e.message,"error"); }
+    finally { btn.disabled = false; btn.textContent = "Registrar visita"; }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// MEDIO/58 — Clasificación ABC automática por volumen de compra
+// ══════════════════════════════════════════════════════════════
+async function _calcularABC() {
+  if (_abcCargado) return;
+  _abcCargado = true;
+  try {
+    const hace365 = Date.now() - 365 * 86400000;
+    const q2 = query(
+      collection(db, "pedidos"),
+      where("estado","in",["CONFIRMADO","ENTREGADO"]),
+      where("_ts",">=", hace365),
+      limit(3000)
+    );
+    const snap = await getDocs(q2);
+    const totales = {};  // clienteId → total
+    snap.docs.forEach(d => {
+      const data = d.data();
+      const cid  = data.clienteId || data.clienteNombre || "";
+      if (!cid) return;
+      totales[cid] = (totales[cid] || 0) + (data.total || data.importe || 0);
+    });
+
+    // Ordenar por total desc y asignar A/B/C
+    const sorted = Object.entries(totales).sort((a,b) => b[1] - a[1]);
+    const n = sorted.length;
+    const limA = Math.ceil(n * 0.20);  // top 20%
+    const limB = Math.ceil(n * 0.50);  // siguiente 30% → hasta 50%
+
+    const newMap = {};
+    sorted.forEach(([cid, _], idx) => {
+      newMap[cid] = idx < limA ? "A" : idx < limB ? "B" : "C";
+    });
+
+    // Mapear de clienteId → docId
+    _abcMap = {};
+    _clientes.forEach(c => {
+      const cid = c.clienteId || c.nombre || "";
+      if (newMap[cid]) _abcMap[c.id] = newMap[cid];
+    });
+
+    // Actualizar KPI y re-renderizar tabla
+    const abcA = Object.values(_abcMap).filter(v => v === "A").length;
+    const elA = document.getElementById("cli-k-abc-a");
+    if (elA) elA.textContent = abcA.toLocaleString("es-MX");
+    _renderTabla();
+  } catch(e) { _abcCargado = false; console.warn("[ABC]", e.message); }
 }
 
 // ── Fotos del cliente (tomadas en APK, guardadas en Firebase Storage) ──

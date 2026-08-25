@@ -1,11 +1,11 @@
 // Service Worker — N-10 ERP
-// Estrategia: Cache-first para assets estáticos, Network-first para datos dinámicos
+// Estrategia: Cache-first para assets estáticos, Network-first para index.html y datos dinámicos
 
-const CACHE_NAME = 'n10-erp-v101';
+const CACHE_NAME = 'n10-erp-v110';
 
+// index.html NUNCA se cachea aquí — siempre se sirve desde la red
+// para garantizar que cada deploy llegue sin necesitar cerrar tabs.
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/css/styles.css',
   '/js/app.js',
   '/js/auth.js',
@@ -59,7 +59,9 @@ const STATIC_ASSETS = [
   '/js/gastos.js',
   '/js/reabasto.js',
   '/js/logistica.js',
+  '/js/agroquimico.js',
   '/js/historial-ventas.js',
+  '/js/bi-analytics.js',
   '/js/reportes-custom.js',
   '/js/manuales.js',
   '/js/lib/xlsx.min.js',
@@ -69,7 +71,7 @@ const STATIC_ASSETS = [
   '/manifest.json'
 ];
 
-// Instalar — pre-cachear assets estáticos
+// Instalar — pre-cachear assets estáticos (sin index.html)
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache =>
@@ -80,16 +82,24 @@ self.addEventListener('install', event => {
   );
 });
 
-// Activar — limpiar caches viejos
+// Activar — limpiar caches viejos y notificar a todas las tabs
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys =>
+        Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      )
+      .then(() => self.clients.claim())
+      .then(() => {
+        // Avisar a todas las tabs que hay una versión nueva
+        return self.clients.matchAll({ type: 'window' }).then(clients => {
+          clients.forEach(c => c.postMessage({ type: 'SW_UPDATED', version: CACHE_NAME }));
+        });
+      })
   );
 });
 
-// Fetch — Cache-first para assets, Network-first para Firebase/APIs
+// Fetch — lógica por tipo de recurso
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
@@ -98,22 +108,33 @@ self.addEventListener('fetch', event => {
       url.hostname.includes('googleapis') ||
       url.hostname.includes('gstatic') ||
       url.hostname.includes('firebaseapp')) {
-    return; // fetch nativo sin interceptar
+    return;
   }
 
-  // Assets locales → cache-first con fallback a red
+  // index.html y navegación SPA → Network-first, fallback a cache
+  // Nunca servimos un index.html cacheado para evitar estados zombie.
+  if (event.request.mode === 'navigate' ||
+      url.pathname === '/' ||
+      url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(event.request)
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // Assets JS/CSS/imágenes → Cache-first con actualización en background
   event.respondWith(
     caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).then(response => {
+      const networkFetch = fetch(event.request).then(response => {
         if (response.ok && event.request.method === 'GET') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
         return response;
       });
+      return cached || networkFetch;
     }).catch(() => {
-      // Offline y no hay cache → devolver index.html para SPA
       if (event.request.mode === 'navigate') {
         return caches.match('/index.html');
       }

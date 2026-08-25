@@ -29,6 +29,7 @@ import { PromocionesModule }      from "./promociones.js";
 import { SegmentoPrecioModule }   from "./precios-segmento.js";
 import { ClientesModule }         from "./clientes.js";
 import { HistorialVentasModule }  from "./historial-ventas.js";
+import { BiAnalyticsModule }      from "./bi-analytics.js";
 import { KardexModule }           from "./kardex.js";
 import { CarteraModule }          from "./cartera.js";
 import { VisitasModule }          from "./visitas.js";
@@ -40,6 +41,7 @@ import { AuditoriaModule }        from "./auditoria.js";
 import { InventarioModule }       from "./inventario.js";
 import { CrmModule }              from "./crm.js";
 import { LogisticaModule }        from "./logistica.js";
+import { AgroquimicoModule }      from "./agroquimico.js";
 import { JuridicoModule }         from "./juridico.js";
 import { ObservabilidadModule }   from "./observabilidad.js";
 import { MiRhModule }             from "./mi-rh.js";
@@ -207,6 +209,7 @@ const MODULES = {
   inventario:   InventarioModule,
   crm:          CrmModule,
   logistica:    LogisticaModule,
+  agroquimico:  AgroquimicoModule,
   juridico:        JuridicoModule,
   observabilidad:  ObservabilidadModule,
   mi_rh:           MiRhModule,
@@ -220,6 +223,7 @@ const MODULES = {
   precios_segmento: SegmentoPrecioModule,
   clientes:         ClientesModule,
   historial_ventas: HistorialVentasModule,
+  bi_analytics:     BiAnalyticsModule,
   manuales:         ManualesModule,
   asignaciones:     AsignacionesModule,
   config:           ConfigModule,
@@ -464,6 +468,7 @@ function _navigate(viewId) {
     formularios:"Formularios", promociones:"Recompensas y lealtad", precios_segmento:"Precios por segmento",
     productos:"Control de productos", comentarios:"Comentarios de clientes",
     inventario:"Inventario", crm:"CRM — Prospectos", logistica:"Logística de visitas",
+    agroquimico:"Agroquímico",
     clientes:"Clientes", auditoria:"Auditoría", devoluciones:"Devoluciones",
     rh:"Recursos Humanos", mi_rh:"Mi RH", chat:"Chat interno",
     juridico:"Jurídico", observabilidad:"Observabilidad", manuales:"Manuales y Políticas",
@@ -471,7 +476,8 @@ function _navigate(viewId) {
     asignaciones:"Asignaciones",
     reabasto:"Reabasto",
     caja:"Arqueo de Caja", gastos:"Gastos de Empleados",
-    historial_ventas:"Historial de Ventas" };
+    historial_ventas:"Historial de Ventas",
+    bi_analytics:"BI & Analytics" };
   const subs = { dashboard:"Resumen del día", mapa:"Ingenieros en campo", mapa_clientes:"Localización total de clientes georeferenciados",
     feed:"Actividades globales", usuarios:"Gestión de privilegios",
     reportes:"Generación de reportes", comisiones:"Nómina e incentivos por ingeniero",
@@ -483,8 +489,10 @@ function _navigate(viewId) {
     inventario:"Stock en tiempo real por producto",
     crm:"Pipeline de prospectos y conversión a clientes",
     logistica:"Visitas programadas por frecuencia de cliente",
+    agroquimico:"Calendario agrícola, recetas de dosis y trazabilidad campo-cultivo-venta",
     asignaciones:"Traspaso de clientes entre ingenieros con auditoría completa",
     clientes:"Directorio y saldos por cliente", historial_ventas:"Log de ventas por cliente para diagnóstico y aprendizaje IA",
+    bi_analytics:"Dashboard con drill-down, rentabilidad, comparativo YoY/MoM y predicción de demanda",
     auditoria:"Registro de cambios críticos",
     devoluciones:"Gestión de devoluciones y créditos", rh:"Gestión de personal",
     mi_rh:"Mi expediente y nómina", chat:"Mensajería interna del equipo",
@@ -606,6 +614,7 @@ function _initGlobalSearch() {
     { view:"promociones",      icon:"🎁", label:"Recompensas y lealtad",    kw:"promociones recompensas lealtad puntos" },
     { view:"devoluciones",     icon:"↩️", label:"Devoluciones",             kw:"devoluciones retornos cambios" },
     { view:"logistica",        icon:"🚚", label:"Logistica de visitas",     kw:"logistica rutas visitas" },
+    { view:"agroquimico",      icon:"🌿", label:"Agroquímico",              kw:"agroquimico cultivos recetas dosis trazabilidad fitosanitario" },
     { view:"visitas",          icon:"📍", label:"Visitas",                  kw:"visitas programacion agenda" },
     { view:"mapa",             icon:"🗺️", label:"Mapa en vivo",             kw:"mapa gps campo ubicacion" },
     { view:"mapa_clientes",   icon:"📍", label:"Mapa de Clientes",          kw:"mapa clientes georeferencia ubicacion visita" },
@@ -613,6 +622,7 @@ function _initGlobalSearch() {
     { view:"metas",            icon:"🏆", label:"Metas de venta",           kw:"metas objetivos cuota" },
     { view:"autorizaciones",   icon:"🔐", label:"Autorizaciones",           kw:"autorizaciones aprobaciones bloqueos" },
     { view:"usuarios",         icon:"⚙️", label:"Usuarios y flags",         kw:"usuarios roles permisos flags" },
+    { view:"bi_analytics",     icon:"🧠", label:"BI & Analytics",            kw:"bi analytics inteligencia negocios rentabilidad demanda prediccion comparativo" },
     { view:"reportes",         icon:"📈", label:"Reportes",                 kw:"reportes graficas estadisticas" },
     { view:"reportes_custom",  icon:"🛠️", label:"Reportes Configurables",   kw:"reportes custom configurables aging" },
     { view:"auditoria",        icon:"🔍", label:"Auditoria",                kw:"auditoria log historial cambios" },
@@ -930,6 +940,7 @@ function _aplicarVisibilidadSidebar() {
     rh:          pvF("PUEDE_VER_RH","GERENTE","ADMINISTRADOR"),
     crm:         pv("GERENTE","MESA_CONTROL","JURIDICO","ADMINISTRADOR"),
     logistica:   pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
+    agroquimico: pv("GERENTE","MESA_CONTROL","INGENIERO","ADMINISTRADOR"),
     juridico:        pv("GERENTE","JURIDICO","RECUPERADOR","ADMINISTRADOR"),
     observabilidad:  pv("GERENTE","ADMINISTRADOR"),
     mi_rh:           pv("INGENIERO","RECUPERADOR","ALMACENISTA"),
@@ -951,6 +962,7 @@ function _aplicarVisibilidadSidebar() {
     caja:             pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
     gastos:           pv("GERENTE","ADMINISTRADOR","MESA_CONTROL"),
     historial_ventas: pv("GERENTE","ADMINISTRADOR","MESA_CONTROL"),
+    bi_analytics:     pv("GERENTE","ADMINISTRADOR","MESA_CONTROL"),
   };
 
   // Aplicar visibilidad a cada sb-item
@@ -974,7 +986,7 @@ function _aplicarVisibilidadSidebar() {
   // Operaciones: usuarios → logistica (aprox las primeras 14 entradas del sbi-admin)
   const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","reabasto","devoluciones","chat","rh","caja","gastos","crm","logistica","historial_ventas"];
   const ctrlViews = ["precios","geocercas","metas","autorizaciones","auditoria"];
-  const cfgViews  = ["formularios","promociones","precios_segmento","productos","config","config_intereses","reportes","reportes_custom"];
+  const cfgViews  = ["formularios","promociones","precios_segmento","productos","config","config_intereses","reportes","reportes_custom","bi_analytics"];
 
   const anyVis = views => views.some(v => vis[v]);
   const showEl = (id, show) => { const e = $sup(id); if (e) e.style.display = show ? "" : "none"; };
