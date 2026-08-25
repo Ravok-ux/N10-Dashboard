@@ -152,20 +152,27 @@ function _bindUI() {
     _actualizarPrecio(idx, val)   { _actualizarPrecioImpl(idx, val); },
     _cambiarCliente()              { _cambiarClienteImpl(); },
     async _filtrarIng(q) {
-      const dd = document.getElementById("pd-ing-dd");
-      if (!dd) return;
+      const dd    = document.getElementById("pd-ing-dd");
+      const input = document.getElementById("pd-ingeniero");
+      if (!dd || !input) return;
       const ings = await getIngenieros();
-      const filtrados = ings.filter(a => norm(a).includes(norm(q)));
-      if (!q || !filtrados.length) { dd.style.display = "none"; return; }
+      const filtrados = q
+        ? ings.filter(a => norm(a).includes(norm(q)))
+        : ings;
+      if (!filtrados.length) { dd.style.display = "none"; return; }
       dd.innerHTML = filtrados.map(a =>
-        `<div style="padding:7px 10px;cursor:pointer;font-size:12px;color:var(--text-primary);border-bottom:1px solid var(--border)"
-          onmousedown="event.preventDefault()"
-          onclick="document.getElementById('pd-ingeniero').value='${esc(a)}';document.getElementById('pd-ing-dd').style.display='none'"
-          >${esc(a)}</div>`
+        `<div class="pd-ing-item" data-alias="${esc(a)}"
+          style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--text-primary);
+            border-bottom:1px solid var(--border)">${esc(a)}</div>`
       ).join("");
       dd.style.display = "block";
-      document.getElementById("pd-ingeniero").onblur = () =>
-        setTimeout(() => { dd.style.display = "none"; }, 150);
+      dd.querySelectorAll(".pd-ing-item").forEach(el =>
+        el.addEventListener("mousedown", ev => {
+          ev.preventDefault();
+          input.value = el.dataset.alias;
+          dd.style.display = "none";
+        }));
+      input.onblur = () => setTimeout(() => { dd.style.display = "none"; }, 150);
     }
   };
 }
@@ -740,8 +747,10 @@ function _renderFormPedido(body) {
           </div>
           <div style="position:relative">
             <input id="pd-ingeniero" style="${_pdinputStyle()}" autocomplete="off"
-              value="${esc(_pedidoCliente?.ingeniero || Sesion.alias || '')}"
-              oninput="PedidosUI._filtrarIng(this.value)" placeholder="Ingeniero…">
+              value="${esc(_pedidoCliente?.ingeniero || '')}"
+              oninput="PedidosUI._filtrarIng(this.value)"
+              onfocus="PedidosUI._filtrarIng(this.value)"
+              placeholder="Buscar ingeniero…">
             <div id="pd-ing-dd" style="display:none;position:absolute;top:100%;left:0;right:0;
               background:var(--surface);border:1px solid var(--border);border-radius:6px;
               max-height:140px;overflow-y:auto;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,.3)"></div>
@@ -929,7 +938,8 @@ async function _confirmarPedido() {
   if (btn) { btn.disabled = true; btn.textContent = "Guardando…"; }
 
   const total   = _pedidoLineas.reduce((s, l) => s + l.cantidad * l.precio, 0);
-  const ingeniero = (document.getElementById("pd-ingeniero")?.value || Sesion.alias || "").trim();
+  const ingeniero = (document.getElementById("pd-ingeniero")?.value || "").trim();
+  if (!ingeniero) { window.toast?.("Selecciona un ingeniero asignado.", "warn"); if (btn) { btn.disabled = false; btn.textContent = "✅ Confirmar pedido"; } return; }
 
   // Folio único con contador atómico
   const contadorRef = doc(db, "config", "contadores");
