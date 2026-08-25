@@ -183,7 +183,8 @@ function _bindUI() {
     dd.querySelectorAll("div[data-id]").forEach(el => {
       el.addEventListener("mousedown", e => {
         e.preventDefault();
-        _seleccionarCliente(el.dataset.id, el.dataset.nombre);
+        const cli = _clientes.find(c => c.id === el.dataset.id) || { id: el.dataset.id, nombre: el.dataset.nombre };
+        _seleccionarCliente(cli);
         buscar.value = el.dataset.nombre;
         dd.style.display = "none";
       });
@@ -210,13 +211,19 @@ function _bindUI() {
 async function _cargarClientes() {
   try {
     const snap = await getDocs(query(collection(db, "clientes"), orderBy("nombre")));
-    _clientes = snap.docs.map(d => ({ id: d.id, nombre: d.data().nombre || "", codigoCliente: d.data().codigoCliente || "" }));
+    _clientes = snap.docs.map(d => ({
+      id: d.id,
+      nombre:       d.data().nombre        || "",
+      codigoCliente:d.data().codigoCliente || "",
+      tipo:         d.data().tipo          || "",
+      tipoCultivo:  d.data().tipoCultivo   || ""
+    }));
   } catch(e) { console.error("[HV] clientes:", e); }
 }
 
 // ── Seleccionar cliente ───────────────────────────────────────
-function _seleccionarCliente(id, nombre) {
-  _clienteSel = { id, nombre };
+function _seleccionarCliente(cli) {
+  _clienteSel = cli;
   _ventas     = [];
   _lastDoc    = null;
   _hayMas     = false;
@@ -233,9 +240,15 @@ function _seleccionarCliente(id, nombre) {
   _q("hv-empty-state").style.display = "none";
   _q("hv-kpis").style.display        = "";
   _q("hv-lista").style.display       = "";
-  _q("hv-subtitle").textContent      = `Historial de ${nombre}`;
   _q("hv-items").innerHTML           = "";
   _q("hv-no-data").style.display     = "none";
+
+  const chips = [cli.tipo, cli.tipoCultivo].filter(Boolean)
+    .map(v => `<span style="font-size:10px;padding:2px 8px;border-radius:9px;
+      background:var(--surface-2);border:1px solid var(--border);color:var(--text-sec)">${esc(v)}</span>`)
+    .join(" ");
+  const subtitle = _q("hv-subtitle");
+  if (subtitle) subtitle.innerHTML = `Historial de ${esc(cli.nombre)}${chips ? " &nbsp;" + chips : ""}`;
 
   _detenerListener();
   _iniciarListener();
@@ -373,7 +386,7 @@ function _cardVenta(v) {
         ${p.categoria ? `<span style="font-size:10px;color:#9CA3AF;margin-left:6px">${esc(p.categoria)}</span>` : ""}
       </div>
       <div style="text-align:right;flex-shrink:0;margin-left:12px">
-        <span style="font-size:11px;color:#9CA3AF">${p.cantidad || 1} ${esc(p.unidad || "pza')}</span>
+        <span style="font-size:11px;color:#9CA3AF">${p.cantidad || 1} ${esc(p.unidad || "pza")}</span>
         <span style="font-size:12px;font-weight:700;color:#4ADE80;margin-left:8px">${fmtMXN(p.precio)}</span>
       </div>
     </div>`).join("");
