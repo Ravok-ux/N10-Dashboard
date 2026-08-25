@@ -28,6 +28,7 @@ import { FormulariosModule }      from "./formularios.js";
 import { PromocionesModule }      from "./promociones.js";
 import { SegmentoPrecioModule }   from "./precios-segmento.js";
 import { ClientesModule }         from "./clientes.js";
+import { HistorialVentasModule }  from "./historial-ventas.js";
 import { KardexModule }           from "./kardex.js";
 import { CarteraModule }          from "./cartera.js";
 import { VisitasModule }          from "./visitas.js";
@@ -218,6 +219,7 @@ const MODULES = {
   promociones:    PromocionesModule,
   precios_segmento: SegmentoPrecioModule,
   clientes:         ClientesModule,
+  historial_ventas: HistorialVentasModule,
   manuales:         ManualesModule,
   asignaciones:     AsignacionesModule,
   config:           ConfigModule,
@@ -468,7 +470,8 @@ function _navigate(viewId) {
     cotizaciones:"Cotizaciones", reportes_custom:"Reportes Configurables",
     asignaciones:"Asignaciones",
     reabasto:"Reabasto",
-    caja:"Arqueo de Caja", gastos:"Gastos de Empleados" };
+    caja:"Arqueo de Caja", gastos:"Gastos de Empleados",
+    historial_ventas:"Historial de Ventas" };
   const subs = { dashboard:"Resumen del día", mapa:"Ingenieros en campo", mapa_clientes:"Localización total de clientes georeferenciados",
     feed:"Actividades globales", usuarios:"Gestión de privilegios",
     reportes:"Generación de reportes", comisiones:"Nómina e incentivos por ingeniero",
@@ -481,7 +484,8 @@ function _navigate(viewId) {
     crm:"Pipeline de prospectos y conversión a clientes",
     logistica:"Visitas programadas por frecuencia de cliente",
     asignaciones:"Traspaso de clientes entre ingenieros con auditoría completa",
-    clientes:"Directorio y saldos por cliente", auditoria:"Registro de cambios críticos",
+    clientes:"Directorio y saldos por cliente", historial_ventas:"Log de ventas por cliente para diagnóstico y aprendizaje IA",
+    auditoria:"Registro de cambios críticos",
     devoluciones:"Gestión de devoluciones y créditos", rh:"Gestión de personal",
     mi_rh:"Mi expediente y nómina", chat:"Mensajería interna del equipo",
     juridico:"Acuerdos de congelamiento y cobranza legal",
@@ -583,6 +587,7 @@ function _initGlobalSearch() {
     { view:"dashboard",        icon:"📊", label:"Dashboard",               kw:"dashboard resumen dia ventas kpis" },
     { view:"pedidos",          icon:"📋", label:"Pedidos",                  kw:"pedidos ordenes folio borrador confirmado" },
     { view:"clientes",         icon:"🏢", label:"Clientes",                 kw:"clientes empresas semaforo credito" },
+    { view:"historial_ventas", icon:"📋", label:"Historial de Ventas",       kw:"historial ventas compras cliente log diagnostico ia" },
     { view:"ingenieros",       icon:"👤", label:"Staff operativo",           kw:"ingenieros vendedores recuperadores campo representantes staff" },
     { view:"asignaciones",     icon:"🔄", label:"Asignaciones",             kw:"asignaciones traspaso reasignar clientes zonas rutas ingeniero" },
     { view:"remisiones",       icon:"📄", label:"Remisiones",               kw:"remisiones credito notas facturas" },
@@ -945,6 +950,7 @@ function _aplicarVisibilidadSidebar() {
     reportes_custom:  pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
     caja:             pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
     gastos:           pv("GERENTE","ADMINISTRADOR","MESA_CONTROL"),
+    historial_ventas: pv("GERENTE","ADMINISTRADOR","MESA_CONTROL"),
   };
 
   // Aplicar visibilidad a cada sb-item
@@ -966,7 +972,7 @@ function _aplicarVisibilidadSidebar() {
 
   // Sublabels y divisores — ocultar si ningún item visible en su grupo
   // Operaciones: usuarios → logistica (aprox las primeras 14 entradas del sbi-admin)
-  const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","reabasto","devoluciones","chat","rh","caja","gastos","crm","logistica"];
+  const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","reabasto","devoluciones","chat","rh","caja","gastos","crm","logistica","historial_ventas"];
   const ctrlViews = ["precios","geocercas","metas","autorizaciones","auditoria"];
   const cfgViews  = ["formularios","promociones","precios_segmento","productos","config","config_intereses","reportes","reportes_custom"];
 
