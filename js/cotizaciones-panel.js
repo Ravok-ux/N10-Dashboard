@@ -1,96 +1,177 @@
-// Cotizaciones — Panel web S3
+// Cotizaciones — Panel web
 import { db } from './firebase-config.js';
 import { Sesion } from './auth.js';
-import { getTipoCambio, formatMoneda } from './multimoneda.js';
+import { esc, logAudit } from './app.js';
 import {
-  collection, doc, addDoc, updateDoc, getDoc,
+  collection, doc, addDoc, updateDoc, setDoc, getDoc,
   onSnapshot, query, orderBy, where, getDocs,
   serverTimestamp, limit
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;'}[c]));
-const fmtMXN = v => Number(v || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
-const fmtMoneda = (v, moneda) => moneda === 'USD'
-  ? `USD $${Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+const fmtMXN   = v => Number(v || 0).toLocaleString('es-MX', { style:'currency', currency:'MXN' });
+const fmtMoneda = (v, m) => m === 'USD'
+  ? `USD $${Number(v||0).toLocaleString('en-US',{minimumFractionDigits:2})}`
   : fmtMXN(v);
-const fmtFecha = ts => ts ? new Date(ts).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const fmtFecha = ts => ts
+  ? new Date(typeof ts === 'number' ? ts : ts.toMillis?.() ?? ts)
+      .toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'})
+  : '—';
+const diasRestantes = venceEn => {
+  if (!venceEn) return null;
+  return Math.ceil((venceEn - Date.now()) / 86400000);
+};
 
-const STATUS_LABELS = {
-  BORRADOR:   { label: 'Borrador',            cls: 'badge-gray'   },
-  ENVIADA:    { label: 'Enviada',              cls: 'badge-yellow' },
-  APROBADA:   { label: 'Aprobada',             cls: 'badge-green'  },
-  RECHAZADA:  { label: 'Rechazada',            cls: 'badge-red'    },
-  EXPIRADA:   { label: 'Expirada',             cls: 'badge-gray'   },
-  CONVERTIDA: { label: 'Convertida en pedido', cls: 'badge-purple' }
+const ESTADOS = {
+  BORRADOR:   { label:'Borrador',            color:'#6B7280', bg:'#F3F4F6', icon:'📝' },
+  ENVIADA:    { label:'Enviada',             color:'#D97706', bg:'#FEF3C7', icon:'📤' },
+  APROBADA:   { label:'Aprobada',            color:'#16A34A', bg:'#DCFCE7', icon:'✅' },
+  RECHAZADA:  { label:'Rechazada',           color:'#DC2626', bg:'#FEE2E2', icon:'❌' },
+  EXPIRADA:   { label:'Expirada',            color:'#9CA3AF', bg:'#F9FAFB', icon:'⏰' },
+  CONVERTIDA: { label:'Convertida en pedido',color:'#7C3AED', bg:'#EDE9FE', icon:'🛒' },
 };
 
 export const CotizacionesPanelModule = (() => {
-  let _unsub = null;
+  let _unsub       = null;
   let _vigenciaDias = 15;
+  let _filtroStatus = '';
+  let _busqueda     = '';
+  let _allDocs      = [];
+
+  // ── Permisos ──────────────────────────────────────────────────────────
+  const _puedeEditar = () =>
+    Sesion.esSuperAdmin?.() || ['GERENTE','ADMINISTRADOR','GERENTE_ZONA'].includes(Sesion.rol);
 
   // ── Init ──────────────────────────────────────────────────────────────
-
   async function init(container) {
-    // Leer vigencia desde /configuracion/cotizaciones
     try {
       const cfgSnap = await getDoc(doc(db, 'configuracion', 'cotizaciones'));
       if (cfgSnap.exists()) _vigenciaDias = cfgSnap.data().vigenciaDias || 15;
     } catch (_) {}
 
     container.innerHTML = `
-      <style>
-        .cot-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:16px; }
-        .cot-kpi { background:var(--surface); border:1px solid var(--border); border-radius:10px;
-          padding:12px 14px; display:flex; flex-direction:column; gap:4px; }
-        .cot-kpi-num { font-size:22px; font-weight:800; color:var(--text-primary); font-variant-numeric:tabular-nums; }
-        .cot-kpi-lbl { font-size:10px; font-weight:600; color:#9CA3AF; text-transform:uppercase; letter-spacing:.05em; }
-        .cot-kpi-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:4px; }
-        .cot-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
-        #tablaCotizaciones tbody tr:hover { background:var(--surface); cursor:pointer; }
-        #tablaCotizaciones tbody tr { transition:background .1s; }
-        .cot-folio { font-weight:700; font-size:11.5px; color:var(--text-primary); font-family:monospace; }
-        .cot-monto { font-variant-numeric:tabular-nums; font-weight:600; text-align:right; }
-        .cot-vence-warn { color:#B91C1C; font-weight:700; }
-      </style>
+    <style>
+      .cot-wrap { padding:0 4px }
+      .cot-header { display:flex; align-items:flex-start; justify-content:space-between;
+        gap:12px; flex-wrap:wrap; margin-bottom:16px }
+      .cot-kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+        gap:10px; margin-bottom:16px }
+      .cot-kpi { background:var(--surface); border:1px solid var(--border); border-radius:10px;
+        padding:14px 16px; display:flex; flex-direction:column; gap:3px }
+      .cot-kpi-val { font-size:24px; font-weight:800; font-variant-numeric:tabular-nums }
+      .cot-kpi-lbl { font-size:10px; font-weight:600; color:#9CA3AF;
+        text-transform:uppercase; letter-spacing:.06em }
+      .cot-filtros { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:12px }
+      .cot-pill { padding:5px 12px; border-radius:20px; border:1.5px solid var(--border);
+        background:transparent; font-size:11.5px; font-weight:600;
+        color:#6B7280; cursor:pointer; transition:all .15s; white-space:nowrap }
+      .cot-pill.active { font-weight:700 }
+      .cot-tabla-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:10px }
+      .cot-tabla { width:100%; border-collapse:collapse; font-size:13px }
+      .cot-tabla th { background:var(--surface); padding:10px 14px;
+        text-align:left; font-size:10px; font-weight:700; color:#9CA3AF;
+        text-transform:uppercase; letter-spacing:.06em;
+        border-bottom:1px solid var(--border); white-space:nowrap }
+      .cot-tabla td { padding:11px 14px; border-bottom:1px solid var(--border);
+        color:var(--text-primary); vertical-align:middle }
+      .cot-tabla tbody tr:last-child td { border-bottom:none }
+      .cot-tabla tbody tr:hover { background:var(--surface) }
+      .cot-folio { font-weight:700; font-family:monospace; font-size:12px }
+      .cot-monto { font-variant-numeric:tabular-nums; font-weight:600;
+        text-align:right; white-space:nowrap }
+      .cot-estado { display:inline-flex; align-items:center; gap:4px;
+        padding:3px 8px; border-radius:20px; font-size:11px; font-weight:700;
+        white-space:nowrap }
+      .cot-vence-ok   { color:#16A34A }
+      .cot-vence-warn { color:#D97706; font-weight:700 }
+      .cot-vence-venc { color:#DC2626; font-weight:700 }
+      /* Modal detalle */
+      .cot-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
+        z-index:2000; align-items:flex-start; justify-content:center;
+        overflow-y:auto; padding:20px }
+      .cot-modal.open { display:flex }
+      .cot-modal-box { background:var(--surface); border:1px solid var(--border);
+        border-radius:14px; width:100%; max-width:720px; box-shadow:0 24px 64px rgba(0,0,0,.4);
+        overflow:hidden; margin:auto }
+      .cot-modal-header { display:flex; align-items:center; gap:12px; padding:18px 20px;
+        border-bottom:1px solid var(--border) }
+      .cot-modal-body { padding:20px; overflow-y:auto; max-height:72vh }
+      .cot-modal-footer { display:flex; justify-content:flex-end; gap:8px;
+        padding:14px 20px; border-top:1px solid var(--border) }
+      .cot-det-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px;
+        margin-bottom:16px }
+      .cot-det-field { display:flex; flex-direction:column; gap:3px }
+      .cot-det-lbl { font-size:10px; font-weight:700; color:#9CA3AF;
+        text-transform:uppercase; letter-spacing:.06em }
+      .cot-det-val { font-size:13px; color:var(--text-primary); font-weight:500 }
+      .cot-items-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:12px }
+      .cot-items-table th { background:var(--surface-2,var(--surface));
+        padding:8px 12px; text-align:left; font-size:10px; font-weight:700;
+        color:#9CA3AF; text-transform:uppercase; border-bottom:1px solid var(--border) }
+      .cot-items-table td { padding:9px 12px; border-bottom:1px solid var(--border) }
+      .cot-items-table tfoot td { font-weight:800; border-top:2px solid var(--border);
+        border-bottom:none; padding-top:12px }
+    </style>
 
-      <div class="view-header" style="margin-bottom:12px">
+    <div class="cot-wrap">
+      <!-- Header -->
+      <div class="cot-header">
         <div>
-          <h2 style="margin:0">Cotizaciones</h2>
-          <div style="font-size:11px;color:#9CA3AF;margin-top:2px" id="cotSubtitulo">Cargando…</div>
+          <div id="cot-subtitulo" style="font-size:12px;color:#9CA3AF;margin-top:2px">Cargando…</div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn-secondary" id="btnConfigVigencia">⚙ Vigencia: ${_vigenciaDias}d</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn-secondary" id="cot-btn-vigencia" style="font-size:12px">
+            ⚙ Vigencia: <strong id="cot-vig-label">${_vigenciaDias}d</strong>
+          </button>
+          ${_puedeEditar() ? `<button class="btn-primary" id="cot-btn-nueva" style="font-size:12px">
+            + Nueva cotización
+          </button>` : ''}
         </div>
       </div>
 
       <!-- KPIs -->
-      <div class="cot-kpi-grid" id="cotKpis">
-        <div class="cot-kpi"><div class="cot-kpi-num" id="kpi-total">—</div><div class="cot-kpi-lbl">Total</div></div>
-        <div class="cot-kpi"><div class="cot-kpi-num" style="color:#D97706" id="kpi-enviadas">—</div><div class="cot-kpi-lbl"><span class="cot-kpi-dot" style="background:#D97706"></span>Enviadas</div></div>
-        <div class="cot-kpi"><div class="cot-kpi-num" style="color:#16A34A" id="kpi-aprobadas">—</div><div class="cot-kpi-lbl"><span class="cot-kpi-dot" style="background:#16A34A"></span>Aprobadas</div></div>
-        <div class="cot-kpi"><div class="cot-kpi-num" style="color:#DC2626" id="kpi-rechazadas">—</div><div class="cot-kpi-lbl"><span class="cot-kpi-dot" style="background:#DC2626"></span>Rechazadas</div></div>
-        <div class="cot-kpi"><div class="cot-kpi-num" style="color:#7C3AED" id="kpi-convertidas">—</div><div class="cot-kpi-lbl"><span class="cot-kpi-dot" style="background:#7C3AED"></span>Convertidas</div></div>
+      <div class="cot-kpis">
+        <div class="cot-kpi">
+          <div class="cot-kpi-val" id="kpi-total" style="color:var(--text-primary)">—</div>
+          <div class="cot-kpi-lbl">Total</div>
+        </div>
+        <div class="cot-kpi">
+          <div class="cot-kpi-val" id="kpi-enviadas" style="color:#D97706">—</div>
+          <div class="cot-kpi-lbl">📤 Enviadas</div>
+        </div>
+        <div class="cot-kpi">
+          <div class="cot-kpi-val" id="kpi-aprobadas" style="color:#16A34A">—</div>
+          <div class="cot-kpi-lbl">✅ Aprobadas</div>
+        </div>
+        <div class="cot-kpi">
+          <div class="cot-kpi-val" id="kpi-rechazadas" style="color:#DC2626">—</div>
+          <div class="cot-kpi-lbl">❌ Rechazadas</div>
+        </div>
+        <div class="cot-kpi">
+          <div class="cot-kpi-val" id="kpi-convertidas" style="color:#7C3AED">—</div>
+          <div class="cot-kpi-lbl">🛒 Convertidas</div>
+        </div>
       </div>
 
-      <!-- Filtro -->
-      <div class="cot-toolbar">
-        <span style="font-size:11px;font-weight:700;color:#6B7280">Filtrar:</span>
-        ${Object.entries(STATUS_LABELS).map(([k,v]) =>
-          `<button class="cot-filtro-btn" data-status="${k}"
-            style="padding:4px 10px;border-radius:20px;border:1px solid var(--border);
-              background:transparent;font-size:11px;font-weight:600;color:#6B7280;cursor:pointer">
-            ${v.label}
+      <!-- Filtros -->
+      <div class="cot-filtros">
+        <span style="font-size:11px;font-weight:700;color:#9CA3AF;flex-shrink:0">Filtrar:</span>
+        ${Object.entries(ESTADOS).map(([k,v]) =>
+          `<button class="cot-pill" data-status="${k}"
+            style="border-color:${v.color}20;color:${v.color}">
+            ${v.icon} ${v.label}
           </button>`).join('')}
-        <button class="cot-filtro-btn" data-status="" style="padding:4px 10px;border-radius:20px;
-          border:1px solid var(--border);background:var(--surface);font-size:11px;
-          font-weight:700;color:var(--text-primary);cursor:pointer">Todos</button>
-        <input id="cotBusqueda" type="search" placeholder="Buscar folio / cliente…"
-          style="margin-left:auto;padding:5px 10px;border:1px solid var(--border);border-radius:7px;
-            background:var(--surface);color:var(--text-primary);font-size:11.5px;min-width:180px">
+        <button class="cot-pill active" data-status=""
+          style="background:var(--surface);color:var(--text-primary);
+            border-color:var(--text-primary)">Todos</button>
+        <input id="cot-buscar" type="search" placeholder="Buscar folio / cliente…"
+          style="margin-left:auto;padding:6px 10px;border:1px solid var(--border);
+            border-radius:7px;background:var(--surface);color:var(--text-primary);
+            font-size:12px;min-width:200px">
       </div>
 
-      <div class="tabla-wrapper">
-        <table class="tabla" id="tablaCotizaciones">
+      <!-- Tabla -->
+      <div class="cot-tabla-wrap">
+        <table class="cot-tabla">
           <thead><tr>
             <th>Folio</th>
             <th>Cliente</th>
@@ -99,276 +180,440 @@ export const CotizacionesPanelModule = (() => {
             <th>Creada</th>
             <th>Vence</th>
             <th>Estado</th>
-            <th>Acciones</th>
+            <th></th>
           </tr></thead>
-          <tbody id="tbodyCot"></tbody>
+          <tbody id="cot-tbody">
+            <tr><td colspan="8" style="padding:40px;text-align:center;color:#9CA3AF">
+              Cargando cotizaciones…</td></tr>
+          </tbody>
         </table>
       </div>
+    </div>
 
-      <!-- Panel detalle de cotización -->
-      <div id="panelCot" class="side-panel hidden">
-        <div class="side-panel-header">
-          <h3 id="panelCotTitulo">Cotización</h3>
-          <button id="cerrarPanelCot" class="btn-icon">✕</button>
+    <!-- Modal detalle / crear -->
+    <div class="cot-modal" id="cot-modal">
+      <div class="cot-modal-box">
+        <div class="cot-modal-header">
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:800;color:var(--text-primary)"
+              id="cot-modal-titulo">Cotización</div>
+            <div style="font-size:11px;color:#9CA3AF;margin-top:2px" id="cot-modal-sub"></div>
+          </div>
+          <button id="cot-modal-close"
+            style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);
+              background:transparent;cursor:pointer;color:#64748B;font-size:14px">✕</button>
         </div>
-        <div id="panelCotBody"></div>
+        <div class="cot-modal-body" id="cot-modal-body"></div>
+        <div class="cot-modal-footer" id="cot-modal-footer"></div>
       </div>
+    </div>
 
-      <!-- Modal config vigencia -->
-      <div id="modalVigencia" class="modal-overlay hidden">
-        <div class="modal-box">
-          <h4>Vigencia por defecto</h4>
-          <form id="formVigencia" novalidate>
-            <label>Días de vigencia
-              <input name="vigenciaDias" type="number" class="input-text" min="1" max="365" value="${_vigenciaDias}" required>
-            </label>
-            <div class="form-actions">
-              <button type="button" id="btnCancelarVigencia" class="btn-secondary">Cancelar</button>
-              <button type="submit" class="btn-primary">Guardar</button>
-            </div>
-          </form>
+    <!-- Modal config vigencia -->
+    <div class="cot-modal" id="cot-modal-vig">
+      <div class="cot-modal-box" style="max-width:360px">
+        <div class="cot-modal-header">
+          <div style="font-size:14px;font-weight:800;color:var(--text-primary)">
+            ⚙ Vigencia por defecto
+          </div>
+          <button id="cot-vig-close"
+            style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);
+              background:transparent;cursor:pointer;color:#64748B;font-size:14px">✕</button>
+        </div>
+        <div class="cot-modal-body">
+          <label style="font-size:12px;font-weight:600;color:#9CA3AF;
+            text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px">
+            Días de vigencia
+          </label>
+          <input id="cot-vig-input" type="number" min="1" max="365" value="${_vigenciaDias}"
+            style="width:100%;padding:10px 12px;border:1px solid var(--border);
+              border-radius:8px;background:var(--surface);color:var(--text-primary);
+              font-size:16px;font-weight:700;text-align:center;box-sizing:border-box">
+        </div>
+        <div class="cot-modal-footer">
+          <button id="cot-vig-cancel" class="btn-secondary">Cancelar</button>
+          <button id="cot-vig-guardar" class="btn-primary">Guardar</button>
         </div>
       </div>
-    `;
+    </div>`;
 
     _bindUI(container);
-    _escuchar(container, '');
+    _escuchar();
   }
 
-  // ── Escucha Firestore ─────────────────────────────────────────────────
-
-  function _escuchar(container, filtroStatus) {
-    if (_unsub) _unsub();
-    let q = query(collection(db, 'cotizaciones'), orderBy('creadaEn', 'desc'), limit(300));
-    if (filtroStatus) q = query(collection(db, 'cotizaciones'), where('status', '==', filtroStatus), orderBy('creadaEn', 'desc'), limit(300));
+  // ── Firestore ─────────────────────────────────────────────────────────
+  function _escuchar() {
+    _unsub?.();
+    const q = _filtroStatus
+      ? query(collection(db,'cotizaciones'), where('status','==',_filtroStatus),
+          orderBy('creadaEn','desc'), limit(300))
+      : query(collection(db,'cotizaciones'), orderBy('creadaEn','desc'), limit(300));
 
     _unsub = onSnapshot(q, snap => {
-      const tbody = container.querySelector('#tbodyCot');
-      if (snap.empty) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:#9CA3AF">Sin cotizaciones.</td></tr>'; return; }
-      const ahora = Date.now();
-
-      // KPIs
-      const counts = { ENVIADA: 0, APROBADA: 0, RECHAZADA: 0, CONVERTIDA: 0 };
-      snap.docs.forEach(d => { const s = d.data().status; if (counts[s] !== undefined) counts[s]++; });
-      const setKpi = (id, val) => { const el = container.querySelector(id); if (el) el.textContent = val; };
-      setKpi('#kpi-total', snap.size);
-      setKpi('#kpi-enviadas', counts.ENVIADA);
-      setKpi('#kpi-aprobadas', counts.APROBADA);
-      setKpi('#kpi-rechazadas', counts.RECHAZADA);
-      setKpi('#kpi-convertidas', counts.CONVERTIDA);
-      const sub = container.querySelector('#cotSubtitulo');
-      if (sub) sub.textContent = `${snap.size} cotizaciones · ${counts.APROBADA} aprobadas · ${counts.CONVERTIDA} convertidas en pedido`;
-
-      tbody.innerHTML = snap.docs.map(d => {
-        const c = d.data();
-        const statusInfo = STATUS_LABELS[c.status] || { label: c.status, cls: 'badge-gray' };
-        const expirada = c.venceEn > 0 && c.venceEn < ahora && c.status !== 'EXPIRADA' && c.status !== 'CONVERTIDA';
-        return `<tr>
-          <td><span class="cot-folio">${esc(c.folio)}</span></td>
-          <td>${esc(c.clienteNombre)}</td>
-          <td style="color:#9CA3AF;font-size:11px">${esc(c.ingenieroAlias)}</td>
-          <td class="cot-monto">${fmtMoneda(c.total, c.moneda)}${c.moneda === 'USD' ? ` <small style="color:#9CA3AF">TC ${c.tipoCambio?.toFixed(2) || '?'}</small>` : ''}</td>
-          <td style="font-size:11px;color:#9CA3AF">${fmtFecha(c.creadaEn)}</td>
-          <td class="${expirada ? 'cot-vence-warn' : ''}" style="font-size:11px">${fmtFecha(c.venceEn)}${expirada ? ' ⚠️' : ''}</td>
-          <td><span class="${statusInfo.cls}">${statusInfo.label}</span></td>
-          <td>
-            <div style="display:flex;gap:4px">
-              <button class="btn-sm btn-ver-cot" data-id="${esc(d.id)}">Ver</button>
-              ${_puedeConvertir(c) ? `<button class="btn-sm btn-convertir" data-id="${esc(d.id)}" style="background:var(--color-primary);color:#fff">→ Pedido</button>` : ''}
-            </div>
-          </td>
-        </tr>`;
-      }).join('');
-
-      tbody.querySelectorAll('.btn-ver-cot').forEach(btn =>
-        btn.addEventListener('click', () => {
-          const docSnap = snap.docs.find(d => d.id === btn.dataset.id);
-          if (docSnap) _abrirDetalle(container, docSnap);
-        }));
-
-      tbody.querySelectorAll('.btn-convertir').forEach(btn =>
-        btn.addEventListener('click', () => _convertirEnPedido(btn.dataset.id)));
+      _allDocs = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      _actualizarKPIs();
+      _renderTabla();
+    }, err => {
+      console.error('[Cotizaciones]', err);
+      document.getElementById('cot-tbody').innerHTML =
+        `<tr><td colspan="8" style="padding:32px;text-align:center;color:#DC2626">
+          Error: ${err.message}</td></tr>`;
     });
   }
 
-  function _puedeConvertir(c) {
-    return ['ENVIADA', 'APROBADA'].includes(c.status);
-  }
-
-  // ── Detalle panel ─────────────────────────────────────────────────────
-
-  function _abrirDetalle(container, docSnap) {
-    const c = docSnap.data();
-    const items = c.items || [];
-    const panel = container.querySelector('#panelCot');
-    container.querySelector('#panelCotTitulo').textContent = c.folio || 'Cotización';
-
-    const statusInfo = STATUS_LABELS[c.status] || { label: c.status, cls: 'badge-gray' };
-    const totalLine = items.reduce((s, i) => s + (i.subtotal || 0), 0);
-
-    const itemsHtml = items.map(i => `
-      <tr>
-        <td>${esc(i.nombreProducto)}</td>
-        <td class="num">${Number(i.cantidad).toLocaleString('es-MX')}</td>
-        <td class="num">${fmtMXN(i.precioUnitario)}</td>
-        <td class="num">${fmtMXN(i.subtotal)}</td>
-      </tr>
-    `).join('');
-
-    container.querySelector('#panelCotBody').innerHTML = `
-      <div style="padding:12px">
-        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-          <span class="${statusInfo.cls}">${statusInfo.label}</span>
-          <span>Vigencia: ${c.vigenciaDias || 15} días</span>
-          <span>Vence: ${fmtFecha(c.venceEn)}</span>
-          ${c.moneda === 'USD' ? `<span style="background:#DBEAFE;color:#1E40AF;border-radius:4px;padding:.15rem .4rem;font-size:.78rem;font-weight:700">💱 USD · TC $${c.tipoCambio?.toFixed(4) || '?'} · MXN ${fmtMXN(c.totalMxn || (c.total * (c.tipoCambio || 1)))}</span>` : '<span style="background:#D1FAE5;color:#065F46;border-radius:4px;padding:.15rem .4rem;font-size:.78rem;font-weight:700">🇲🇽 MXN</span>'}
-        </div>
-        <p><strong>Cliente:</strong> ${esc(c.clienteNombre)}</p>
-        <p><strong>Ingeniero:</strong> ${esc(c.ingenieroAlias)}</p>
-        <p><strong>Creada:</strong> ${fmtFecha(c.creadaEn)}</p>
-        ${c.notas ? `<p><strong>Notas:</strong> ${esc(c.notas)}</p>` : ''}
-        <table class="tabla" style="margin-top:12px">
-          <thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr></thead>
-          <tbody>${itemsHtml}</tbody>
-          <tfoot><tr>
-            <td colspan="3" style="text-align:right;font-weight:bold">TOTAL</td>
-            <td class="num"><strong>${fmtMXN(c.total || totalLine)}</strong></td>
-          </tr></tfoot>
-        </table>
-        ${_puedeConvertir(c) ? `
-        <div style="margin-top:16px;display:flex;gap:8px">
-          <button class="btn-primary" id="btnPanelConvertir" data-id="${esc(docSnap.id)}">Convertir en pedido</button>
-          <select id="selActualizarStatus" class="input-select">
-            <option value="">Actualizar estado…</option>
-            <option value="APROBADA">Aprobar</option>
-            <option value="RECHAZADA">Rechazar</option>
-          </select>
-        </div>` : ''}
-        ${c.pedidoFolio ? `<p style="margin-top:8px;color:var(--color-primary)">Pedido: <strong>${esc(c.pedidoFolio)}</strong></p>` : ''}
-      </div>
-    `;
-
-    panel.querySelector('#btnPanelConvertir')?.addEventListener('click', e => {
-      _convertirEnPedido(e.target.dataset.id);
-    });
-    panel.querySelector('#selActualizarStatus')?.addEventListener('change', async e => {
-      const st = e.target.value;
-      if (!st) return;
-      if (!await window.modal({ title: "Actualizar status", message: `¿Marcar esta cotización como "${STATUS_LABELS[st]?.label}"?` })) { e.target.value = ''; return; }
-      try {
-        await updateDoc(doc(db, 'cotizaciones', docSnap.id), { status: st, actualizadoEn: serverTimestamp(), actualizadoPor: Sesion.alias });
-        panel.classList.add('hidden');
-      } catch (err) { window.toast?.("Error: " + err.message, "error"); }
-    });
-
-    panel.classList.remove('hidden');
-  }
-
-  // ── Convertir en pedido ───────────────────────────────────────────────
-
-  async function _convertirEnPedido(cotizacionId) {
-    if (!await window.modal({ title: "Convertir en pedido", message: "¿Convertir esta cotización en un pedido? Se registrará en Firestore.", confirmLabel: "Convertir" })) return;
-    try {
-      const cotSnap = await getDoc(doc(db, 'cotizaciones', cotizacionId));
-      if (!cotSnap.exists()) { window.toast?.("Cotización no encontrada.", "error"); return; }
-      const c = cotSnap.data();
-
-      // Generar folio de pedido
-      const cfgRef = doc(db, 'configuracion_erp', 'ULTIMO_FOLIO_PEDIDO_WEB');
-      const cfgSnap = await getDoc(cfgRef);
-      const ultimo = parseInt(cfgSnap.exists() ? cfgSnap.data().valor : '0', 10) || 0;
-      const siguiente = ultimo + 1;
-      const folioPed = 'N10-PED-' + String(siguiente).padStart(5, '0');
-      await updateDoc(cfgRef.parent ? cfgRef : doc(db, 'configuracion_erp', 'ULTIMO_FOLIO_PEDIDO_WEB'), { valor: String(siguiente) }).catch(() =>
-        addDoc(collection(db, 'configuracion_erp'), { clave: 'ULTIMO_FOLIO_PEDIDO_WEB', valor: String(siguiente) }));
-
-      const pedido = {
-        folio:          folioPed,
-        clienteId:      c.clienteId,
-        clienteNombre:  c.clienteNombre,
-        ingenieroAlias: c.ingenieroAlias,
-        tipoPedido:     'VENTA_RUTA',
-        tipoVenta:      'CONTADO',
-        status:         'BORRADOR',
-        subtotal:       c.subtotal,
-        total:          c.total,
-        totalMxn:       c.totalMxn || c.total,
-        moneda:         c.moneda || 'MXN',
-        tipoCambio:     c.tipoCambio || 1,
-        items:          c.items || [],
-        cotizacionId:   cotizacionId,
-        cotizacionFolio: c.folio,
-        creadoEn:       serverTimestamp(),
-        creadoPor:      Sesion.alias
-      };
-      const pedRef = await addDoc(collection(db, 'pedidos'), pedido);
-      await updateDoc(doc(db, 'cotizaciones', cotizacionId), {
-        status:         'CONVERTIDA',
-        pedidoFirestoreId: pedRef.id,
-        pedidoFolio:    folioPed,
-        actualizadoEn:  serverTimestamp()
-      });
-      document.querySelector('#panelCot')?.classList.add('hidden');
-      window.toast?.(`Pedido ${folioPed} creado`, 'success');
-      if (await window.modal({ title: 'Pedido creado', message: `${folioPed} fue creado en borrador. ¿Ir al módulo de Pedidos?`, confirmLabel: 'Ir a Pedidos', cancelLabel: 'Quedarme' })) {
-        window.navigate?.('pedidos');
-      }
-    } catch (err) {
-      window.toast?.('Error al convertir: ' + err.message, 'error');
+  function _actualizarKPIs() {
+    const todos = _allDocs;
+    const cnt = k => todos.filter(d => d.status === k).length;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('kpi-total', todos.length);
+    set('kpi-enviadas', cnt('ENVIADA'));
+    set('kpi-aprobadas', cnt('APROBADA'));
+    set('kpi-rechazadas', cnt('RECHAZADA'));
+    set('kpi-convertidas', cnt('CONVERTIDA'));
+    const sub = document.getElementById('cot-subtitulo');
+    if (sub) {
+      const venc = todos.filter(d =>
+        d.venceEn && d.venceEn < Date.now() &&
+        !['EXPIRADA','CONVERTIDA','RECHAZADA'].includes(d.status)).length;
+      sub.textContent = `${todos.length} cotizaciones · ${cnt('APROBADA')} aprobadas · ${cnt('CONVERTIDA')} convertidas`
+        + (venc ? ` · ⚠️ ${venc} vencidas` : '');
     }
   }
 
-  // ── Config vigencia ───────────────────────────────────────────────────
+  function _renderTabla() {
+    const tbody = document.getElementById('cot-tbody');
+    if (!tbody) return;
+    const q = _busqueda.toLowerCase();
+    const rows = _allDocs.filter(c =>
+      !q ||
+      (c.folio||'').toLowerCase().includes(q) ||
+      (c.clienteNombre||'').toLowerCase().includes(q) ||
+      (c.ingenieroAlias||'').toLowerCase().includes(q)
+    );
+
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="8" style="padding:40px;text-align:center;color:#9CA3AF">
+        ${_allDocs.length ? 'Sin resultados para la búsqueda.' : 'Sin cotizaciones registradas.'}</td></tr>`;
+      return;
+    }
+
+    const ahora = Date.now();
+    tbody.innerHTML = rows.map(c => {
+      const est = ESTADOS[c.status] || ESTADOS.BORRADOR;
+      const dias = diasRestantes(c.venceEn);
+      let venceCls = 'cot-vence-ok', venceTxt = '';
+      if (c.venceEn) {
+        if (dias === null) venceTxt = '—';
+        else if (dias < 0) { venceCls = 'cot-vence-venc'; venceTxt = `${fmtFecha(c.venceEn)} ⚠️`; }
+        else if (dias <= 3) { venceCls = 'cot-vence-warn'; venceTxt = `${fmtFecha(c.venceEn)} (${dias}d)`; }
+        else venceTxt = fmtFecha(c.venceEn);
+      } else venceTxt = '—';
+
+      return `<tr style="cursor:pointer" data-id="${esc(c.id)}" class="cot-row">
+        <td><span class="cot-folio">${esc(c.folio||'—')}</span></td>
+        <td style="font-weight:500;max-width:180px;overflow:hidden;
+          text-overflow:ellipsis;white-space:nowrap">${esc(c.clienteNombre||'—')}</td>
+        <td style="color:#9CA3AF;font-size:12px">${esc(c.ingenieroAlias||'—')}</td>
+        <td class="cot-monto">${fmtMoneda(c.total, c.moneda)}</td>
+        <td style="font-size:12px;color:#9CA3AF;white-space:nowrap">${fmtFecha(c.creadaEn)}</td>
+        <td class="${venceCls}" style="font-size:12px;white-space:nowrap">${venceTxt}</td>
+        <td>
+          <span class="cot-estado"
+            style="background:${est.bg};color:${est.color}">
+            ${est.icon} ${est.label}
+          </span>
+        </td>
+        <td>
+          <div style="display:flex;gap:4px">
+            <button class="btn-sm btn-outline cot-ver" data-id="${esc(c.id)}"
+              style="font-size:11px;padding:4px 10px">Ver</button>
+            ${['ENVIADA','APROBADA'].includes(c.status) && _puedeEditar()
+              ? `<button class="btn-sm cot-convertir" data-id="${esc(c.id)}"
+                  style="font-size:11px;padding:4px 10px;background:#7C3AED;
+                    color:#fff;border:none;border-radius:6px;cursor:pointer">
+                  🛒 Pedido
+                </button>` : ''}
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('.cot-ver').forEach(btn =>
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const c = _allDocs.find(d => d.id === btn.dataset.id);
+        if (c) _abrirDetalle(c);
+      }));
+    tbody.querySelectorAll('.cot-row').forEach(tr =>
+      tr.addEventListener('click', e => {
+        if (e.target.closest('button')) return;
+        const c = _allDocs.find(d => d.id === tr.dataset.id);
+        if (c) _abrirDetalle(c);
+      }));
+    tbody.querySelectorAll('.cot-convertir').forEach(btn =>
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        _convertirEnPedido(btn.dataset.id);
+      }));
+  }
+
+  // ── Detalle ───────────────────────────────────────────────────────────
+  function _abrirDetalle(c) {
+    const est = ESTADOS[c.status] || ESTADOS.BORRADOR;
+    const items = c.items || [];
+    const totalCalc = items.reduce((s,i) => s + (i.subtotal||0), 0);
+    const dias = diasRestantes(c.venceEn);
+
+    document.getElementById('cot-modal-titulo').textContent = c.folio || 'Cotización';
+    document.getElementById('cot-modal-sub').innerHTML =
+      `<span class="cot-estado" style="background:${est.bg};color:${est.color};
+        display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
+        border-radius:20px;font-size:11px;font-weight:700">
+        ${est.icon} ${est.label}
+      </span>${dias !== null && dias < 0 ? ' · <span style="color:#DC2626;font-weight:700">⚠️ Vencida hace '+Math.abs(dias)+'d</span>' : dias !== null && dias <= 3 ? ` · <span style="color:#D97706;font-weight:700">Vence en ${dias}d</span>` : ''}`;
+
+    document.getElementById('cot-modal-body').innerHTML = `
+      <div class="cot-det-grid">
+        <div class="cot-det-field">
+          <span class="cot-det-lbl">Cliente</span>
+          <span class="cot-det-val">${esc(c.clienteNombre||'—')}</span>
+        </div>
+        <div class="cot-det-field">
+          <span class="cot-det-lbl">Ingeniero</span>
+          <span class="cot-det-val">${esc(c.ingenieroAlias||'—')}</span>
+        </div>
+        <div class="cot-det-field">
+          <span class="cot-det-lbl">Creada</span>
+          <span class="cot-det-val">${fmtFecha(c.creadaEn)}</span>
+        </div>
+        <div class="cot-det-field">
+          <span class="cot-det-lbl">Vence</span>
+          <span class="cot-det-val ${dias !== null && dias < 0 ? 'cot-vence-venc' : dias !== null && dias <= 3 ? 'cot-vence-warn' : ''}">${fmtFecha(c.venceEn)}</span>
+        </div>
+        <div class="cot-det-field">
+          <span class="cot-det-lbl">Moneda</span>
+          <span class="cot-det-val">${c.moneda || 'MXN'}${c.moneda === 'USD' ? ` · TC $${Number(c.tipoCambio||0).toFixed(4)}` : ''}</span>
+        </div>
+        <div class="cot-det-field">
+          <span class="cot-det-lbl">Vigencia</span>
+          <span class="cot-det-val">${c.vigenciaDias || _vigenciaDias} días</span>
+        </div>
+        ${c.notas ? `<div class="cot-det-field" style="grid-column:1/-1">
+          <span class="cot-det-lbl">Notas</span>
+          <span class="cot-det-val">${esc(c.notas)}</span>
+        </div>` : ''}
+        ${c.pedidoFolio ? `<div class="cot-det-field" style="grid-column:1/-1">
+          <span class="cot-det-lbl">Pedido generado</span>
+          <span class="cot-det-val" style="color:#7C3AED;font-weight:700">🛒 ${esc(c.pedidoFolio)}</span>
+        </div>` : ''}
+      </div>
+
+      <div style="overflow-x:auto">
+        <table class="cot-items-table">
+          <thead><tr>
+            <th>Producto</th>
+            <th style="text-align:right">Cant.</th>
+            <th style="text-align:right">Precio unit.</th>
+            <th style="text-align:right">Subtotal</th>
+          </tr></thead>
+          <tbody>
+            ${items.length ? items.map(i => `<tr>
+              <td>${esc(i.nombreProducto||i.nombre||'—')}</td>
+              <td style="text-align:right;font-variant-numeric:tabular-nums">
+                ${Number(i.cantidad).toLocaleString('es-MX')}</td>
+              <td style="text-align:right;font-variant-numeric:tabular-nums">
+                ${fmtMoneda(i.precioUnitario||i.precio, c.moneda)}</td>
+              <td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums">
+                ${fmtMoneda(i.subtotal, c.moneda)}</td>
+            </tr>`).join('') :
+            `<tr><td colspan="4" style="padding:20px;text-align:center;color:#9CA3AF">
+              Sin productos en esta cotización.</td></tr>`}
+          </tbody>
+          <tfoot><tr>
+            <td colspan="3" style="text-align:right;color:#9CA3AF;font-size:12px">TOTAL</td>
+            <td style="text-align:right;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums">
+              ${fmtMoneda(c.total || totalCalc, c.moneda)}
+            </td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+
+    // Footer con acciones
+    const footer = document.getElementById('cot-modal-footer');
+    footer.innerHTML = '';
+    if (_puedeEditar() && ['ENVIADA','APROBADA','BORRADOR'].includes(c.status)) {
+      if (['ENVIADA','APROBADA'].includes(c.status)) {
+        footer.innerHTML += `
+          <button id="det-aprobar" class="btn-secondary" data-id="${esc(c.id)}"
+            style="background:#DCFCE7;color:#16A34A;border-color:#16A34A40;font-size:12px">
+            ✅ Aprobar
+          </button>
+          <button id="det-rechazar" class="btn-secondary" data-id="${esc(c.id)}"
+            style="background:#FEE2E2;color:#DC2626;border-color:#DC262640;font-size:12px">
+            ❌ Rechazar
+          </button>
+          <button id="det-convertir" class="btn-primary" data-id="${esc(c.id)}"
+            style="background:#7C3AED;font-size:12px">
+            🛒 Convertir en pedido
+          </button>`;
+      }
+    }
+
+    document.getElementById('det-aprobar')?.addEventListener('click', async e => {
+      await _cambiarEstado(e.target.dataset.id, 'APROBADA');
+    });
+    document.getElementById('det-rechazar')?.addEventListener('click', async e => {
+      if (!await window.modal?.({ title:'Rechazar cotización', message:'¿Confirmar rechazo?', confirmLabel:'Rechazar' })) return;
+      await _cambiarEstado(e.target.dataset.id, 'RECHAZADA');
+    });
+    document.getElementById('det-convertir')?.addEventListener('click', async e => {
+      _cerrarModal();
+      await _convertirEnPedido(e.target.dataset.id);
+    });
+
+    document.getElementById('cot-modal').classList.add('open');
+  }
+
+  async function _cambiarEstado(id, nuevoEstado) {
+    try {
+      await updateDoc(doc(db,'cotizaciones',id), {
+        status: nuevoEstado,
+        actualizadoEn: serverTimestamp(),
+        actualizadoPor: Sesion.alias
+      });
+      logAudit('COTIZACION_ESTADO', { id, estado: nuevoEstado });
+      window.toast?.(`Estado actualizado a ${ESTADOS[nuevoEstado]?.label}`, 'success');
+      _cerrarModal();
+    } catch(e) { window.toast?.('Error: ' + e.message, 'error'); }
+  }
+
+  // ── Convertir en pedido ───────────────────────────────────────────────
+  async function _convertirEnPedido(cotId) {
+    if (!await window.modal?.({ title:'Convertir en pedido',
+      message:'¿Convertir esta cotización en un pedido borrador?',
+      confirmLabel:'Convertir' })) return;
+    try {
+      const cotSnap = await getDoc(doc(db,'cotizaciones',cotId));
+      if (!cotSnap.exists()) { window.toast?.('No se encontró la cotización.','error'); return; }
+      const c = cotSnap.data();
+
+      // Folio secuencial
+      const cfgRef = doc(db,'configuracion_erp','ULTIMO_FOLIO_PEDIDO_WEB');
+      const cfgSnap = await getDoc(cfgRef);
+      const ultimo = parseInt(cfgSnap.exists() ? cfgSnap.data().valor : '0') || 0;
+      const siguiente = ultimo + 1;
+      const folioPed = 'N10-PED-' + String(siguiente).padStart(5,'0');
+      await setDoc(cfgRef, { valor: String(siguiente) }, { merge:true });
+
+      const pedRef = await addDoc(collection(db,'pedidos'), {
+        folio:          folioPed,
+        clienteId:      c.clienteId || '',
+        clienteNombre:  c.clienteNombre || '',
+        ingenieroAlias: c.ingenieroAlias || '',
+        tipoPedido:     'VENTA_RUTA',
+        tipoVenta:      'CONTADO',
+        status:         'BORRADOR',
+        subtotal:       c.subtotal || 0,
+        total:          c.total || 0,
+        totalMxn:       c.totalMxn || c.total || 0,
+        moneda:         c.moneda || 'MXN',
+        tipoCambio:     c.tipoCambio || 1,
+        items:          c.items || [],
+        cotizacionId:   cotId,
+        cotizacionFolio: c.folio || '',
+        creadoEn:       serverTimestamp(),
+        creadoPor:      Sesion.alias
+      });
+
+      await updateDoc(doc(db,'cotizaciones',cotId), {
+        status: 'CONVERTIDA',
+        pedidoFirestoreId: pedRef.id,
+        pedidoFolio: folioPed,
+        actualizadoEn: serverTimestamp()
+      });
+
+      logAudit('COTIZACION_CONVERTIDA', { cotId, folioPed });
+      window.toast?.(`✅ Pedido ${folioPed} creado en borrador`, 'success');
+
+      if (await window.modal?.({ title:'Pedido creado', message:`${folioPed} fue creado. ¿Ir al módulo de Pedidos?`,
+        confirmLabel:'Ir a Pedidos', cancelLabel:'Quedarme' })) {
+        window.navigate?.('pedidos');
+      }
+    } catch(e) { window.toast?.('Error al convertir: ' + e.message, 'error'); }
+  }
+
+  // ── UI ────────────────────────────────────────────────────────────────
+  function _cerrarModal() {
+    document.getElementById('cot-modal')?.classList.remove('open');
+  }
 
   function _bindUI(container) {
-    container.querySelector('#cerrarPanelCot').addEventListener('click', () =>
-      container.querySelector('#panelCot').classList.add('hidden'));
-
-    container.querySelector('#btnConfigVigencia').addEventListener('click', () =>
-      container.querySelector('#modalVigencia').classList.remove('hidden'));
-
-    container.querySelector('#btnCancelarVigencia').addEventListener('click', () =>
-      container.querySelector('#modalVigencia').classList.add('hidden'));
-
-    container.querySelector('#formVigencia').addEventListener('submit', async e => {
-      e.preventDefault();
-      const dias = parseInt(e.target.vigenciaDias.value, 10);
-      if (isNaN(dias) || dias < 1) { window.toast?.('Ingresa días válidos (mínimo 1)', 'error'); return; }
-      try {
-        await updateDoc(doc(db, 'configuracion', 'cotizaciones'), { vigenciaDias: dias, actualizadoPor: Sesion.alias, actualizadoEn: serverTimestamp() }).catch(async () => {
-          await addDoc(collection(db, 'configuracion'), { vigenciaDias: dias });
-        });
-        _vigenciaDias = dias;
-        container.querySelector('#btnConfigVigencia').textContent = `⚙ Vigencia: ${dias}d`;
-        container.querySelector('#modalVigencia').classList.add('hidden');
-      } catch (err) { window.toast?.('Error: ' + err.message, 'error'); }
+    // Cerrar modal
+    document.getElementById('cot-modal-close')?.addEventListener('click', _cerrarModal);
+    document.getElementById('cot-modal')?.addEventListener('click', e => {
+      if (e.target === document.getElementById('cot-modal')) _cerrarModal();
     });
 
-    // Filtro por botones de estado
-    let _filtroActivo = '';
-    container.querySelectorAll('.cot-filtro-btn').forEach(btn => {
+    // Filtros de estado
+    container.querySelectorAll('.cot-pill').forEach(btn => {
       btn.addEventListener('click', () => {
-        _filtroActivo = btn.dataset.status;
-        container.querySelectorAll('.cot-filtro-btn').forEach(b => {
-          b.style.background = b === btn ? 'var(--surface)' : 'transparent';
-          b.style.color = b === btn ? 'var(--text-primary)' : '#6B7280';
-          b.style.borderColor = b === btn ? 'var(--color-primary,#3B82F6)' : 'var(--border)';
+        container.querySelectorAll('.cot-pill').forEach(b => {
+          const est = b.dataset.status ? ESTADOS[b.dataset.status] : null;
+          b.classList.remove('active');
+          b.style.background = 'transparent';
+          b.style.fontWeight = '600';
+          if (est) { b.style.color = est.color; b.style.borderColor = est.color + '30'; }
+          else { b.style.color = '#6B7280'; b.style.borderColor = 'var(--border)'; }
         });
-        _escuchar(container, _filtroActivo);
+        btn.classList.add('active');
+        btn.style.background = 'var(--surface)';
+        btn.style.fontWeight = '700';
+        if (btn.dataset.status) {
+          const est = ESTADOS[btn.dataset.status];
+          btn.style.borderColor = est.color;
+        } else {
+          btn.style.color = 'var(--text-primary)';
+          btn.style.borderColor = 'var(--text-primary)';
+        }
+        _filtroStatus = btn.dataset.status;
+        _escuchar();
       });
     });
 
-    // Búsqueda local
-    container.querySelector('#cotBusqueda').addEventListener('input', e => {
-      const q = e.target.value.toLowerCase();
-      container.querySelectorAll('#tbodyCot tr').forEach(tr => {
-        tr.style.display = !q || tr.textContent.toLowerCase().includes(q) ? '' : 'none';
-      });
+    // Búsqueda
+    container.querySelector('#cot-buscar')?.addEventListener('input', e => {
+      _busqueda = e.target.value;
+      _renderTabla();
+    });
+
+    // Config vigencia
+    container.querySelector('#cot-btn-vigencia')?.addEventListener('click', () =>
+      document.getElementById('cot-modal-vig').classList.add('open'));
+    document.getElementById('cot-vig-close')?.addEventListener('click', () =>
+      document.getElementById('cot-modal-vig').classList.remove('open'));
+    document.getElementById('cot-vig-cancel')?.addEventListener('click', () =>
+      document.getElementById('cot-modal-vig').classList.remove('open'));
+    document.getElementById('cot-vig-guardar')?.addEventListener('click', async () => {
+      const dias = parseInt(document.getElementById('cot-vig-input').value, 10);
+      if (!dias || dias < 1) { window.toast?.('Ingresa días válidos','error'); return; }
+      try {
+        await setDoc(doc(db,'configuracion','cotizaciones'),
+          { vigenciaDias: dias, actualizadoPor: Sesion.alias, actualizadoEn: serverTimestamp() },
+          { merge:true });
+        _vigenciaDias = dias;
+        document.getElementById('cot-vig-label').textContent = `${dias}d`;
+        document.getElementById('cot-modal-vig').classList.remove('open');
+        window.toast?.('Vigencia actualizada','success');
+      } catch(e) { window.toast?.('Error: ' + e.message, 'error'); }
+    });
+
+    // Nueva cotización (informativo por ahora — se crea desde APK)
+    container.querySelector('#cot-btn-nueva')?.addEventListener('click', () => {
+      window.toast?.('Las cotizaciones se crean desde el APK del ingeniero.','info');
     });
   }
 
   function destroy() {
-    if (_unsub) { _unsub(); _unsub = null; }
+    _unsub?.(); _unsub = null; _allDocs = []; _busqueda = ''; _filtroStatus = '';
   }
 
   return { init, mount: init, destroy };
