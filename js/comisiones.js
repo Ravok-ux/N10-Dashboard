@@ -41,6 +41,8 @@ export const ComisionesModule = {
     _unsubs.forEach(fn => fn && fn());
     _unsubs = [];
     _tabActiva = "config";
+    _unsubCob?.(); _unsubCob = null;
+    _unsubN10?.(); _unsubN10 = null;
   }
 };
 

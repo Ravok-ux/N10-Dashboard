@@ -24,6 +24,7 @@ export const ProveedoresModule = {
       container.innerHTML = `<div style="padding:40px;text-align:center;color:#9CA3AF">Sin acceso.</div>`;
       return () => {};
     }
+    _provs = []; _filtro = ""; _editId = null; _filtrosCat = "";
     container.innerHTML = _html();
     _bindUI();
     _cargar();

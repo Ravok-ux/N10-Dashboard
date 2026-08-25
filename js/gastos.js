@@ -39,6 +39,10 @@ export function mount(container) {
 
 export function destroy() {
   if (_unsub) { _unsub(); _unsub = null; }
+  _filtroStatus = "PENDIENTE";
+  _filtroAlias  = "";
+  _lastDocs     = [];
+  _container    = null;
 }
 
 // ─── HTML ────────────────────────────────────────────────────────────────────
