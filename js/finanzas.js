@@ -636,7 +636,13 @@ function _montarConciliacion() {
         <span id="conc-file-nombre" style="font-size:12px;color:var(--text-muted)">Sin archivo</span>
       </div>
     </div>
-    <div id="conc-resultados"></div>`;
+    <div id="conc-resultados"></div>
+    <div class="card" style="margin-top:16px">
+      <b>Historial de Conciliaciones</b>
+      <div id="conc-historial" style="margin-top:8px">Cargando…</div>
+    </div>`;
+
+  _concCargarHistorial();
 
   window._concCargarCSV = (input) => {
     const file = input.files[0];
@@ -786,6 +792,33 @@ async function _concProcesar(texto) {
     });
     alert('Conciliación guardada.');
   };
+}
+
+function _concCargarHistorial() {
+  const q = query(collection(db, 'conciliaciones_bancarias'), orderBy('creadoEn', 'desc'), limit(20));
+  const unsub = onSnapshot(q, snap => {
+    const div = el('conc-historial');
+    if (!div) return;
+    if (snap.empty) { div.innerHTML = '<p class="empty">Sin conciliaciones guardadas</p>'; return; }
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    div.innerHTML = `<table class="tbl" style="font-size:12px">
+      <thead><tr><th>Banco</th><th>Mes</th><th>Mov. banco</th><th>Conciliados</th><th>Sin match</th><th>Diferencia</th><th>Usuario</th><th>Fecha</th></tr></thead>
+      <tbody>${rows.map(r => {
+        const color = Math.abs(r.diferencia || 0) < 1 ? '#10b981' : '#ef4444';
+        return `<tr>
+          <td>${r.banco || '—'}</td>
+          <td>${r.mes || '—'}</td>
+          <td class="num">${r.movsBanco || 0}</td>
+          <td class="num" style="color:#10b981">${r.conciliados || 0}</td>
+          <td class="num" style="color:#f59e0b">${r.sinMatch || 0}</td>
+          <td class="num" style="color:${color}">$${fmt(r.diferencia || 0)}</td>
+          <td>${r.usuario || '—'}</td>
+          <td>${fmtDate(r.creadoEn)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  });
+  _unsubs.push(unsub);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -40,6 +40,8 @@ import { RhModule }               from "./rh.js";
 import { AuditoriaModule }        from "./auditoria.js";
 import { InventarioModule }       from "./inventario.js";
 import { CrmModule }              from "./crm.js";
+import { mount as asistenciaMount, destroy as asistenciaDestroy } from "./asistencia.js";
+import { mount as smsMount,        destroy as smsDestroy        } from "./sms.js";
 import { LogisticaModule }        from "./logistica.js";
 import { AgroquimicoModule }      from "./agroquimico.js";
 import { IntegracionesModule }    from "./integraciones.js";
@@ -210,6 +212,8 @@ const MODULES = {
   auditoria:    AuditoriaModule,
   inventario:   InventarioModule,
   crm:          CrmModule,
+  asistencia:   { mount: asistenciaMount, destroy: asistenciaDestroy },
+  sms:          { mount: smsMount,        destroy: smsDestroy },
   logistica:    LogisticaModule,
   agroquimico:  AgroquimicoModule,
   integraciones: IntegracionesModule,
@@ -483,6 +487,8 @@ function _navigate(viewId) {
     reabasto:"Reabasto",
     caja:"Arqueo de Caja", gastos:"Gastos de Empleados",
     historial_ventas:"Historial de Ventas",
+    asistencia:"Control de Asistencia",
+    sms:"SMS Masivo",
     bi_analytics:"BI & Analytics" };
   const subs = { dashboard:"Resumen del día", mapa:"Ingenieros en campo", mapa_clientes:"Localización total de clientes georeferenciados",
     feed:"Actividades globales", usuarios:"Gestión de privilegios",
@@ -494,6 +500,8 @@ function _navigate(viewId) {
     productos:"Gestión del catálogo", comentarios:"Notas y seguimiento de clientes",
     inventario:"Stock en tiempo real por producto",
     crm:"Pipeline de prospectos y conversión a clientes",
+    asistencia:"Registro de entradas/salidas y horarios del equipo en campo",
+    sms:"Campañas de SMS masivo vía SendPulse con segmentación de clientes",
     logistica:"Visitas programadas por frecuencia de cliente",
     agroquimico:"Calendario agrícola, recetas de dosis y trazabilidad campo-cultivo-venta",
     integraciones:"Pasarela de pagos, SPEI, WhatsApp Business y API pública — activa por etapas",
@@ -622,6 +630,8 @@ function _initGlobalSearch() {
     { view:"precios_segmento", icon:"🔖", label:"Precios por segmento",     kw:"precios segmento descuento" },
     { view:"promociones",      icon:"🎁", label:"Recompensas y lealtad",    kw:"promociones recompensas lealtad puntos" },
     { view:"devoluciones",     icon:"↩️", label:"Devoluciones",             kw:"devoluciones retornos cambios" },
+    { view:"asistencia",       icon:"🕐", label:"Control de Asistencia",    kw:"asistencia horarios entradas salidas registro personal" },
+    { view:"sms",             icon:"📱", label:"SMS Masivo",                kw:"sms campanas masivo sendpulse mensajes marketing" },
     { view:"logistica",        icon:"🚚", label:"Logistica de visitas",     kw:"logistica rutas visitas" },
     { view:"agroquimico",      icon:"🌿", label:"Agroquímico",              kw:"agroquimico cultivos recetas dosis trazabilidad fitosanitario" },
     { view:"integraciones",    icon:"🔌", label:"Integraciones",            kw:"integraciones api pasarela pagos whatsapp spei webhooks stripe conekta" },
@@ -950,6 +960,8 @@ function _aplicarVisibilidadSidebar() {
     chat:        true,
     rh:          pvF("PUEDE_VER_RH","GERENTE","ADMINISTRADOR"),
     crm:         pv("GERENTE","MESA_CONTROL","JURIDICO","ADMINISTRADOR"),
+    asistencia:  pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
+    sms:         pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
     logistica:   pv("GERENTE","MESA_CONTROL","ADMINISTRADOR"),
     agroquimico: pv("GERENTE","MESA_CONTROL","INGENIERO","ADMINISTRADOR"),
     integraciones: SA,  // solo SUPER_ADMIN puede gestionar — los demás ven estado en readonly via el módulo
@@ -997,7 +1009,7 @@ function _aplicarVisibilidadSidebar() {
 
   // Sublabels y divisores — ocultar si ningún item visible en su grupo
   // Operaciones: usuarios → logistica (aprox las primeras 14 entradas del sbi-admin)
-  const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","reabasto","devoluciones","chat","rh","caja","gastos","crm","logistica","historial_ventas","agroquimico","integraciones","finanzas","juridico","observabilidad","mi_rh"];
+  const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","reabasto","devoluciones","chat","rh","caja","gastos","crm","asistencia","sms","logistica","historial_ventas","agroquimico","integraciones","finanzas","juridico","observabilidad","mi_rh"];
   const ctrlViews = ["precios","geocercas","metas","autorizaciones","auditoria"];
   const cfgViews  = ["formularios","promociones","precios_segmento","productos","config","config_intereses","reportes","reportes_custom","bi_analytics"];
 
