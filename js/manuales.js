@@ -54,6 +54,8 @@ export const ManualesModule = {
 
   destroy() {
     this._container = null;
+    _cat      = "todos";
+    _manuales = [];
   },
 };
 
