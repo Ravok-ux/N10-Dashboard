@@ -1,267 +1,431 @@
 // ══════════════════════════════════════════════════════════════
 // visitas.js — Programación automática + solicitudes atemporales
 // ══════════════════════════════════════════════════════════════
-
 import { db }    from "./firebase-config.js";
 import { Sesion } from "./auth.js";
-import { esc }   from "./app.js";
+import { esc, logAudit } from "./app.js";
 import {
   collection, query, orderBy, onSnapshot, where,
-  doc, getDoc, updateDoc, addDoc, serverTimestamp, Timestamp
+  doc, updateDoc, addDoc, serverTimestamp, limit
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const fmtDt = ts => {
-  if (!ts) return "—";
-  const d = ts?.toDate?.() ?? new Date(ts);
-  return d.toLocaleDateString("es-MX", { weekday:"short", day:"numeric", month:"short" });
-};
-const fmtDtLong = ts => {
-  if (!ts) return "—";
-  const d = ts?.toDate?.() ?? new Date(ts);
-  return d.toLocaleDateString("es-MX", { day:"numeric", month:"long", year:"numeric" });
-};
-const diasHastaTs = ts => {
+const toDate = ts => {
   if (!ts) return null;
-  const d = ts?.toDate?.() ?? new Date(ts);
+  if (ts?.toDate) return ts.toDate();
+  if (typeof ts === "number") return new Date(ts);
+  return new Date(ts);
+};
+const fmtFecha = ts => {
+  const d = toDate(ts);
+  if (!d) return "—";
+  return d.toLocaleDateString("es-MX", { day:"numeric", month:"short", year:"numeric" });
+};
+const fmtCorto = ts => {
+  const d = toDate(ts);
+  if (!d) return "Nunca";
+  return d.toLocaleDateString("es-MX", { day:"numeric", month:"short" });
+};
+const diasHasta = ts => {
+  const d = toDate(ts);
+  if (!d) return null;
   return Math.ceil((d - new Date()) / 86400000);
 };
 
-let _unsubSol  = null;
-let _unsubCli  = null;
+let _unsubSol = null;
+let _unsubCli = null;
 let _solicitudes = [];
 let _clientes    = [];
-let _tabActiva   = "calendario"; // calendario | solicitudes
+let _tabActiva   = "calendario";
+let _busqueda    = "";
+let _filtroFreq  = "TODOS";
 
 const _puedeAutorizar = () =>
-  Sesion.esSuperAdmin() ||
+  Sesion.esSuperAdmin?.() ||
   ["GERENTE","GERENTE_ZONA","MESA_CONTROL"].includes(Sesion.rol) ||
   Sesion.flags?.PUEDE_AUTORIZAR_VISITAS === true;
 
-// ── Módulo exportado ──────────────────────────────────────────
+// ── Módulo ────────────────────────────────────────────────────
 export const VisitasModule = {
   mount(container) {
+    _busqueda = ""; _filtroFreq = "TODOS"; _tabActiva = "calendario";
     container.innerHTML = _html();
     _bindUI(container);
     _escucharSolicitudes();
     _escucharClientes();
-    return () => this.destroy();
   },
   destroy() {
     _unsubSol?.(); _unsubSol = null;
     _unsubCli?.(); _unsubCli = null;
-    _solicitudes = [];
-    _clientes    = [];
+    _solicitudes = []; _clientes = [];
+    delete window.VisitasUI;
   }
 };
 
-// ── HTML base ─────────────────────────────────────────────────
+// ── HTML ──────────────────────────────────────────────────────
 function _html() {
   return `
-  <div style="padding:0 0 24px">
+  <style>
+    .vis-wrap { padding:0 2px 24px }
+    .vis-tabs { display:flex; gap:0; margin-bottom:0;
+      border-bottom:2px solid var(--border) }
+    .vis-tab { padding:9px 18px; border:none; background:none; cursor:pointer;
+      font-size:13px; font-weight:600; color:#9CA3AF;
+      border-bottom:2px solid transparent; margin-bottom:-2px;
+      transition:color .15s, border-color .15s; display:flex; align-items:center; gap:6px }
+    .vis-tab.active { color:var(--accent,#3B82F6); border-bottom-color:var(--accent,#3B82F6); font-weight:700 }
+    .vis-kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr));
+      gap:10px; margin:16px 0 }
+    .vis-kpi { background:var(--surface); border:1px solid var(--border); border-radius:10px;
+      padding:12px 14px }
+    .vis-kpi-val { font-size:22px; font-weight:800; font-variant-numeric:tabular-nums }
+    .vis-kpi-lbl { font-size:10px; font-weight:600; color:#9CA3AF;
+      text-transform:uppercase; letter-spacing:.05em; margin-top:2px }
+    .vis-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px }
+    .vis-tabla-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:10px }
+    .vis-tabla { width:100%; border-collapse:collapse; font-size:13px }
+    .vis-tabla th { background:var(--surface); padding:10px 14px;
+      text-align:left; font-size:10px; font-weight:700; color:#9CA3AF;
+      text-transform:uppercase; letter-spacing:.06em;
+      border-bottom:1px solid var(--border); white-space:nowrap }
+    .vis-tabla td { padding:10px 14px; border-bottom:1px solid var(--border);
+      color:var(--text-primary); vertical-align:middle }
+    .vis-tabla tbody tr:last-child td { border-bottom:none }
+    .vis-tabla tbody tr:hover { background:var(--surface) }
+    .vis-chip { display:inline-flex; align-items:center; gap:3px; padding:3px 9px;
+      border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap }
+    .vis-sol-card { background:var(--surface); border:1px solid var(--border);
+      border-radius:10px; padding:14px 16px; margin-bottom:8px;
+      display:flex; align-items:flex-start; justify-content:space-between; gap:12px }
+    .vis-sol-card:hover { border-color:var(--accent,#3B82F6) }
+    .vis-badge { background:#EF4444; color:#fff; border-radius:10px;
+      padding:1px 6px; font-size:10px; font-weight:700 }
+  </style>
 
-    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border)">
-      <button class="vis-tab active" data-tab="calendario" style="${_tabStyle(true)}">📅 Calendario de visitas</button>
-      <button class="vis-tab" data-tab="solicitudes" style="${_tabStyle(false)}">
+  <div class="vis-wrap">
+    <!-- Tabs -->
+    <div class="vis-tabs">
+      <button class="vis-tab active" data-tab="calendario">📅 Calendario de visitas</button>
+      <button class="vis-tab" data-tab="solicitudes">
         📋 Solicitudes atemporales
-        <span id="vis-badge-sol" style="display:none;background:#EF4444;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px">0</span>
+        <span id="vis-badge-sol" style="display:none" class="vis-badge">0</span>
       </button>
     </div>
 
     <!-- Panel Calendario -->
     <div id="vis-panel-calendario">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-        <input id="vis-search" type="text" placeholder="🔍 Buscar cliente o ingeniero…"
-          style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text-primary);font-size:13px">
-        <select id="vis-filter-freq" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text-primary);font-size:13px">
-          <option value="TODOS">Todas las frecuencias</option>
-          <option value="VENCE_HOY">⚠️ Visita hoy o vencida</option>
-          <option value="ESTA_SEMANA">📅 Esta semana</option>
-          <option value="SIN_VISITA">❌ Sin programar</option>
-        </select>
+      <!-- KPIs -->
+      <div class="vis-kpis">
+        <div class="vis-kpi">
+          <div class="vis-kpi-val" id="vis-k-total" style="color:var(--text-primary)">—</div>
+          <div class="vis-kpi-lbl">Clientes</div>
+        </div>
+        <div class="vis-kpi">
+          <div class="vis-kpi-val" id="vis-k-vencidas" style="color:#DC2626">—</div>
+          <div class="vis-kpi-lbl">⚠️ Vencidas</div>
+        </div>
+        <div class="vis-kpi">
+          <div class="vis-kpi-val" id="vis-k-hoy" style="color:#D97706">—</div>
+          <div class="vis-kpi-lbl">🔔 Hoy</div>
+        </div>
+        <div class="vis-kpi">
+          <div class="vis-kpi-val" id="vis-k-semana" style="color:#16A34A">—</div>
+          <div class="vis-kpi-lbl">📅 Esta semana</div>
+        </div>
+        <div class="vis-kpi">
+          <div class="vis-kpi-val" id="vis-k-sin" style="color:#9CA3AF">—</div>
+          <div class="vis-kpi-lbl">Sin programar</div>
+        </div>
       </div>
-      <div style="overflow-x:auto">
-        <table id="vis-tabla-cal" style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead>
-            <tr style="background:var(--surface-2);text-align:left">
-              <th style="padding:8px 10px">Cliente</th>
-              <th style="padding:8px 10px">Ingeniero</th>
-              <th style="padding:8px 10px;text-align:center">Frecuencia</th>
-              <th style="padding:8px 10px;text-align:center">Última visita</th>
-              <th style="padding:8px 10px;text-align:center">Próxima visita</th>
-              <th style="padding:8px 10px;text-align:center">Estado</th>
-            </tr>
-          </thead>
-          <tbody id="vis-tbody-cal">${window.skeleton?.(8, 6) ?? ""}</tbody>
+
+      <!-- Toolbar -->
+      <div class="vis-toolbar">
+        <input id="vis-search" type="search" placeholder="🔍 Buscar cliente o ingeniero…"
+          style="flex:1;min-width:220px;padding:7px 10px;border:1px solid var(--border);
+            border-radius:7px;background:var(--surface);color:var(--text-primary);font-size:13px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${[
+            ["TODOS",       "Todos",          "#6B7280"],
+            ["VENCIDAS",    "⚠️ Vencidas",    "#DC2626"],
+            ["HOY",         "🔔 Hoy",         "#D97706"],
+            ["ESTA_SEMANA", "📅 Esta semana", "#16A34A"],
+            ["SIN_VISITA",  "Sin programar",  "#9CA3AF"],
+          ].map(([v,l,c]) => `
+            <button class="vis-filtro-btn" data-freq="${v}"
+              style="padding:5px 12px;border-radius:20px;border:1.5px solid ${c}30;
+                background:${v==="TODOS"?"var(--surface)":"transparent"};
+                font-size:11.5px;font-weight:${v==="TODOS"?"700":"600"};
+                color:${c};cursor:pointer;transition:all .15s">
+              ${l}
+            </button>`).join("")}
+        </div>
+      </div>
+
+      <!-- Tabla -->
+      <div class="vis-tabla-wrap">
+        <table class="vis-tabla">
+          <thead><tr>
+            <th>Cliente</th>
+            <th>Ingeniero</th>
+            <th>Frecuencia</th>
+            <th>Última visita</th>
+            <th>Próxima visita</th>
+            <th>Estado</th>
+          </tr></thead>
+          <tbody id="vis-tbody-cal">
+            <tr><td colspan="6" style="padding:40px;text-align:center;color:#9CA3AF">
+              Cargando clientes…</td></tr>
+          </tbody>
         </table>
       </div>
     </div>
 
     <!-- Panel Solicitudes -->
-    <div id="vis-panel-solicitudes" style="display:none">
-      <div id="vis-solicitudes-content">
-        <div class="skeleton" style="height:60px;border-radius:8px;margin-bottom:8px"></div>
-        <div class="skeleton" style="height:60px;border-radius:8px;margin-bottom:8px"></div>
+    <div id="vis-panel-solicitudes" style="display:none;padding-top:16px">
+      <div id="vis-sol-content">
+        <div style="padding:40px;text-align:center;color:#9CA3AF">Cargando solicitudes…</div>
       </div>
     </div>
-
   </div>`;
 }
 
-function _tabStyle(active) {
-  return `padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:${active?"700":"400"};
-    color:${active?"var(--accent)":"var(--text-sec)"};border-bottom:${active?"2px solid var(--accent)":"2px solid transparent"};margin-bottom:-2px`;
-}
-
-// ── Escuchas ──────────────────────────────────────────────────
+// ── Firestore ─────────────────────────────────────────────────
 function _escucharSolicitudes() {
+  _unsubSol?.();
+  // Sin orderBy compuesto — ordena client-side para evitar índice requerido
   _unsubSol = onSnapshot(
-    query(collection(db, "solicitudes_visita"), orderBy("creadaEn", "desc")),
+    query(collection(db, "solicitudes_visita"), limit(200)),
     snap => {
-      _solicitudes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      _solicitudes = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (toDate(b.creadaEn) || 0) - (toDate(a.creadaEn) || 0));
       const pendientes = _solicitudes.filter(s => s.status === "PENDIENTE").length;
       const badge = document.getElementById("vis-badge-sol");
       if (badge) {
         badge.textContent = pendientes;
         badge.style.display = pendientes > 0 ? "" : "none";
       }
-      _renderSolicitudes();
-    }
+      if (_tabActiva === "solicitudes") _renderSolicitudes();
+    }, err => console.error("[Visitas/sol]", err)
   );
 }
 
 function _escucharClientes() {
+  _unsubCli?.();
+  // Query sin orderBy para traer TODOS los clientes, independientemente de si tienen proximaVisita
   _unsubCli = onSnapshot(
-    query(collection(db, "clientes"), orderBy("proximaVisita", "asc")),
+    query(collection(db, "clientes"), limit(500)),
     snap => {
       _clientes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Ordenar: primero vencidos, luego por proximaVisita asc, luego sin fecha
+      _clientes.sort((a, b) => {
+        const pa = toDate(a.proximaVisita);
+        const pb = toDate(b.proximaVisita);
+        if (!pa && !pb) return (a.nombre||"").localeCompare(b.nombre||"");
+        if (!pa) return 1;
+        if (!pb) return -1;
+        return pa - pb;
+      });
+      _actualizarKPIs();
       _renderCalendario();
+    }, err => {
+      console.error("[Visitas/cli]", err);
+      const tbody = document.getElementById("vis-tbody-cal");
+      if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:#DC2626">
+        Error: ${err.message}</td></tr>`;
     }
   );
+}
+
+// ── KPIs ──────────────────────────────────────────────────────
+function _actualizarKPIs() {
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const en7 = new Date(hoy); en7.setDate(en7.getDate() + 7);
+  const vencidas = _clientes.filter(c => {
+    const pv = toDate(c.proximaVisita);
+    return pv && pv < hoy;
+  }).length;
+  const hoyN = _clientes.filter(c => {
+    const pv = toDate(c.proximaVisita);
+    return pv && pv >= hoy && pv < new Date(hoy.getTime() + 86400000);
+  }).length;
+  const semana = _clientes.filter(c => {
+    const pv = toDate(c.proximaVisita);
+    return pv && pv >= hoy && pv <= en7;
+  }).length;
+  const sinProg = _clientes.filter(c => !c.proximaVisita && !c.frecuenciaVisitaId).length;
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set("vis-k-total",    _clientes.length);
+  set("vis-k-vencidas", vencidas);
+  set("vis-k-hoy",      hoyN);
+  set("vis-k-semana",   semana);
+  set("vis-k-sin",      sinProg);
 }
 
 // ── Render calendario ─────────────────────────────────────────
 function _renderCalendario() {
   const tbody = document.getElementById("vis-tbody-cal");
   if (!tbody) return;
-  const q    = (document.getElementById("vis-search")?.value || "").toLowerCase();
-  const fil  = document.getElementById("vis-filter-freq")?.value || "TODOS";
-  const hoy  = new Date(); hoy.setHours(0,0,0,0);
-  const en7  = new Date(hoy); en7.setDate(en7.getDate() + 7);
+  const q   = _busqueda.toLowerCase();
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const en7 = new Date(hoy); en7.setDate(en7.getDate() + 7);
 
   let lista = _clientes.filter(c => {
-    if (q && !(c.nombre||"").toLowerCase().includes(q) && !(c.vendedor||"").toLowerCase().includes(q)) return false;
-    if (fil === "VENCE_HOY") {
-      const pv = c.proximaVisita?.toDate?.() ?? (c.proximaVisita ? new Date(c.proximaVisita) : null);
-      return pv && pv <= hoy;
+    if (q && !(c.nombre||"").toLowerCase().includes(q) &&
+             !(c.vendedor||"").toLowerCase().includes(q)) return false;
+    const pv = toDate(c.proximaVisita);
+    switch (_filtroFreq) {
+      case "VENCIDAS":    return pv && pv < hoy;
+      case "HOY":         return pv && pv >= hoy && pv < new Date(hoy.getTime()+86400000);
+      case "ESTA_SEMANA": return pv && pv >= hoy && pv <= en7;
+      case "SIN_VISITA":  return !c.proximaVisita && !c.frecuenciaVisitaId;
+      default: return true;
     }
-    if (fil === "ESTA_SEMANA") {
-      const pv = c.proximaVisita?.toDate?.() ?? (c.proximaVisita ? new Date(c.proximaVisita) : null);
-      return pv && pv >= hoy && pv <= en7;
-    }
-    if (fil === "SIN_VISITA") return !c.proximaVisita && !c.frecuenciaVisitaId;
-    return true;
   });
 
-  if (lista.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-sec)">Sin clientes que mostrar</td></tr>`;
+  if (!lista.length) {
+    const msg = _clientes.length === 0
+      ? "Sin clientes registrados en el sistema."
+      : q || _filtroFreq !== "TODOS"
+        ? "Sin resultados para el filtro seleccionado."
+        : "Sin clientes con visitas programadas.";
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:40px;text-align:center;color:#9CA3AF">${msg}</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = lista.slice(0, 100).map(c => {
-    const pv   = c.proximaVisita?.toDate?.() ?? (c.proximaVisita ? new Date(c.proximaVisita) : null);
-    const uv   = c.fechaUltimaVisita ? (c.fechaUltimaVisita?.toDate?.() ?? new Date(c.fechaUltimaVisita)) : null;
-    const dias = pv ? Math.ceil((pv - new Date()) / 86400000) : null;
+  tbody.innerHTML = lista.slice(0, 150).map(c => {
+    const pv   = toDate(c.proximaVisita);
+    const uv   = toDate(c.fechaUltimaVisita);
+    const dias = diasHasta(pv);
 
-    let estadoChip = "";
-    if (dias === null)      estadoChip = `<span style="color:var(--text-sec);font-size:11px">Sin programar</span>`;
-    else if (dias < 0)      estadoChip = `<span style="padding:2px 8px;background:#FEE2E2;color:#991B1B;border-radius:12px;font-size:11px">⚠️ Vencida hace ${-dias}d</span>`;
-    else if (dias === 0)    estadoChip = `<span style="padding:2px 8px;background:#FEF9C3;color:#854D0E;border-radius:12px;font-size:11px">🔔 Hoy</span>`;
-    else if (dias <= 3)     estadoChip = `<span style="padding:2px 8px;background:#FFEDD5;color:#9A3412;border-radius:12px;font-size:11px">📅 En ${dias}d</span>`;
-    else                    estadoChip = `<span style="padding:2px 8px;background:#DCFCE7;color:#166534;border-radius:12px;font-size:11px">✓ En ${dias}d</span>`;
+    let chip = "";
+    if (dias === null)    chip = `<span class="vis-chip" style="background:#F3F4F6;color:#6B7280">Sin programar</span>`;
+    else if (dias < 0)    chip = `<span class="vis-chip" style="background:#FEE2E2;color:#991B1B">⚠️ Vencida hace ${-dias}d</span>`;
+    else if (dias === 0)  chip = `<span class="vis-chip" style="background:#FEF9C3;color:#854D0E">🔔 Hoy</span>`;
+    else if (dias <= 3)   chip = `<span class="vis-chip" style="background:#FFEDD5;color:#9A3412">📅 En ${dias}d</span>`;
+    else                  chip = `<span class="vis-chip" style="background:#DCFCE7;color:#166534">✓ En ${dias}d</span>`;
 
-    return `<tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:9px 10px;font-weight:600">${esc(c.nombre || c.id)}</td>
-      <td style="padding:9px 10px;color:var(--text-sec)">${esc(c.vendedor || "—")}</td>
-      <td style="padding:9px 10px;text-align:center;font-size:12px">${esc(c.frecuenciaVisitaLabel || c.frecuenciaVisita || "—")}</td>
-      <td style="padding:9px 10px;text-align:center;font-size:12px;color:var(--text-sec)">${uv ? uv.toLocaleDateString("es-MX",{day:"numeric",month:"short"}) : "Nunca"}</td>
-      <td style="padding:9px 10px;text-align:center;font-size:12px">${pv ? fmtDtLong(pv) : "—"}</td>
-      <td style="padding:9px 10px;text-align:center">${estadoChip}</td>
+    const freqLabel = c.frecuenciaVisitaLabel || c.frecuenciaVisita || "—";
+
+    return `<tr>
+      <td style="font-weight:600;max-width:200px;overflow:hidden;
+        text-overflow:ellipsis;white-space:nowrap">${esc(c.nombre || c.id)}</td>
+      <td style="color:#9CA3AF;font-size:12px">${esc(c.vendedor || "—")}</td>
+      <td style="font-size:12px">${esc(freqLabel)}</td>
+      <td style="font-size:12px;color:#9CA3AF">${uv ? fmtCorto(uv) : "Nunca"}</td>
+      <td style="font-size:12px">${pv ? fmtFecha(pv) : "—"}</td>
+      <td>${chip}</td>
     </tr>`;
   }).join("");
 }
 
 // ── Render solicitudes ────────────────────────────────────────
 function _renderSolicitudes() {
-  const el = document.getElementById("vis-solicitudes-content");
+  const el = document.getElementById("vis-sol-content");
   if (!el) return;
   const puedeAut = _puedeAutorizar();
 
-  if (_solicitudes.length === 0) {
-    el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--text-sec)">Sin solicitudes de visita atemporal</div>`;
+  if (!_solicitudes.length) {
+    el.innerHTML = `<div style="padding:60px;text-align:center;color:#9CA3AF">
+      Sin solicitudes de visita atemporal registradas.</div>`;
     return;
   }
 
-  el.innerHTML = _solicitudes.map(s => {
-    const statusColor = { PENDIENTE:"#FEF9C3;color:#854D0E", APROBADA:"#DCFCE7;color:#166534", RECHAZADA:"#FEE2E2;color:#991B1B" }[s.status] || "#F3F4F6;color:#374151";
-    const acciones = s.status === "PENDIENTE" && puedeAut ? `
-      <button onclick="VisitasUI.aprobar('${s.id}')" style="padding:4px 10px;background:#DCFCE7;color:#166534;border:none;border-radius:4px;cursor:pointer;font-size:12px">✓ Aprobar</button>
-      <button onclick="VisitasUI.rechazar('${s.id}')" style="padding:4px 10px;background:#FEE2E2;color:#991B1B;border:none;border-radius:4px;cursor:pointer;font-size:12px">✕ Rechazar</button>` : "";
+  const COLOR = {
+    PENDIENTE:  { bg:"#FEF9C3", c:"#854D0E", icon:"⏳" },
+    APROBADA:   { bg:"#DCFCE7", c:"#166534", icon:"✅" },
+    RECHAZADA:  { bg:"#FEE2E2", c:"#991B1B", icon:"❌" },
+  };
 
-    return `<div style="background:var(--surface-2);border-radius:8px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
-      <div>
-        <div style="font-weight:600;margin-bottom:2px">${esc(s.clienteNombre || "—")}</div>
-        <div style="font-size:12px;color:var(--text-sec)">Solicitado por <b>${esc(s.solicitadoPor||"—")}</b> · ${fmtDtLong(s.creadaEn)}</div>
-        ${s.motivo ? `<div style="font-size:12px;margin-top:4px;color:var(--text-sec)">Motivo: ${esc(s.motivo)}</div>` : ""}
+  el.innerHTML = _solicitudes.map(s => {
+    const col = COLOR[s.status] || { bg:"#F3F4F6", c:"#374151", icon:"•" };
+    return `<div class="vis-sol-card">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:14px;margin-bottom:3px">${esc(s.clienteNombre || "—")}</div>
+        <div style="font-size:12px;color:#9CA3AF">
+          Solicitado por <strong>${esc(s.solicitadoPor || "—")}</strong>
+          · ${fmtFecha(s.creadaEn)}
+        </div>
+        ${s.motivo ? `<div style="font-size:12px;margin-top:5px;color:var(--text-primary);
+          padding:6px 10px;background:var(--surface-2,var(--border));border-radius:6px">
+          ${esc(s.motivo)}</div>` : ""}
+        ${s.resueltaPor ? `<div style="font-size:11px;color:#9CA3AF;margin-top:4px">
+          Resuelto por ${esc(s.resueltaPor)} · ${fmtFecha(s.resueltaEn)}</div>` : ""}
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="padding:3px 10px;background:${statusColor};border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap">${s.status}</span>
-        ${acciones}
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span class="vis-chip" style="background:${col.bg};color:${col.c}">
+          ${col.icon} ${s.status}
+        </span>
+        ${s.status === "PENDIENTE" && puedeAut ? `
+          <button class="btn-sm vis-aprobar" data-id="${esc(s.id)}"
+            style="background:#DCFCE7;color:#166534;border:1px solid #16A34A40;
+              border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600">
+            ✓ Aprobar
+          </button>
+          <button class="btn-sm vis-rechazar" data-id="${esc(s.id)}"
+            style="background:#FEE2E2;color:#991B1B;border:1px solid #DC262640;
+              border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600">
+            ✕ Rechazar
+          </button>` : ""}
       </div>
     </div>`;
   }).join("");
+
+  el.querySelectorAll(".vis-aprobar").forEach(btn =>
+    btn.addEventListener("click", () => _resolverSolicitud(btn.dataset.id, "APROBADA")));
+  el.querySelectorAll(".vis-rechazar").forEach(btn =>
+    btn.addEventListener("click", () => _resolverSolicitud(btn.dataset.id, "RECHAZADA")));
 }
 
 // ── Bind UI ───────────────────────────────────────────────────
 function _bindUI(container) {
-  container.addEventListener("click", e => {
-    const tab = e.target.closest(".vis-tab");
-    if (tab) _cambiarTab(tab.dataset.tab, container);
-  });
-  container.addEventListener("input", e => {
-    if (e.target.id === "vis-search" || e.target.id === "vis-filter-freq") _renderCalendario();
-  });
-  container.addEventListener("change", e => {
-    if (e.target.id === "vis-filter-freq") _renderCalendario();
+  // Tabs
+  container.querySelectorAll(".vis-tab").forEach(btn =>
+    btn.addEventListener("click", () => {
+      _tabActiva = btn.dataset.tab;
+      container.querySelectorAll(".vis-tab").forEach(b => {
+        b.classList.toggle("active", b === btn);
+      });
+      document.getElementById("vis-panel-calendario").style.display =
+        _tabActiva === "calendario" ? "" : "none";
+      document.getElementById("vis-panel-solicitudes").style.display =
+        _tabActiva === "solicitudes" ? "" : "none";
+      if (_tabActiva === "solicitudes") _renderSolicitudes();
+    }));
+
+  // Búsqueda
+  container.querySelector("#vis-search")?.addEventListener("input", e => {
+    _busqueda = e.target.value;
+    _renderCalendario();
   });
 
-  window.VisitasUI = {
-    aprobar:  async (id) => _resolverSolicitud(id, "APROBADA"),
-    rechazar: async (id) => _resolverSolicitud(id, "RECHAZADA"),
-  };
-}
-
-function _cambiarTab(tab, container) {
-  _tabActiva = tab;
-  container.querySelectorAll(".vis-tab").forEach(b => {
-    const active = b.dataset.tab === tab;
-    b.style.fontWeight   = active ? "700" : "400";
-    b.style.color        = active ? "var(--accent)" : "var(--text-sec)";
-    b.style.borderBottom = active ? "2px solid var(--accent)" : "2px solid transparent";
-  });
-  document.getElementById("vis-panel-calendario").style.display  = tab === "calendario"   ? "" : "none";
-  document.getElementById("vis-panel-solicitudes").style.display = tab === "solicitudes"  ? "" : "none";
-  if (tab === "solicitudes") _renderSolicitudes();
+  // Filtros de frecuencia
+  container.querySelectorAll(".vis-filtro-btn").forEach(btn =>
+    btn.addEventListener("click", () => {
+      _filtroFreq = btn.dataset.freq;
+      container.querySelectorAll(".vis-filtro-btn").forEach(b => {
+        const activo = b === btn;
+        b.style.background  = activo ? "var(--surface)" : "transparent";
+        b.style.fontWeight  = activo ? "700" : "600";
+        b.style.borderWidth = activo ? "1.5px" : "1.5px";
+        b.style.opacity     = activo ? "1" : ".75";
+      });
+      _renderCalendario();
+    }));
 }
 
 async function _resolverSolicitud(id, nuevoStatus) {
-  const accion = nuevoStatus === "APROBADA" ? "¿Aprobar esta solicitud de visita?" : "¿Rechazar esta solicitud de visita?";
-  if (!await window.modal({ title: nuevoStatus === "APROBADA" ? "Aprobar solicitud" : "Rechazar solicitud", message: accion })) return;
+  const label = nuevoStatus === "APROBADA" ? "Aprobar" : "Rechazar";
+  if (!await window.modal?.({ title: `${label} solicitud`,
+    message: `¿${label} esta solicitud de visita atemporal?`,
+    confirmLabel: label })) return;
   try {
     await updateDoc(doc(db, "solicitudes_visita", id), {
-      status:         nuevoStatus,
-      resueltaPor:    Sesion.alias,
-      resueltaEn:     serverTimestamp()
+      status:      nuevoStatus,
+      resueltaPor: Sesion.alias,
+      resueltaEn:  serverTimestamp()
     });
-    toast?.(`✅ Solicitud ${nuevoStatus.toLowerCase()}`, "success");
-  } catch (e) { toast?.("❌ " + e.message, "error"); }
+    logAudit("VISITA_SOLICITUD_" + nuevoStatus, { id });
+    window.toast?.(`Solicitud ${nuevoStatus.toLowerCase()}`, "success");
+  } catch(e) { window.toast?.("Error: " + e.message, "error"); }
 }

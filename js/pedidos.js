@@ -31,6 +31,7 @@ export const PedidosModule = {
     document.getElementById("pd-tbody").innerHTML = window.skeleton?.(6, 7) ?? "";
     _bindUI();
     _escuchar();
+    _precargarCaches(); // carga clientes y productos en background al abrir el módulo
     return () => this.destroy();
   },
   destroy() { _unsub?.(); _unsub = null; _pedidos = []; _filtroStatus = "TODOS"; _filtroAlias = "TODOS"; }
@@ -578,10 +579,30 @@ function _setText(id, val) { const el = document.getElementById(id); if (el) el.
 // ═══════════════════════════════════════════════════════════════
 // NUEVO PEDIDO desde panel web
 // ═══════════════════════════════════════════════════════════════
-let _pedidoLineas  = [];  // [{ productoId, nombre, precio, cantidad }]
-let _pedidoCliente = null; // { id, nombre, ingeniero }
-let _productosBusq = [];
-let _clientesBusq  = [];
+let _pedidoLineas  = [];
+let _pedidoCliente = null;
+
+// ── Pre-carga de caches ───────────────────────────────────────
+async function _precargarCaches() {
+  // Clientes
+  if (!window._clientesCache?.length) {
+    try {
+      const snap = await getDocs(query(collection(db, "clientes"), limit(500)));
+      window._clientesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(c => c.nombre)
+        .sort((a, b) => (a.nombre||"").localeCompare(b.nombre||""));
+    } catch(e) { console.warn("[Pedidos/clientes cache]", e); }
+  }
+  // Productos
+  if (!window._productosCache?.length) {
+    try {
+      const snap = await getDocs(query(collection(db, "productos"), limit(500)));
+      window._productosCache = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(p => p.nombre)
+        .sort((a, b) => (a.nombre||"").localeCompare(b.nombre||""));
+    } catch(e) { console.warn("[Pedidos/productos cache]", e); }
+  }
+}
 
 function _pdinputStyle() {
   return `width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
@@ -659,10 +680,12 @@ function _renderFormPedido(body) {
         : `<div style="position:relative">
             <input id="pd-cli-search" type="text" placeholder="Buscar cliente por nombre…"
               oninput="PedidosUI.buscarCliente(this.value)"
+              onblur="setTimeout(()=>{const d=document.getElementById('pd-cli-results');if(d)d.style.display='none'},150)"
               style="${_pdinputStyle()}">
-            <div id="pd-cli-results" style="position:absolute;left:0;right:0;top:100%;background:var(--surface);
-              border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;z-index:10;
-              box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
+            <div id="pd-cli-results" style="display:none;position:absolute;left:0;right:0;top:100%;
+              background:var(--surface);border:1px solid var(--border);border-radius:8px;
+              max-height:220px;overflow-y:auto;z-index:10;
+              box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:3px"></div>
           </div>`}
     </div>
 
@@ -673,12 +696,14 @@ function _renderFormPedido(body) {
         📦 Paso 2 — Productos
       </div>
       <div style="position:relative;margin-bottom:10px">
-        <input id="pd-prod-search" type="text" placeholder="Buscar producto por nombre o número…"
+        <input id="pd-prod-search" type="text" placeholder="Buscar producto por nombre o código…"
           oninput="PedidosUI.buscarProducto(this.value)"
+          onblur="setTimeout(()=>{const d=document.getElementById('pd-prod-results');if(d)d.style.display='none'},150)"
           style="${_pdinputStyle()}">
-        <div id="pd-prod-results" style="position:absolute;left:0;right:0;top:100%;background:var(--surface);
-          border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;z-index:10;
-          box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
+        <div id="pd-prod-results" style="display:none;position:absolute;left:0;right:0;top:100%;
+          background:var(--surface);border:1px solid var(--border);border-radius:8px;
+          max-height:220px;overflow-y:auto;z-index:10;
+          box-shadow:0 8px 24px rgba(0,0,0,.15);margin-top:3px"></div>
       </div>
       <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -777,30 +802,44 @@ function _reRenderFormPedido() {
 async function _buscarClientePedido(q) {
   const res = document.getElementById("pd-cli-results");
   if (!res) return;
-  if (!q || q.length < 2) { res.innerHTML = ""; return; }
+  if (!q || q.length < 2) { res.style.display = "none"; res.innerHTML = ""; return; }
+  // Si el cache está vacío, intentar cargarlo ahora
+  if (!window._clientesCache?.length) await _precargarCaches();
   const qLow = q.toLowerCase();
   const lista = (window._clientesCache || []).filter(c =>
     (c.nombre || "").toLowerCase().includes(qLow) ||
-    (c.telefono || "").toLowerCase().includes(qLow)
-  ).slice(0, 8);
+    (c.telefono || "").toLowerCase().includes(qLow) ||
+    (c.clienteId || "").toLowerCase().includes(qLow)
+  ).slice(0, 10);
+
   if (!lista.length) {
-    // Fallback Firestore si no hay caché
-    try {
-      const snap = await getDocs(query(collection(db, "clientes"), orderBy("nombre"), limit(300)));
-      window._clientesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      return _buscarClientePedido(q);
-    } catch { res.innerHTML = ""; return; }
+    res.innerHTML = `<div style="padding:10px 14px;font-size:12px;color:#9CA3AF">Sin resultados para "${esc(q)}"</div>`;
+    res.style.display = "block";
+    return;
   }
   res.innerHTML = lista.map(c =>
-    `<div onclick="PedidosUI.seleccionarCliente('${esc(c.id)}','${esc(c.nombre)}')"
+    `<div class="pd-dd-cli" data-id="${esc(c.id)}" data-nombre="${esc(c.nombre)}"
       style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);
-        font-size:12px;color:var(--text-primary)"
-      onmouseover="this.style.background='var(--surface-2)'"
-      onmouseout="this.style.background=''">
-      <strong>${esc(c.nombre)}</strong>
-      ${c.zona ? `<span style="color:var(--text-sec);margin-left:8px">${esc(c.zona)}</span>` : ""}
-      ${c.ingeniero ? `<span style="float:right;color:#1565C0;font-size:11px">${esc(c.ingeniero)}</span>` : ""}
-    </div>`).join("");
+        font-size:12px;color:var(--text-primary);display:flex;align-items:center;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${esc(c.nombre)}
+        </div>
+        ${c.zona ? `<div style="font-size:10px;color:#9CA3AF">${esc(c.zona)}</div>` : ""}
+      </div>
+      ${c.ingeniero ? `<span style="font-size:11px;color:#2563EB;font-weight:600;flex-shrink:0">${esc(c.ingeniero)}</span>` : ""}
+    </div>`
+  ).join("");
+  res.style.display = "block";
+  // Event delegation — evita onclick inline
+  res.querySelectorAll(".pd-dd-cli").forEach(el => {
+    el.addEventListener("mouseenter", () => el.style.background = "var(--surface-2)");
+    el.addEventListener("mouseleave", () => el.style.background = "");
+    el.addEventListener("mousedown", e => {
+      e.preventDefault();
+      _seleccionarCliente(el.dataset.id, el.dataset.nombre);
+    });
+  });
 }
 
 function _seleccionarCliente(id, nombre) {
@@ -812,30 +851,47 @@ function _seleccionarCliente(id, nombre) {
 async function _buscarProductoPedido(q) {
   const res = document.getElementById("pd-prod-results");
   if (!res) return;
-  if (!q || q.length < 2) { res.innerHTML = ""; return; }
+  if (!q || q.length < 2) { res.style.display = "none"; res.innerHTML = ""; return; }
+  if (!window._productosCache?.length) await _precargarCaches();
   const qLow = q.toLowerCase();
-  if (!window._productosCache) {
-    try {
-      const snap = await getDocs(query(collection(db, "productos"), orderBy("nombre"), limit(500)));
-      window._productosCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch { res.innerHTML = ""; return; }
-  }
-  const lista = window._productosCache.filter(p =>
+  const lista = (window._productosCache || []).filter(p =>
     (p.nombre || "").toLowerCase().includes(qLow) ||
+    (p.codigoN10 || p.codigo || "").toLowerCase().includes(qLow) ||
     (String(p.numero || "")).includes(q)
-  ).slice(0, 8);
-  res.innerHTML = lista.map(p =>
-    `<div onclick="PedidosUI.agregarProducto('${esc(p.id)}','${esc(p.nombre)}',${p.precio||0})"
+  ).slice(0, 10);
+
+  if (!lista.length) {
+    res.innerHTML = `<div style="padding:10px 14px;font-size:12px;color:#9CA3AF">Sin productos para "${esc(q)}"</div>`;
+    res.style.display = "block";
+    return;
+  }
+  res.innerHTML = lista.map(p => {
+    const precio = p.precioBase ?? p.precio ?? 0;
+    const codigo = p.codigoN10 || p.codigo || p.numero || "";
+    return `<div class="pd-dd-prod"
+      data-id="${esc(p.id)}" data-nombre="${esc(p.nombre)}" data-precio="${precio}"
       style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);
-        font-size:12px;color:var(--text-primary)"
-      onmouseover="this.style.background='var(--surface-2)'"
-      onmouseout="this.style.background=''">
-      <strong>${esc(p.nombre)}</strong>
-      ${p.numero ? `<span style="color:var(--text-sec);margin-left:8px">#${p.numero}</span>` : ""}
-      <span style="float:right;font-weight:700;color:#1565C0">
-        $${(p.precio||0).toLocaleString("es-MX",{minimumFractionDigits:2})}
+        font-size:12px;color:var(--text-primary);display:flex;align-items:center;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${esc(p.nombre)}
+        </div>
+        ${codigo ? `<div style="font-size:10px;color:#9CA3AF">${esc(codigo)}</div>` : ""}
+      </div>
+      <span style="font-weight:800;color:#2563EB;flex-shrink:0;font-variant-numeric:tabular-nums">
+        $${precio.toLocaleString("es-MX",{minimumFractionDigits:2})}
       </span>
-    </div>`).join("");
+    </div>`;
+  }).join("");
+  res.style.display = "block";
+  res.querySelectorAll(".pd-dd-prod").forEach(el => {
+    el.addEventListener("mouseenter", () => el.style.background = "var(--surface-2)");
+    el.addEventListener("mouseleave", () => el.style.background = "");
+    el.addEventListener("mousedown", e => {
+      e.preventDefault();
+      _agregarLinea(el.dataset.id, el.dataset.nombre, el.dataset.precio);
+    });
+  });
 }
 
 function _agregarLinea(productoId, nombre, precio) {
