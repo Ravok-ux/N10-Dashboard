@@ -1,6 +1,22 @@
 {
   "indexes": [
     {
+      "collectionGroup": "pedidos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clienteId",   "order": "ASCENDING" },
+        { "fieldPath": "_ts",         "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pedidos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clienteNombre", "order": "ASCENDING" },
+        { "fieldPath": "_ts",           "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "rh_anticipos",
       "queryScope": "COLLECTION",
       "fields": [
