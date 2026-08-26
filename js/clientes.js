@@ -8,7 +8,7 @@ import { Sesion } from "./auth.js";
 import {
   collection, query, orderBy, onSnapshot,
   doc, updateDoc, getDoc, addDoc, serverTimestamp,
-  getDocs, where
+  getDocs, where, limit
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { exportarExcel } from "./excel-utils.js";
 
@@ -1338,6 +1338,38 @@ async function _abrirFormCliente(clienteId = null) {
         `)}
         ${_field("Ingeniero asignado", ingSelect)}
       </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${_field("Tipo de cultivo", `
+          <input id="clf-tipocultivo" list="clf-cultivos-list" style="${_inputStyle()}"
+            placeholder="Jitomate, maíz, calabacita…"
+            value="${esc(c.tipoCultivo||'')}">
+          <datalist id="clf-cultivos-list">
+            <option value="Jitomate"></option>
+            <option value="Calabacita"></option>
+            <option value="Maíz"></option>
+            <option value="Chile"></option>
+            <option value="Pepino"></option>
+            <option value="Sandía"></option>
+            <option value="Melón"></option>
+            <option value="Aguacate"></option>
+            <option value="Cebolla"></option>
+            <option value="Ajo"></option>
+            <option value="Papa"></option>
+            <option value="Trigo"></option>
+            <option value="Sorgo"></option>
+            <option value="Fresa"></option>
+            <option value="Brócoli"></option>
+            <option value="Lechuga"></option>
+            <option value="Espárrago"></option>
+            <option value="Nuez"></option>
+            <option value="Vid"></option>
+            <option value="Ornamental"></option>
+          </datalist>
+        `)}
+        ${_field("Tipo de instalación", `<input id="clf-tipo" style="${_inputStyle()}"
+          placeholder="Invernadero, campo abierto…"
+          value="${esc(c.tipo||'')}">`)}
+      </div>
       <div>
         <div style="font-size:11px;font-weight:700;color:var(--text-sec);margin-bottom:6px">Días de visita</div>
         <div style="display:flex;gap:14px;flex-wrap:wrap;padding:10px;background:var(--surface-2);
@@ -1515,6 +1547,8 @@ async function _guardarFormCliente(clienteId) {
       deudaOriginal: parseFloat(v("clf-deuda").replace(/[^0-9.]/g,"")) || null,
       limiteCredito: parseFloat(v("clf-limite").replace(/[^0-9.]/g,"")) || null,
       condicionesPago: v("clf-condpago") || null,
+      tipoCultivo:   v("clf-tipocultivo") || null,
+      tipo:          v("clf-tipo") || null,
       notas:         document.getElementById("clf-notas")?.value?.trim() || null,
       activo: true,
     };
