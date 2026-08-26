@@ -17,6 +17,22 @@
       ]
     },
     {
+      "collectionGroup": "pedidos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",      "order": "ASCENDING" },
+        { "fieldPath": "fechaPedido", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pedidos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",             "order": "ASCENDING" },
+        { "fieldPath": "fechaAutorizacion",  "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "gastos_empleado",
       "queryScope": "COLLECTION",
       "fields": [

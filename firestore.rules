@@ -1013,6 +1013,41 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ── /calendario_agricola ─────────────────────────────────────────────────
+    match /calendario_agricola/{docId} {
+      allow read:             if cuentaActiva() && esRolConocido();
+      allow create, update:   if cuentaActiva() && esAdminOSuperior();
+      allow delete:           if cuentaActiva() && esAdminOSuperior();
+    }
+
+    // ── /recetas_agroquimicas ─────────────────────────────────────────────────
+    match /recetas_agroquimicas/{docId} {
+      allow read:             if cuentaActiva() && esRolConocido();
+      allow create, update:   if cuentaActiva() && esAdminOSuperior();
+      allow delete:           if cuentaActiva() && esAdminOSuperior();
+    }
+
+    // ── /trazabilidad_campo ───────────────────────────────────────────────────
+    match /trazabilidad_campo/{docId} {
+      allow read:   if cuentaActiva() && esRolConocido();
+      allow create: if cuentaActiva() && esRolConocido();
+      allow update, delete: if cuentaActiva() && esAdminOSuperior();
+    }
+
+    // ── /proveedores ──────────────────────────────────────────────────────────
+    match /proveedores/{docId} {
+      allow read:           if cuentaActiva() && esRolConocido();
+      allow create, update: if cuentaActiva() && esAdminOSuperior();
+      allow delete:         if cuentaActiva() && esAdminOSuperior();
+    }
+
+    // ── /comision_cobranza_config ─────────────────────────────────────────────
+    match /comision_cobranza_config/{docId} {
+      allow read:           if cuentaActiva() && esRolConocido();
+      allow create, update: if cuentaActiva() && esAdminOSuperior();
+      allow delete:         if cuentaActiva() && esAdminOSuperior();
+    }
+
     // ── Bloqueo por defecto ───────────────────────────────────────────────────
     // Cualquier colección no listada queda denegada
     match /{document=**} {
