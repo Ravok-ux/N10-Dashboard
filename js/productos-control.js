@@ -228,8 +228,8 @@ function _html() {
         <div style="flex:1"></div>
         ${puedeImportar() ? `
           <button onclick="Prod_stockPlantilla()" title="Descargar plantilla de actualización de stock"
-            style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);
-              background:transparent;color:var(--text-primary);font-size:11.5px;cursor:pointer;white-space:nowrap">
+            style="padding:7px 14px;border-radius:6px;border:1px solid var(--border);
+              background:var(--surface);color:var(--text-primary);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">
             📦 Plantilla Stock
           </button>
           <button onclick="Prod_stockImportar()" title="Importar stock desde Excel"
@@ -673,8 +673,8 @@ function _renderDetalle(docId) {
     <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;
       border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
       <button onclick="ProdCtrlUI.cerrarDetalle()"
-        style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);
-          background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">
+        style="padding:7px 14px;border-radius:6px;border:1px solid var(--border);
+          background:var(--surface);color:var(--text-primary);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">
         ← Catálogo
       </button>
       <div style="flex:1;min-width:0">
@@ -691,7 +691,7 @@ function _renderDetalle(docId) {
       ${PUEDE_EDITAR() ? `
         <button onclick="ProdCtrlUI.abrirEdicion('${esc(docId)}')"
           style="padding:7px 14px;border-radius:6px;border:1px solid var(--border);
-            background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer">
+            background:var(--surface);color:var(--text-primary);font-size:12px;font-weight:600;cursor:pointer">
           ✏ Editar
         </button>
         <button onclick="ProdCtrlUI.toggleActivo('${esc(docId)}',${!activo})"

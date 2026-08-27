@@ -479,7 +479,7 @@ function _render() {
           : ""}
         <button onclick="IngenierosUI.editarPerfil('${u.alias}')"
           style="margin-left:auto;font-size:10px;padding:3px 9px;border:1px solid var(--border);
-            border-radius:5px;background:transparent;cursor:pointer;color:var(--text-primary)">
+            border-radius:5px;background:var(--surface);cursor:pointer;color:var(--text-primary);font-weight:600">
           ✏️ Editar
         </button>
       </div>

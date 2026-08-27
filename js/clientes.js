@@ -1015,7 +1015,7 @@ async function _abrirDetalle(id) {
     <div style="display:flex;gap:10px;justify-content:space-between;align-items:center">
       <button onclick="ClientesUI.verFotos('${esc(c.id)}','${esc(c.nombre||'')}')"
         style="padding:8px 14px;border:1px solid var(--border);border-radius:6px;
-          background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer">
+          background:var(--surface);color:var(--text-primary);font-size:12px;font-weight:600;cursor:pointer">
         📷 Fotos APK
       </button>
       <div style="display:flex;gap:10px">

@@ -150,8 +150,8 @@ function _html() {
     </div>
     <div id="hv-mas-wrap" style="text-align:center;padding:16px;display:none">
       <button id="hv-mas-btn" style="padding:7px 20px;border:1px solid var(--border);
-        border-radius:6px;background:transparent;color:var(--text-primary);
-        font-size:12px;cursor:pointer">Cargar más</button>
+        border-radius:6px;background:var(--surface);color:var(--text-primary);
+        font-size:12px;font-weight:600;cursor:pointer">Cargar más</button>
     </div>
   </div>
 
