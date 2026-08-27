@@ -11,6 +11,10 @@
 import { db } from "./firebase-config.js";
 import { Sesion } from "./auth.js";
 import { exportarExcel } from "./excel-utils.js";
+
+let _escFn = null;
+const _regEsc   = fn => { _unregEsc(); _escFn = e => { if (e.key === "Escape") fn(); }; document.addEventListener("keydown", _escFn); };
+const _unregEsc = () => { if (_escFn) { document.removeEventListener("keydown", _escFn); _escFn = null; } };
 import {
   collection, doc, addDoc, setDoc, deleteDoc,
   onSnapshot, query, where, limit, getDocs, getDoc,
@@ -294,6 +298,7 @@ window._frmVerRespuestas = async id => {
   titulo.textContent = `Respuestas: ${form?.titulo || id}`;
   body.innerHTML = `<div style="padding:12px;color:var(--text-sec)">Cargando…</div>`;
   panel.style.display = "flex";
+  _regEsc(window._frmCerrarResp);
 
   try {
     const q = query(
@@ -341,6 +346,7 @@ window._frmVerRespuestas = async id => {
 };
 
 window._frmCerrarResp = () => {
+  _unregEsc();
   document.getElementById("frmRespPanel").style.display = "none";
 };
 
@@ -417,6 +423,7 @@ function _abrirModal(id) {
   `;
 
   document.getElementById("frmModalOverlay").style.display = "flex";
+  _regEsc(_cerrarModal);
   _renderCamposModal();
 
   document.getElementById("fmBtnGuardar").addEventListener("click", () => _guardarPlantilla(id));
@@ -427,6 +434,7 @@ function _abrirModal(id) {
 }
 
 function _cerrarModal() {
+  _unregEsc();
   document.getElementById("frmModalOverlay").style.display = "none";
 }
 

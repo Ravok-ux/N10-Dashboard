@@ -12,6 +12,11 @@ import {
   updateDoc, addDoc, serverTimestamp, limit
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// ── ESC helper ───────────────────────────────────────────────
+let _escFn = null;
+const _regEsc   = fn => { _unregEsc(); _escFn = e => { if (e.key === "Escape") fn(); }; document.addEventListener("keydown", _escFn); };
+const _unregEsc = () => { if (_escFn) { document.removeEventListener("keydown", _escFn); _escFn = null; } };
+
 // ── Columnas Excel ────────────────────────────────────────────
 const _COLS_PROD = [
   { key: "codigo",         header: "Código N10",       width: 14, required: true },
@@ -1089,6 +1094,7 @@ function _bindUI() {
       list.addEventListener("pointercancel", _endDrag);
 
       document.getElementById("pc-modal-cols").style.display = "flex";
+      _regEsc(() => { document.getElementById("pc-modal-cols").style.display = "none"; _unregEsc(); });
     },
 
     guardarCols() {
@@ -1159,10 +1165,12 @@ function _bindUI() {
       _resetFotoUI(p.fotoUrl || null);
 
       document.getElementById("pc-modal-edit").style.display = "flex";
+      _regEsc(() => ProdCtrlUI.cerrarEdicion());
       setTimeout(() => document.getElementById("pc-e-nombre")?.focus(), 80);
     },
 
     cerrarEdicion() {
+      _unregEsc();
       document.getElementById("pc-modal-edit").style.display = "none";
       _editandoId = null;
       _fotoFile = null;
@@ -1292,6 +1300,7 @@ function _bindUI() {
       const err = document.getElementById("pc-express-error");
       if (err) err.style.display = "none";
       document.getElementById("pc-modal-express").style.display = "flex";
+      _regEsc(() => { document.getElementById("pc-modal-express").style.display = "none"; _unregEsc(); });
       setTimeout(() => document.getElementById("pe-nombre")?.focus(), 80);
     },
 
@@ -1337,6 +1346,7 @@ function _bindUI() {
       const err = document.getElementById("pc-edit-error"); if (err) err.style.display = "none";
       _resetFotoUI(null);
       document.getElementById("pc-modal-edit").style.display = "flex";
+      _regEsc(() => ProdCtrlUI.cerrarEdicion());
       setTimeout(() => document.getElementById("pc-e-nombre")?.focus(), 80);
     },
 

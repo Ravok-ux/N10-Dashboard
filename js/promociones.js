@@ -10,6 +10,10 @@ import {
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;'}[c]));
 
+let _escFn = null;
+const _regEsc   = fn => { _unregEsc(); _escFn = e => { if (e.key === "Escape") fn(); }; document.addEventListener("keydown", _escFn); };
+const _unregEsc = () => { if (_escFn) { document.removeEventListener("keydown", _escFn); _escFn = null; } };
+
 const TIPOS_PROMO = {
   DESCUENTO_MONTO_PEDIDO:    'Descuento $ en pedido',
   DESCUENTO_MONTO_PRODUCTO:  'Descuento $ en producto',
@@ -467,9 +471,11 @@ export const PromocionesModule = (() => {
     if (sel) sel.value = tipo;
     container.querySelector('#camposTipo').innerHTML = _renderCamposTipo(tipo, datos);
     panel.classList.add('open');
+    _regEsc(() => _cerrarPanelCampana(container));
   }
 
   function _cerrarPanelCampana(container) {
+    _unregEsc();
     container.querySelector('#modalCampanaOverlay').classList.remove('open');
   }
 
@@ -597,6 +603,7 @@ export const PromocionesModule = (() => {
     form.reset();
     form.clienteId.value = clienteId;
     container.querySelector('#modalPuntosTitulo').textContent = `Ajustar puntos — ${clienteNombre}`;
+    _regEsc(() => { modal.classList.add('hidden'); _unregEsc(); });
 
     const sel = form.campanaId;
     sel.innerHTML = '<option value="">Sin campaña</option>';

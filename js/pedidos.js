@@ -12,6 +12,10 @@ import { registrarVentaN10, revertirVentaN10 } from "./comisiones-n10-engine.js"
 import { getIngenieros } from "./erp-cache.js";
 import { logAudit, norm } from "./app.js";
 
+let _escFn = null;
+const _regEsc   = fn => { _unregEsc(); _escFn = e => { if (e.key === "Escape") fn(); }; document.addEventListener("keydown", _escFn); };
+const _unregEsc = () => { if (_escFn) { document.removeEventListener("keydown", _escFn); _escFn = null; } };
+
 let _unsub    = null;
 let _filtroStatus  = "TODOS";
 let _filtroAlias   = "TODOS";
@@ -137,6 +141,7 @@ function _bindUI() {
     setAlias(a) { _filtroAlias = a; _renderTabla(); },
     nuevoPedido() { _abrirFormPedido(); },
     cerrarFormPedido() {
+      _unregEsc();
       const m = document.getElementById("pd-form-modal");
       if (m) m.style.display = "none";
       _pedidoLineas = [];
@@ -624,6 +629,7 @@ function _abrirFormPedido() {
   if (!modal || !body) return;
   _renderFormPedido(body);
   modal.style.display = "flex";
+  _regEsc(() => PedidosUI.cerrarFormPedido());
 }
 
 function _renderFormPedido(body) {

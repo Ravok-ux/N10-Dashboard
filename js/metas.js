@@ -12,6 +12,11 @@ import {
   serverTimestamp, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// ── ESC helper ───────────────────────────────────────────────────────────────
+let _escFn = null;
+const _regEsc   = fn => { _unregEsc(); _escFn = e => { if (e.key === "Escape") fn(); }; document.addEventListener("keydown", _escFn); };
+const _unregEsc = () => { if (_escFn) { document.removeEventListener("keydown", _escFn); _escFn = null; } };
+
 // ── Estado ─────────────────────────────────────────────────────────────────────
 let _unsubMetas    = null;
 let _unsubUsuarios = null;
@@ -435,6 +440,7 @@ function _abrirForm(id) {
   `;
 
   document.getElementById("mFormWrap").style.display = "flex";
+  _regEsc(_cerrarForm);
   document.getElementById("mfBtnGuardar").addEventListener("click", () => _guardarForm(id));
   document.getElementById("mfBtnCancelar").addEventListener("click", _cerrarForm);
   document.getElementById("mFormWrap").addEventListener("click", e => {
@@ -443,6 +449,7 @@ function _abrirForm(id) {
 }
 
 function _cerrarForm() {
+  _unregEsc();
   document.getElementById("mFormWrap").style.display = "none";
 }
 

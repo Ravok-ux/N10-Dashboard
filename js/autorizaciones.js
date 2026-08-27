@@ -14,6 +14,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { logAudit } from "./app.js";
 
+let _escFn = null;
+const _regEsc   = fn => { _unregEsc(); _escFn = e => { if (e.key === "Escape") fn(); }; document.addEventListener("keydown", _escFn); };
+const _unregEsc = () => { if (_escFn) { document.removeEventListener("keydown", _escFn); _escFn = null; } };
+
 const STATUS_PENDIENTE = "PENDIENTE_AUTORIZACION";
 const STATUS_CONFIRMADO = "CONFIRMADO";
 const STATUS_RECHAZADO  = "RECHAZADO";
@@ -304,6 +308,7 @@ window._autRechazar = id => {
   const overlay = document.getElementById("autModalRechazo");
   if (!overlay) return;
   overlay.style.display = "flex";
+  _regEsc(() => { overlay.style.display = "none"; _rechazandoId = null; _unregEsc(); });
   const motivoInput = document.getElementById("autMotivoInput");
   if (motivoInput) { motivoInput.value = ""; motivoInput.focus(); }
 

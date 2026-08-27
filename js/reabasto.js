@@ -10,6 +10,11 @@ import {
   serverTimestamp, writeBatch, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// ── ESC helper ───────────────────────────────────────────────
+let _escFn = null;
+const _regEsc   = fn => { _unregEsc(); _escFn = e => { if (e.key === "Escape") fn(); }; document.addEventListener("keydown", _escFn); };
+const _unregEsc = () => { if (_escFn) { document.removeEventListener("keydown", _escFn); _escFn = null; } };
+
 // ── Permisos ───────────────────────────────────────────────────
 const PUEDE_GESTIONAR = () =>
   ["SUPER_ADMIN","GERENTE","ADMINISTRADOR","ALMACENISTA"].includes(Sesion.rol);
@@ -227,10 +232,12 @@ function _abrirDetalle(id) {
   inner.innerHTML = _htmlDetalle(s);
   modal.style.display = "flex";
   modal.onclick = e => { if (e.target === modal) _cerrarModal(); };
+  _regEsc(_cerrarModal);
   _bindAccionesDetalle(s);
 }
 
 function _cerrarModal() {
+  _unregEsc();
   const modal = document.getElementById("reb-modal");
   if (modal) modal.style.display = "none";
 }

@@ -15,6 +15,11 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { Sesion } from "./auth.js";
 
+// ── ESC helper ───────────────────────────────────────────────
+let _escFn = null;
+const _regEsc   = fn => { _unregEsc(); _escFn = e => { if (e.key === "Escape") fn(); }; document.addEventListener("keydown", _escFn); };
+const _unregEsc = () => { if (_escFn) { document.removeEventListener("keydown", _escFn); _escFn = null; } };
+
 // ── Constantes ────────────────────────────────────────────────
 const CULTIVOS = ["Maíz","Jitomate","Chile","Papa","Cebolla","Sorgo","Trigo","Frijol","Aguacate","Cítricos","Mango","Caña","Alfalfa","Otro"];
 const ETAPAS   = ["Germinación","Plántula","Vegetativo","Floración","Fructificación","Maduración","Cosecha","Post-cosecha"];
@@ -370,6 +375,7 @@ function _montarCalendario() {
   let _datos  = [];
 
   const cerrar = () => {
+    _unregEsc();
     el("cal-modal").style.display = "none";
     _editId = null;
     ["cal-f-cultivo","cal-f-etapa","cal-f-region","cal-f-notas"].forEach(id => { if(el(id)) el(id).value=""; });
@@ -379,7 +385,7 @@ function _montarCalendario() {
     if (el("cal-guardar"))     el("cal-guardar").textContent     = "Guardar";
   };
 
-  el("cal-nuevo-btn")?.addEventListener("click", () => { el("cal-modal").style.display = "flex"; });
+  el("cal-nuevo-btn")?.addEventListener("click", () => { el("cal-modal").style.display = "flex"; _regEsc(cerrar); });
   el("cal-modal-close")?.addEventListener("click", cerrar);
   el("cal-cancel")?.addEventListener("click", cerrar);
   el("cal-modal")?.addEventListener("click", e => { if (e.target === el("cal-modal")) cerrar(); });
@@ -487,7 +493,7 @@ function _montarCalendario() {
         if (el("cal-f-hasta"))   el("cal-f-hasta").value   = d.mesFin||12;
         if (el("cal-modal-title")) el("cal-modal-title").textContent = "Editar ventana";
         if (el("cal-guardar"))     el("cal-guardar").textContent     = "Actualizar";
-        el("cal-modal").style.display = "flex";
+        el("cal-modal").style.display = "flex"; _regEsc(cerrar);
       });
     });
     tbody.querySelectorAll(".cal-del-btn").forEach(btn => {
@@ -593,6 +599,7 @@ function _montarRecetas() {
   }
 
   const cerrar = () => {
+    _unregEsc();
     el("rec-modal").style.display = "none";
     _editId = null;
     ["rec-f-nombre","rec-f-cultivo","rec-f-etapa","rec-f-agua","rec-f-ha","rec-f-notas"].forEach(id => { if(el(id)) el(id).value=""; });
@@ -602,7 +609,7 @@ function _montarRecetas() {
     _prodCount = 0;
   };
 
-  el("rec-nuevo-btn")?.addEventListener("click", () => { cerrar(); el("rec-modal").style.display="flex"; _agregarFila(); });
+  el("rec-nuevo-btn")?.addEventListener("click", () => { cerrar(); el("rec-modal").style.display="flex"; _regEsc(cerrar); _agregarFila(); });
   el("rec-modal-close")?.addEventListener("click", cerrar);
   el("rec-cancel")?.addEventListener("click", cerrar);
   el("rec-modal")?.addEventListener("click", e => { if (e.target === el("rec-modal")) cerrar(); });
@@ -763,7 +770,7 @@ function _montarRecetas() {
         (d.productos||[]).forEach(p => _agregarFila(p));
         if(el("rec-modal-title")) el("rec-modal-title").textContent = "Editar receta";
         if(el("rec-guardar"))     el("rec-guardar").textContent     = "Actualizar";
-        el("rec-modal").style.display = "flex";
+        el("rec-modal").style.display = "flex"; _regEsc(cerrar);
       });
     });
     cards.querySelectorAll(".rec-del-btn").forEach(btn => {
@@ -918,6 +925,7 @@ function _montarTrazabilidad() {
     </div>`;
 
   const cerrarTrz = () => {
+    _unregEsc();
     el("trz-modal").style.display = "none";
     ["trz-f-ing-sel","trz-f-cultivo-sel","trz-f-etapa-sel","trz-f-receta"].forEach(id => { if(el(id)) el(id).value=""; });
     ["trz-f-cliente","trz-f-parcela","trz-f-resultado","trz-f-pedido"].forEach(id => { if(el(id)) el(id).value=""; });
@@ -926,7 +934,7 @@ function _montarTrazabilidad() {
     _trzProdCount = 0;
   };
 
-  el("trz-nuevo-btn")?.addEventListener("click",  () => { cerrarTrz(); el("trz-modal").style.display="flex"; _agregarFilaTrz(); });
+  el("trz-nuevo-btn")?.addEventListener("click",  () => { cerrarTrz(); el("trz-modal").style.display="flex"; _regEsc(cerrarTrz); _agregarFilaTrz(); });
   el("trz-modal-close")?.addEventListener("click", cerrarTrz);
   el("trz-cancel")?.addEventListener("click",      cerrarTrz);
   el("trz-modal")?.addEventListener("click", e => { if(e.target===el("trz-modal")) cerrarTrz(); });

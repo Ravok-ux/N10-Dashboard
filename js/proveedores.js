@@ -12,6 +12,10 @@ import {
   query, orderBy, serverTimestamp, where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+let _escFn = null;
+const _regEsc   = fn => { _unregEsc(); _escFn = e => { if (e.key === "Escape") fn(); }; document.addEventListener("keydown", _escFn); };
+const _unregEsc = () => { if (_escFn) { document.removeEventListener("keydown", _escFn); _escFn = null; } };
+
 let _provs    = [];
 let _filtro   = "";
 let _editId   = null;
@@ -220,6 +224,7 @@ function _bindUI() {
       document.getElementById("pf-activo").checked  = true;
       document.getElementById("prov-modal-err").style.display = "none";
       document.getElementById("prov-modal").style.display = "flex";
+      _regEsc(() => ProveedoresUI.cerrar());
     },
 
     editar(id) {
@@ -237,9 +242,11 @@ function _bindUI() {
       document.getElementById("pf-activo").checked  = p.activo !== false;
       document.getElementById("prov-modal-err").style.display = "none";
       document.getElementById("prov-modal").style.display = "flex";
+      _regEsc(() => ProveedoresUI.cerrar());
     },
 
     cerrar() {
+      _unregEsc();
       document.getElementById("prov-modal").style.display = "none";
     },
 

@@ -8,6 +8,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { exportarExcel } from "./excel-utils.js";
 
+let _escFn = null;
+const _regEsc   = fn => { _unregEsc(); _escFn = e => { if (e.key === "Escape") fn(); }; document.addEventListener("keydown", _escFn); };
+const _unregEsc = () => { if (_escFn) { document.removeEventListener("keydown", _escFn); _escFn = null; } };
+
 const _COLS_ING = [
   { key: "alias",     header: "Alias",           width: 14, required: true,  ejemplo: "jperez" },
   { key: "nombre",    header: "Nombre completo",  width: 24, required: true,  ejemplo: "Juan Pérez García" },
@@ -258,10 +262,12 @@ function _bindUI() {
       const err = document.getElementById("ing-modal-error");
       if (err) err.style.display = "none";
       document.getElementById("ing-modal").style.display = "flex";
+      _regEsc(() => IngenierosUI.cerrarAlta());
       setTimeout(() => document.getElementById("ing-f-alias")?.focus(), 80);
     },
 
     cerrarAlta() {
+      _unregEsc();
       document.getElementById("ing-modal").style.display = "none";
     },
 
@@ -295,6 +301,7 @@ function _bindUI() {
       // Alias no editable en modo edición
       document.getElementById("ing-f-alias").readOnly = true;
       document.getElementById("ing-modal").style.display = "flex";
+      _regEsc(() => IngenierosUI.cerrarAlta());
     },
 
     async guardarAlta() {
