@@ -996,31 +996,28 @@ function _aplicarVisibilidadSidebar() {
     el.style.display = vis[v] !== false ? "" : "none";
   });
 
-  // Sección Supervisión
-  const supVis = pv("GERENTE","GERENTE_ZONA","ADMINISTRADOR","MESA_CONTROL");
+  // Visibilidad de cada grupo — ocultar si ningún item del grupo es visible
   const $sup   = id => document.getElementById(id);
-  if ($sup("sb-grupo-supervision")) $sup("sb-grupo-supervision").style.display = supVis ? "" : "none";
-  if ($sup("sbi-supervision"))      $sup("sbi-supervision").style.display      = supVis ? "" : "none";
-
-  // Sección Admin: visible si tiene al menos un item visible
-  const adminVis = pv("GERENTE","ADMINISTRADOR","MESA_CONTROL","ALMACENISTA","RECUPERADOR","JURIDICO","INGENIERO");
-  if ($sup("sb-admin-group")) $sup("sb-admin-group").style.display = adminVis ? "" : "none";
-  if ($sup("sbi-admin"))      $sup("sbi-admin").style.display      = adminVis ? "" : "none";
-
-  // Sublabels y divisores — ocultar si ningún item visible en su grupo
-  // Operaciones: usuarios → logistica (aprox las primeras 14 entradas del sbi-admin)
-  const opsViews = ["usuarios","comisiones","compras","kardex","cartera","visitas","cotizaciones","inventario","reabasto","devoluciones","chat","rh","caja","gastos","crm","asistencia","sms","logistica","historial_ventas","agroquimico","integraciones","finanzas","juridico","observabilidad","mi_rh"];
-  const ctrlViews = ["precios","geocercas","metas","autorizaciones","auditoria"];
-  const cfgViews  = ["formularios","promociones","precios_segmento","productos","config","config_intereses","reportes","reportes_custom","bi_analytics"];
-
-  const anyVis = views => views.some(v => vis[v]);
   const showEl = (id, show) => { const e = $sup(id); if (e) e.style.display = show ? "" : "none"; };
+  const anyVis = views => views.some(v => vis[v] !== false);
 
-  showEl("sb-sublabel-ops", anyVis(opsViews));
-  showEl("sb-sublabel-ctrl", anyVis(ctrlViews));
-  showEl("sb-div-ctrl",      anyVis(ctrlViews));
-  showEl("sb-sublabel-cfg",  anyVis(cfgViews));
-  showEl("sb-div-cfg",       anyVis(cfgViews));
+  const grupos = [
+    { grp: "sb-grupo-campo",         sbi: "sbi-campo",        views: ["ingenieros","clientes","mapa_clientes","asignaciones","pedidos","remisiones","visitas","manuales","agroquimico","logistica","geocercas"] },
+    { grp: "sb-grupo-ventas",        sbi: "sbi-ventas",       views: ["crm","cotizaciones","metas","formularios","promociones","sms","historial_ventas"] },
+    { grp: "sb-grupo-juridico-sec",  sbi: "sbi-juridico-sec", views: ["juridico"] },
+    { grp: "sb-grupo-catalogo",      sbi: "sbi-catalogo",     views: ["productos","precios","precios_segmento"] },
+    { grp: "sb-grupo-inventario",    sbi: "sbi-inventario",   views: ["inventario","reabasto","compras","proveedores","kardex","devoluciones"] },
+    { grp: "sb-grupo-finanzas",      sbi: "sbi-finanzas",     views: ["caja","gastos","finanzas","comisiones","cartera","config_intereses","cobranza"] },
+    { grp: "sb-grupo-rrhh",          sbi: "sbi-rrhh",         views: ["rh","mi_rh","asistencia"] },
+    { grp: "sb-grupo-analisis",      sbi: "sbi-analisis",     views: ["bi_analytics","reportes","reportes_custom"] },
+    { grp: "sb-grupo-supervision",   sbi: "sbi-supervision",  views: ["comentarios","autorizaciones","auditoria","observabilidad","chat"] },
+    { grp: "sb-grupo-sistema",       sbi: "sbi-sistema",      views: ["usuarios","config","integraciones"] },
+  ];
+  grupos.forEach(({ grp, sbi, views }) => {
+    const show = anyVis(views);
+    showEl(grp, show);
+    showEl(sbi, show);
+  });
 }
 
 // ══════════════════════════════════════════════════════════════

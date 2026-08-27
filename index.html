@@ -77,9 +77,9 @@
 
     <nav class="sb-nav">
 
-      <!-- ── PRINCIPAL ── -->
+      <!-- ── INICIO ── -->
       <div class="sb-group" data-section="principal">
-        <span>PRINCIPAL</span><span class="sb-chevron">▾</span>
+        <span>INICIO</span><span class="sb-chevron">▾</span>
       </div>
       <div class="sb-section-items" id="sbi-principal">
         <a class="sb-item active" href="#" data-view="dashboard">
@@ -98,7 +98,7 @@
       </div>
 
       <!-- ── CAMPO ── -->
-      <div class="sb-group" data-section="campo">
+      <div class="sb-group" id="sb-grupo-campo" data-section="campo">
         <span>CAMPO</span><span class="sb-chevron">▾</span>
       </div>
       <div class="sb-section-items" id="sbi-campo">
@@ -120,11 +120,161 @@
         <a class="sb-item" href="#" data-view="remisiones">
           <span class="sb-icon">📄</span> Remisiones
         </a>
-        <a class="sb-item" href="#" data-view="cobranza">
-          <span class="sb-icon">💰</span> Cobranza
+        <a class="sb-item" href="#" data-view="visitas">
+          <span class="sb-icon">📅</span> Visitas
         </a>
         <a class="sb-item" href="#" data-view="manuales">
           <span class="sb-icon">📋</span> Manuales
+        </a>
+        <a class="sb-item" href="#" data-view="agroquimico">
+          <span class="sb-icon">🌿</span> Agroquímico
+        </a>
+        <a class="sb-item" href="#" data-view="logistica">
+          <span class="sb-icon">🚗</span> Logística
+        </a>
+        <a class="sb-item" href="#" data-view="geocercas">
+          <span class="sb-icon">📍</span> Geocercas
+        </a>
+      </div>
+
+      <!-- ── VENTAS & CRM ── -->
+      <div class="sb-group" id="sb-grupo-ventas" data-section="ventas">
+        <span>VENTAS &amp; CRM</span><span class="sb-chevron">▾</span>
+      </div>
+      <div class="sb-section-items" id="sbi-ventas">
+        <a class="sb-item" href="#" data-view="crm">
+          <span class="sb-icon">🎯</span> CRM — Prospectos
+        </a>
+        <a class="sb-item" href="#" data-view="cotizaciones">
+          <span class="sb-icon">📋</span> Cotizaciones
+        </a>
+        <a class="sb-item" href="#" data-view="metas">
+          <span class="sb-icon">🎯</span> Metas de venta
+        </a>
+        <a class="sb-item" href="#" data-view="formularios">
+          <span class="sb-icon">📋</span> Formularios
+        </a>
+        <a class="sb-item" href="#" data-view="promociones">
+          <span class="sb-icon">🎁</span> Recompensa y lealtad
+        </a>
+        <a class="sb-item" href="#" data-view="sms">
+          <span class="sb-icon">📱</span> SMS Masivo
+        </a>
+        <a class="sb-item" href="#" data-view="historial_ventas">
+          <span class="sb-icon">📜</span> Historial de Ventas
+        </a>
+      </div>
+
+      <!-- ── JURÍDICO ── -->
+      <div class="sb-group" id="sb-grupo-juridico-sec" data-section="juridico">
+        <span>JURÍDICO</span><span class="sb-chevron">▾</span>
+      </div>
+      <div class="sb-section-items" id="sbi-juridico-sec">
+        <a class="sb-item" href="#" data-view="juridico" id="sb-juridico">
+          <span class="sb-icon">⚖️</span> Jurídico
+        </a>
+      </div>
+
+      <!-- ── CATÁLOGO ── -->
+      <div class="sb-group" id="sb-grupo-catalogo" data-section="catalogo">
+        <span>CATÁLOGO</span><span class="sb-chevron">▾</span>
+      </div>
+      <div class="sb-section-items" id="sbi-catalogo">
+        <a class="sb-item" href="#" data-view="productos">
+          <span class="sb-icon">📦</span> Catálogo / Productos
+        </a>
+        <a class="sb-item" href="#" data-view="precios" id="sb-precios">
+          <span class="sb-icon">💲</span> Precios y costos
+        </a>
+        <a class="sb-item" href="#" data-view="precios_segmento">
+          <span class="sb-icon">🏷️</span> Precios por segmento
+        </a>
+      </div>
+
+      <!-- ── INVENTARIO & COMPRAS ── -->
+      <div class="sb-group" id="sb-grupo-inventario" data-section="inventario">
+        <span>INVENTARIO &amp; COMPRAS</span><span class="sb-chevron">▾</span>
+      </div>
+      <div class="sb-section-items" id="sbi-inventario">
+        <a class="sb-item" href="#" data-view="inventario">
+          <span class="sb-icon">📦</span> Inventario
+        </a>
+        <a class="sb-item" href="#" data-view="reabasto">
+          <span class="sb-icon">📥</span> Reabasto
+        </a>
+        <a class="sb-item" href="#" data-view="compras">
+          <span class="sb-icon">📋</span> Órdenes de compra
+        </a>
+        <a class="sb-item" href="#" data-view="proveedores">
+          <span class="sb-icon">🏭</span> Proveedores
+        </a>
+        <a class="sb-item" href="#" data-view="kardex">
+          <span class="sb-icon">📦</span> Kardex
+        </a>
+        <a class="sb-item" href="#" data-view="devoluciones">
+          <span class="sb-icon">↩️</span> Devoluciones
+          <span class="sb-badge hidden" id="dev-badge">0</span>
+        </a>
+      </div>
+
+      <!-- ── FINANZAS ── -->
+      <div class="sb-group" id="sb-grupo-finanzas" data-section="finanzas">
+        <span>FINANZAS</span><span class="sb-chevron">▾</span>
+      </div>
+      <div class="sb-section-items" id="sbi-finanzas">
+        <a class="sb-item" href="#" data-view="caja">
+          <span class="sb-icon">🏧</span> Arqueo de Caja
+        </a>
+        <a class="sb-item" href="#" data-view="gastos">
+          <span class="sb-icon">🧾</span> Gastos
+        </a>
+        <a class="sb-item" href="#" data-view="finanzas">
+          <span class="sb-icon">💰</span> Finanzas
+        </a>
+        <a class="sb-item" href="#" data-view="comisiones">
+          <span class="sb-icon">📊</span> Comisiones
+        </a>
+        <a class="sb-item" href="#" data-view="cartera">
+          <span class="sb-icon">💳</span> Cartera vencida
+          <span class="sb-badge hidden" id="cart-badge">0</span>
+        </a>
+        <a class="sb-item" href="#" data-view="config_intereses">
+          <span class="sb-icon">📊</span> Tasas de interés
+        </a>
+        <a class="sb-item" href="#" data-view="cobranza">
+          <span class="sb-icon">💰</span> Cobranza
+        </a>
+      </div>
+
+      <!-- ── RECURSOS HUMANOS ── -->
+      <div class="sb-group" id="sb-grupo-rrhh" data-section="rrhh">
+        <span>RECURSOS HUMANOS</span><span class="sb-chevron">▾</span>
+      </div>
+      <div class="sb-section-items" id="sbi-rrhh">
+        <a class="sb-item" href="#" data-view="rh">
+          <span class="sb-icon">👥</span> Recursos Humanos
+        </a>
+        <a class="sb-item" href="#" data-view="mi_rh" id="sb-mi-rh">
+          <span class="sb-icon">👤</span> Mi RH
+        </a>
+        <a class="sb-item" href="#" data-view="asistencia">
+          <span class="sb-icon">🕐</span> Asistencia
+        </a>
+      </div>
+
+      <!-- ── ANÁLISIS ── -->
+      <div class="sb-group" id="sb-grupo-analisis" data-section="analisis">
+        <span>ANÁLISIS</span><span class="sb-chevron">▾</span>
+      </div>
+      <div class="sb-section-items" id="sbi-analisis">
+        <a class="sb-item" href="#" data-view="bi_analytics">
+          <span class="sb-icon">🧠</span> BI &amp; Analytics
+        </a>
+        <a class="sb-item" href="#" data-view="reportes">
+          <span class="sb-icon">📈</span> Reportes
+        </a>
+        <a class="sb-item" href="#" data-view="reportes_custom">
+          <span class="sb-icon">📋</span> Reportes custom
         </a>
       </div>
 
@@ -136,140 +286,34 @@
         <a class="sb-item" href="#" data-view="comentarios" id="sb-comentarios">
           <span class="sb-icon">💬</span> Comentarios
         </a>
-      </div>
-
-      <!-- ── ADMINISTRACIÓN ── -->
-      <div class="sb-group" id="sb-admin-group" data-section="admin">
-        <span>ADMINISTRACIÓN</span><span class="sb-chevron">▾</span>
-      </div>
-      <div class="sb-section-items" id="sbi-admin">
-        <div class="sb-sublabel" id="sb-sublabel-ops">Operaciones</div>
-        <a class="sb-item" href="#" data-view="usuarios" id="sb-usuarios">
-          <span class="sb-icon">🔐</span> Usuarios y flags
-        </a>
-        <a class="sb-item" href="#" data-view="comisiones">
-          <span class="sb-icon">📊</span> Comisiones
-        </a>
-        <a class="sb-item" href="#" data-view="compras">
-          <span class="sb-icon">📋</span> Órdenes de compra
-        </a>
-        <a class="sb-item" href="#" data-view="proveedores">
-          <span class="sb-icon">🏭</span> Proveedores
-        </a>
-        <a class="sb-item" href="#" data-view="kardex">
-          <span class="sb-icon">📦</span> Kardex
-        </a>
-        <a class="sb-item" href="#" data-view="cartera">
-          <span class="sb-icon">💳</span> Cartera vencida
-          <span class="sb-badge hidden" id="cart-badge">0</span>
-        </a>
-        <a class="sb-item" href="#" data-view="visitas">
-          <span class="sb-icon">📅</span> Visitas
-        </a>
-        <a class="sb-item" href="#" data-view="cotizaciones">
-          <span class="sb-icon">📋</span> Cotizaciones
-        </a>
-        <a class="sb-item" href="#" data-view="inventario">
-          <span class="sb-icon">📦</span> Inventario
-        </a>
-        <a class="sb-item" href="#" data-view="reabasto">
-          <span class="sb-icon">📥</span> Reabasto
-        </a>
-        <a class="sb-item" href="#" data-view="devoluciones">
-          <span class="sb-icon">↩️</span> Devoluciones
-          <span class="sb-badge hidden" id="dev-badge">0</span>
-        </a>
-        <a class="sb-item" href="#" data-view="chat">
-          <span class="sb-icon">💬</span> Chat interno
-          <span class="sb-badge hidden" id="chat-badge">0</span>
-        </a>
-        <a class="sb-item" href="#" data-view="rh">
-          <span class="sb-icon">👥</span> Recursos Humanos
-        </a>
-        <a class="sb-item" href="#" data-view="caja">
-          <span class="sb-icon">🏧</span> Arqueo de Caja
-        </a>
-        <a class="sb-item" href="#" data-view="gastos">
-          <span class="sb-icon">🧾</span> Gastos
-        </a>
-        <a class="sb-item" href="#" data-view="mi_rh" id="sb-mi-rh">
-          <span class="sb-icon">👤</span> Mi RH
-        </a>
-        <a class="sb-item" href="#" data-view="crm">
-          <span class="sb-icon">🎯</span> CRM — Prospectos
-        </a>
-        <a class="sb-item" href="#" data-view="historial_ventas">
-          <span class="sb-icon">📜</span> Historial de Ventas
-        </a>
-        <a class="sb-item" href="#" data-view="asistencia">
-          <span class="sb-icon">🕐</span> Asistencia
-        </a>
-        <a class="sb-item" href="#" data-view="sms">
-          <span class="sb-icon">📱</span> SMS Masivo
-        </a>
-        <a class="sb-item" href="#" data-view="logistica">
-          <span class="sb-icon">🚗</span> Logística de visitas
-        </a>
-        <a class="sb-item" href="#" data-view="agroquimico">
-          <span class="sb-icon">🌿</span> Agroquímico
-        </a>
-        <a class="sb-item" href="#" data-view="integraciones" id="sb-integraciones">
-          <span class="sb-icon">🔌</span> Integraciones
-        </a>
-        <a class="sb-item" href="#" data-view="finanzas">
-          <span class="sb-icon">💰</span> Finanzas
-        </a>
-        <a class="sb-item" href="#" data-view="juridico" id="sb-juridico">
-          <span class="sb-icon">⚖️</span> Jurídico
-        </a>
-        <a class="sb-item" href="#" data-view="observabilidad" id="sb-observabilidad">
-          <span class="sb-icon">📡</span> Observabilidad
-        </a>
-        <div class="sb-divider-mini" id="sb-div-ctrl"></div>
-        <div class="sb-sublabel" id="sb-sublabel-ctrl">Control</div>
-        <a class="sb-item" href="#" data-view="precios" id="sb-precios">
-          <span class="sb-icon">💲</span> Precios y costos
-        </a>
-        <a class="sb-item" href="#" data-view="geocercas">
-          <span class="sb-icon">📍</span> Geocercas
-        </a>
-        <a class="sb-item" href="#" data-view="metas">
-          <span class="sb-icon">🎯</span> Metas de venta
-        </a>
         <a class="sb-item" href="#" data-view="autorizaciones">
           <span class="sb-icon">✅</span> Autorizaciones
         </a>
         <a class="sb-item" href="#" data-view="auditoria">
           <span class="sb-icon">🔍</span> Auditoría
         </a>
-        <div class="sb-divider-mini" id="sb-div-cfg"></div>
-        <div class="sb-sublabel" id="sb-sublabel-cfg">Configuración</div>
-        <a class="sb-item" href="#" data-view="formularios">
-          <span class="sb-icon">📋</span> Formularios
+        <a class="sb-item" href="#" data-view="observabilidad" id="sb-observabilidad">
+          <span class="sb-icon">📡</span> Observabilidad
         </a>
-        <a class="sb-item" href="#" data-view="promociones">
-          <span class="sb-icon">🎁</span> Recompensa y lealtad
+        <a class="sb-item" href="#" data-view="chat">
+          <span class="sb-icon">💬</span> Chat interno
+          <span class="sb-badge hidden" id="chat-badge">0</span>
         </a>
-        <a class="sb-item" href="#" data-view="precios_segmento">
-          <span class="sb-icon">🏷️</span> Precios por segmento
-        </a>
-        <a class="sb-item" href="#" data-view="productos">
-          <span class="sb-icon">📦</span> Catálogo / Productos
+      </div>
+
+      <!-- ── SISTEMA ── -->
+      <div class="sb-group" id="sb-grupo-sistema" data-section="sistema">
+        <span>SISTEMA</span><span class="sb-chevron">▾</span>
+      </div>
+      <div class="sb-section-items" id="sbi-sistema">
+        <a class="sb-item" href="#" data-view="usuarios" id="sb-usuarios">
+          <span class="sb-icon">🔐</span> Usuarios y flags
         </a>
         <a class="sb-item" href="#" data-view="config">
           <span class="sb-icon">⚙️</span> Config. tickets
         </a>
-        <a class="sb-item" href="#" data-view="config_intereses">
-          <span class="sb-icon">📊</span> Tasas de interés
-        </a>
-        <a class="sb-item" href="#" data-view="bi_analytics">
-          <span class="sb-icon">🧠</span> BI &amp; Analytics
-        </a>
-        <a class="sb-item" href="#" data-view="reportes">
-          <span class="sb-icon">📈</span> Reportes
-        </a>
-        <a class="sb-item" href="#" data-view="reportes_custom">
-          <span class="sb-icon">📋</span> Reportes custom
+        <a class="sb-item" href="#" data-view="integraciones" id="sb-integraciones">
+          <span class="sb-icon">🔌</span> Integraciones
         </a>
       </div>
 
