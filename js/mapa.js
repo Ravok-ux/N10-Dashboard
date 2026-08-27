@@ -12,6 +12,7 @@ let _map       = null;
 let _markers   = {};
 let _unsubs    = [];
 let _mapsReady = false;
+let _autoFitDone = false;  // sólo auto-centrar una vez al primer snapshot
 
 // ── Replay state ──────────────────────────────────────────────
 let _replay = {
@@ -42,6 +43,7 @@ export const MapaModule = {
     _unsubs = [];
     _markers = {};
     _map = null;
+    _autoFitDone = false;
   }
 };
 
@@ -79,6 +81,21 @@ function _html() {
         <span id="ms-gps">🛰 GPS –</span>
         <div style="flex:1"></div>
         <span id="ms-sync">–</span>
+      </div>
+
+      <!-- Buscador de ingenieros en mapa -->
+      <div style="position:absolute;top:12px;left:12px;z-index:5;display:flex;align-items:center;gap:6px">
+        <input id="mapa-search" type="text" placeholder="🔍 Buscar ingeniero..."
+          oninput="MapaBuscador.filtrar(this.value)"
+          style="height:34px;padding:0 12px;border-radius:8px;border:1px solid #30363D;
+            background:rgba(13,17,23,.88);color:#E6EDF3;font-size:12px;width:190px;
+            backdrop-filter:blur(4px);outline:none;"
+          onfocus="this.style.borderColor='#4ADE80'"
+          onblur="this.style.borderColor='#30363D'">
+        <button id="mapa-search-clear" onclick="MapaBuscador.limpiar()"
+          title="Limpiar búsqueda"
+          style="display:none;height:34px;padding:0 10px;border-radius:8px;border:1px solid #30363D;
+            background:rgba(13,17,23,.88);color:#6B7280;font-size:12px;cursor:pointer;">✕</button>
       </div>
 
       <!-- Botón Mi ubicación -->
@@ -207,8 +224,8 @@ function _crearMapa() {
   if (!mapEl) return;
 
   _map = new google.maps.Map(mapEl, {
-    center: { lat: 30.0, lng: -110.0 }, // Centro de Sonora
-    zoom:   8,
+    center: { lat: 20.5, lng: -103.4 }, // Centro México — se reemplaza al cargar marcadores
+    zoom:   6,
     mapTypeId: "roadmap",
     styles: _mapStyles(),
     disableDefaultUI: false,
@@ -281,6 +298,27 @@ function _escucharUbicacionesMapa(map) {
         });
       }
     });
+
+    // Auto-centrar al primer snapshot con marcadores reales
+    if (!_autoFitDone && map && Object.keys(_markers).length > 0) {
+      _autoFitDone = true;
+      const bounds = new google.maps.LatLngBounds();
+      // Prioridad: ingenieros en jornada activa; fallback: todos los marcadores
+      const enJornadaIds = snap.docs
+        .filter(d => d.data().enJornada && parseFloat(d.data().lat) && parseFloat(d.data().lng))
+        .map(d => d.id);
+      const idsParaBounds = enJornadaIds.length > 0 ? enJornadaIds : Object.keys(_markers);
+      idsParaBounds.forEach(id => {
+        if (_markers[id]) bounds.extend(_markers[id].getPosition());
+      });
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, { top: 60, right: 20, bottom: 40, left: 20 });
+        // No acercar demasiado si es un solo marcador
+        const listener = google.maps.event.addListenerOnce(map, "idle", () => {
+          if (map.getZoom() > 14) map.setZoom(14);
+        });
+      }
+    }
 
     // Status
     _setText("ms-activos", `${enCampo} activos`);
@@ -695,6 +733,47 @@ window.MapaMiUbicacion = {
       },
       { timeout: 12000, maximumAge: 60000, enableHighAccuracy: false }
     );
+  }
+};
+
+// ── Buscador de ingenieros en el mapa ─────────────────────────
+window.MapaBuscador = {
+  filtrar(query) {
+    const q = (query || "").trim().toLowerCase();
+    const clearBtn = document.getElementById("mapa-search-clear");
+    if (clearBtn) clearBtn.style.display = q ? "block" : "none";
+
+    Object.keys(_markers).forEach(id => {
+      const marker = _markers[id];
+      if (!marker) return;
+      const titulo = (marker.getTitle() || id).toLowerCase();
+      const visible = !q || titulo.includes(q);
+      marker.setVisible(visible);
+    });
+
+    // Si hay exactamente un resultado visible, centrar en él
+    if (q) {
+      const visibles = Object.keys(_markers).filter(id => {
+        const m = _markers[id];
+        return m && m.getVisible() && (m.getTitle() || id).toLowerCase().includes(q);
+      });
+      if (visibles.length === 1 && _map && _markers[visibles[0]]) {
+        _map.panTo(_markers[visibles[0]].getPosition());
+        if (_map.getZoom() < 12) _map.setZoom(13);
+      } else if (visibles.length > 1 && _map) {
+        const bounds = new google.maps.LatLngBounds();
+        visibles.forEach(id => bounds.extend(_markers[id].getPosition()));
+        _map.fitBounds(bounds, 60);
+      }
+    } else {
+      // Sin búsqueda: mostrar todos
+      Object.keys(_markers).forEach(id => _markers[id]?.setVisible(true));
+    }
+  },
+
+  limpiar() {
+    const inp = document.getElementById("mapa-search");
+    if (inp) { inp.value = ""; this.filtrar(""); }
   }
 };
 
