@@ -145,7 +145,7 @@ function _html() {
       <input class="cfg-input" id="cfg-alert-postvenc" type="number" min="1" max="30" value="1">
     </div>
     <div style="display:flex;justify-content:flex-end;padding:12px 0 0">
-      <button class="cfg-btn-guardar" id="cfg-alert-guardar">Guardar alertas</button>
+      <button class="cfg-btn-primary" id="cfg-alert-guardar">Guardar alertas</button>
     </div>
     <div id="cfg-alert-status" style="font-size:12px;color:#16A34A;height:16px;margin-top:4px"></div>
   </div>
