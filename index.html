@@ -20,16 +20,12 @@
     // La clave de Maps se sustituye en CI/CD: %%MAPS_API_KEY%%
     window.N10_MAPS_KEY = "AIzaSyABlKaosFaAnATC_lpB_BP1K0VpdaEfqe8";
     // Registro del Service Worker (PWA)
+    // Sin auto-reload en controllerchange: el SW de FCM también dispara ese evento
+    // y causaba un ciclo de refresh infinito en PWA. index.html siempre va a red
+    // (Network-first en sw.js) por lo que no se necesita recargar al activar un SW nuevo.
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        // Flag para recargar una sola vez por sesión al detectar nuevo SW
-        let _swReloading = false;
-        const _swReload = () => { if (!_swReloading) { _swReloading = true; window.location.reload(); } };
-
         navigator.serviceWorker.register('/sw.js').catch(() => {});
-
-        // Un solo punto de recarga: cuando el controller efectivamente cambia
-        navigator.serviceWorker.addEventListener('controllerchange', _swReload);
       });
     }
   </script>
