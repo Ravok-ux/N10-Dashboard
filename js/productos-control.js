@@ -194,18 +194,15 @@ function _html() {
           <button onclick="ProdCtrlUI.abrirAltaProducto()"
             style="padding:7px 16px;border-radius:6px;border:none;background:#1B5E20;
               color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">
-            Nuevo Normal
-          </button>
-          <button onclick="ProdCtrlUI.abrirAltaExpress()"
-            style="padding:7px 16px;border-radius:6px;border:1px solid var(--border);
-              background:transparent;color:var(--text-primary);font-size:12px;font-weight:700;
-              cursor:pointer;white-space:nowrap">
-            Nuevo Express
+            + Nuevo producto
           </button>` : ""}
         <button onclick="ProdCtrlUI.abrirConfigCols()" title="Configurar columnas"
-          style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);
-            background:transparent;color:var(--text-primary);font-size:13px;cursor:pointer"
-          >⚙ Columnas</button>
+          style="padding:7px 14px;border-radius:6px;border:1px solid var(--border);
+            background:var(--surface);color:var(--text-primary);font-size:12px;
+            font-weight:600;cursor:pointer;white-space:nowrap;display:inline-flex;
+            align-items:center;gap:5px">
+          ⚙ Columnas
+        </button>
       </div>
 
       <!-- KPIs -->
@@ -361,7 +358,8 @@ function _html() {
         <div style="display:flex;gap:10px;justify-content:flex-end">
           <button onclick="ProdCtrlUI.cerrarEdicion()"
             style="padding:8px 18px;border:1px solid var(--border);border-radius:6px;
-              background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer">
+              background:var(--surface-2,#F3F4F6);color:var(--text-primary);font-size:12px;
+              font-weight:600;cursor:pointer">
             Cancelar
           </button>
           <button onclick="ProdCtrlUI.guardarEdicion()"
@@ -369,39 +367,6 @@ function _html() {
               background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer"
             id="pc-edit-save-btn">
             Guardar cambios
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Modal Nuevo Express ── -->
-    <div id="pc-modal-express" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
-      z-index:1000;align-items:center;justify-content:center;padding:16px">
-      <div style="background:var(--surface);border-radius:14px;width:360px;max-width:100%;
-        border:1px solid var(--border);padding:24px">
-        <div style="font-size:14px;font-weight:800;color:var(--text-primary);margin-bottom:16px">Nuevo producto (express)</div>
-        <div style="margin-bottom:12px">
-          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Nombre*</label>
-          <input id="pe-nombre" type="text" maxlength="120" placeholder="Nombre del producto"
-            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
-              font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
-        </div>
-        <div style="margin-bottom:18px">
-          <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Precio cliente ($)</label>
-          <input id="pe-precio" type="number" min="0" step="0.01" placeholder="0.00"
-            style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
-              font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
-        </div>
-        <div id="pc-express-error" style="display:none;background:#FEE2E2;border-radius:6px;
-          padding:8px 12px;font-size:11.5px;color:#DC2626;margin-bottom:12px"></div>
-        <div style="display:flex;gap:10px;justify-content:flex-end">
-          <button onclick="document.getElementById('pc-modal-express').style.display='none'"
-            style="padding:8px 18px;border:1px solid var(--border);border-radius:6px;
-              background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer">Cancelar</button>
-          <button onclick="ProdCtrlUI.guardarExpress()"
-            style="padding:8px 22px;border:none;border-radius:6px;
-              background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
-            Guardar
           </button>
         </div>
       </div>
@@ -418,11 +383,13 @@ function _html() {
         <div style="display:flex;gap:8px;justify-content:space-between">
           <button onclick="ProdCtrlUI.resetCols()"
             style="padding:7px 14px;border:1px solid var(--border);border-radius:6px;
-              background:transparent;color:#9CA3AF;font-size:11px;cursor:pointer">Restablecer</button>
+              background:var(--surface-2,#F3F4F6);color:var(--text-sec,#6B7280);font-size:11px;
+              font-weight:600;cursor:pointer">Restablecer</button>
           <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('pc-modal-cols').style.display='none'"
               style="padding:7px 14px;border:1px solid var(--border);border-radius:6px;
-                background:transparent;color:var(--text-primary);font-size:12px;cursor:pointer">Cancelar</button>
+                background:var(--surface-2,#F3F4F6);color:var(--text-primary);font-size:12px;
+                font-weight:600;cursor:pointer">Cancelar</button>
             <button onclick="ProdCtrlUI.guardarCols()"
               style="padding:7px 18px;border:none;border-radius:6px;
                 background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Aplicar</button>
@@ -1294,36 +1261,7 @@ function _bindUI() {
       }
     },
 
-    // ── Nuevo Express ─────────────────────────────────────────
-    abrirAltaExpress() {
-      _val("pe-nombre", ""); _val("pe-precio", "");
-      const err = document.getElementById("pc-express-error");
-      if (err) err.style.display = "none";
-      document.getElementById("pc-modal-express").style.display = "flex";
-      _regEsc(() => { document.getElementById("pc-modal-express").style.display = "none"; _unregEsc(); });
-      setTimeout(() => document.getElementById("pe-nombre")?.focus(), 80);
-    },
-
-    async guardarExpress() {
-      const nombre = document.getElementById("pe-nombre")?.value.trim();
-      const precio = parseFloat(document.getElementById("pe-precio")?.value) || 0;
-      const err    = document.getElementById("pc-express-error");
-      if (!nombre) { err.textContent = "Nombre obligatorio."; err.style.display = "block"; return; }
-      try {
-        const num    = Math.max(..._todos.map(p => p.numero ?? 0), 0) + 1;
-        const codigo = "N10-" + String(num).padStart(4, "0");
-        await addDoc(collection(db, "productos"), {
-          nombre, codigo, precio_base: precio, activo: true, numero: num,
-          nombre_sucursal: "Nutricion de 10", impuesto: "Exento",
-          materia_prima: false, peso: 0, clave_sat: "", costo_base: 0,
-          creadoPor: Sesion.alias, creadoEn: serverTimestamp()
-        });
-        window.toast?.(`"${nombre}" agregado.`, "success");
-        document.getElementById("pc-modal-express").style.display = "none";
-      } catch(e) { err.textContent = "Error: " + e.message; err.style.display = "block"; }
-    },
-
-    // ── Nuevo Normal ──────────────────────────────────────────
+    // ── Nuevo producto ────────────────────────────────────────
     abrirAltaProducto() {
       _editandoId = null;
       _catLoad().then(_catPopulateDatalist);
