@@ -1052,23 +1052,41 @@ function _bindUI() {
         </li>`;
       }).join("");
 
-      // Drag & drop
+      // Drag & drop — pointer events (funciona en táctil y mouse)
       let _dragSrc = null;
-      list.querySelectorAll("li[draggable=true]").forEach(li => {
-        li.addEventListener("dragstart", e => { _dragSrc = li; li.style.opacity = ".4"; e.dataTransfer.effectAllowed = "move"; });
-        li.addEventListener("dragend",   () => { li.style.opacity = li.querySelector("input").checked ? "1" : ".45"; });
-        li.addEventListener("dragover",  e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; });
-        li.addEventListener("drop",      e => {
-          e.preventDefault();
-          if (_dragSrc && _dragSrc !== li) {
-            const items = [...list.querySelectorAll("li")];
-            const srcIdx = items.indexOf(_dragSrc);
-            const dstIdx = items.indexOf(li);
-            if (srcIdx < dstIdx) li.after(_dragSrc);
-            else li.before(_dragSrc);
-          }
+      const _liOpacity = li => li.querySelector("input")?.checked !== false ? "1" : ".45";
+      list.addEventListener("pointerdown", e => {
+        const li = e.target.closest("li[draggable='true']");
+        if (!li || e.target.tagName === "INPUT") return;
+        e.preventDefault();
+        _dragSrc = li;
+        list.setPointerCapture(e.pointerId);
+        li.style.opacity = ".35";
+        li.style.boxShadow = "0 4px 14px rgba(0,0,0,.18)";
+      }, { passive: false });
+      list.addEventListener("pointermove", e => {
+        if (!_dragSrc) return;
+        e.preventDefault();
+        const all = [...list.querySelectorAll("li")];
+        const over = all.find(li => {
+          if (li === _dragSrc) return false;
+          const r = li.getBoundingClientRect();
+          return e.clientY >= r.top && e.clientY <= r.bottom;
         });
-      });
+        if (over) {
+          const fi = all.indexOf(_dragSrc), ti = all.indexOf(over);
+          if (fi < ti) list.insertBefore(_dragSrc, over.nextSibling);
+          else         list.insertBefore(_dragSrc, over);
+        }
+      }, { passive: false });
+      const _endDrag = () => {
+        if (!_dragSrc) return;
+        _dragSrc.style.opacity = _liOpacity(_dragSrc);
+        _dragSrc.style.boxShadow = "";
+        _dragSrc = null;
+      };
+      list.addEventListener("pointerup",     _endDrag);
+      list.addEventListener("pointercancel", _endDrag);
 
       document.getElementById("pc-modal-cols").style.display = "flex";
     },
