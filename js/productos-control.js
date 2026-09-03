@@ -762,6 +762,8 @@ function _renderDetalle(docId) {
           ${_dfield("Categoría",          esc(p.categoria || "–"))}
           ${_dfield("Subcategoría",       esc(p.subcategoria || "–"))}
           ${_dfield("Embalaje / Unidad",   esc(p.unidad || "–"))}
+          ${p.granel === true && p.granel_partes ? _dfield("Granel",
+            `<span style="color:#4ADE80;font-weight:700">✓ Activo</span> &nbsp;·&nbsp; ${p.granel_dosis}${p.granel_unidad}/dosis &nbsp;·&nbsp; ${p.granel_partes} dosis/pieza &nbsp;·&nbsp; $${(p.granel_precio_dosis||0).toLocaleString("es-MX",{minimumFractionDigits:2})}`) : ""}
           ${_dfield("Peso",               p.peso > 0 ? p.peso + " kg" : "–")}
           ${_dfield("Familia",            p.familia === "N10" ? "💧 N10 — Litros" : "Estándar")}
           ${p.familia === "N10" ? _dfield("Litros por unidad", p.litros_por_unidad > 0 ? p.litros_por_unidad + " L" : "–") : ""}
@@ -809,68 +811,158 @@ function _renderDetalle(docId) {
 
       <!-- Tab granel -->
       <div id="pd-tab-granel" style="display:none">
-        <div style="margin-bottom:20px;padding:16px;background:var(--surface-2));
-          border-radius:10px;border:1px solid var(--border)">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:${granel?"16px":"0"}">
-            <div style="flex:1">
-              <div style="font-size:13px;font-weight:700;color:var(--text-primary)">Venta a Granel</div>
-              <div style="font-size:11px;color:#9CA3AF;margin-top:2px">
-                Permite vender fracciones o cantidades especiales con precio diferenciado
-              </div>
-            </div>
-            ${PUEDE_EDITAR() ? `
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                <div style="position:relative;width:40px;height:22px">
-                  <input type="checkbox" id="pd-granel-toggle" ${granel?"checked":""} style="opacity:0;position:absolute;inset:0;cursor:pointer;z-index:1"
-                    onchange="ProdCtrlUI.toggleGranel('${esc(docId)}', this.checked)">
-                  <div id="pd-granel-track" style="position:absolute;inset:0;border-radius:11px;
-                    background:${granel?"#4ADE80":"#374151"};transition:background .2s"></div>
-                  <div id="pd-granel-thumb" style="position:absolute;top:3px;left:${granel?"21px":"3px"};width:16px;height:16px;
-                    border-radius:50%;background:var(--surface);transition:left .2s"></div>
+        ${(() => {
+          // Derivar cantidad total del envase desde el nombre del producto
+          const nombreProd = p.nombre || "";
+          let granelTotalDeriv = p.granel_total || 0;
+          let granelUnidadDeriv = p.granel_unidad || "";
+          if (!granelTotalDeriv) {
+            const mNum = nombreProd.match(/(\d+(?:[.,]\d+)?)\s*(kg|g|L|ml|lt|lts)\b/i);
+            if (mNum) {
+              const val = parseFloat(mNum[1].replace(",","."));
+              const un  = mNum[2].toLowerCase().replace("lt","L").replace("lts","L");
+              // Normalizar a unidad base
+              if (un === "kg")       { granelTotalDeriv = val * 1000; granelUnidadDeriv = "g"; }
+              else if (un === "g")   { granelTotalDeriv = val;        granelUnidadDeriv = "g"; }
+              else if (un === "l")   { granelTotalDeriv = val * 1000; granelUnidadDeriv = "ml"; }
+              else if (un === "ml")  { granelTotalDeriv = val;        granelUnidadDeriv = "ml"; }
+            }
+          }
+          const dosisVal    = p.granel_dosis   || "";
+          const precioVal   = p.granel_precio_dosis || "";
+          const partes      = (dosisVal && granelTotalDeriv) ? Math.floor(granelTotalDeriv / dosisVal) : null;
+          const unidadLabel = granelUnidadDeriv || "g";
+          const derivMsg    = granelTotalDeriv && !p.granel_total
+            ? `<span style="font-size:10px;color:#6B7280">Detectado del nombre: <b>${granelTotalDeriv}${unidadLabel}</b> — ajusta si es incorrecto</span>`
+            : "";
+
+          return `
+          <div style="padding:16px;background:var(--surface-2));border-radius:10px;border:1px solid var(--border)">
+            <!-- Header toggle -->
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:${granel?"20px":"0"}">
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:700;color:var(--text-primary)">Venta a Granel</div>
+                <div style="font-size:11px;color:#9CA3AF;margin-top:2px">
+                  Permite vender fracciones del producto con precio por dosis diferenciado
                 </div>
-                <span style="font-size:12px;font-weight:600;color:${granel?"#4ADE80":"#9CA3AF"}">
-                  ${granel?"Habilitado":"Deshabilitado"}
-                </span>
-              </label>` : `<span style="font-size:12px;font-weight:700;color:${granel?"#4ADE80":"#9CA3AF"}">${granel?"Habilitado":"Deshabilitado"}</span>`}
-          </div>
-          ${granel ? `
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding-top:16px;border-top:1px solid var(--border)">
-              <div>
-                <label style="font-size:10px;color:#9CA3AF;display:block;margin-bottom:4px">PRECIO GRANEL ($)</label>
-                <input type="number" id="pd-precio-granel" value="${p.precio_granel || ""}" min="0" step="0.01"
-                  ${!PUEDE_EDITAR() ? "disabled" : ""}
-                  style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
-                    font-size:13px;font-weight:700;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
               </div>
-              <div>
-                <label style="font-size:10px;color:#9CA3AF;display:block;margin-bottom:4px">MÍNIMO GRANEL</label>
-                <input type="number" id="pd-min-granel" value="${p.minimo_granel || ""}" min="0" step="0.1"
-                  ${!PUEDE_EDITAR() ? "disabled" : ""}
-                  style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
-                    font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
-              </div>
-              <div>
-                <label style="font-size:10px;color:#9CA3AF;display:block;margin-bottom:4px">UNIDAD GRANEL</label>
-                <input type="text" id="pd-unidad-granel" value="${esc(p.unidad_granel || "kg")}" maxlength="20"
-                  ${!PUEDE_EDITAR() ? "disabled" : ""}
-                  style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
-                    font-size:13px;background:var(--surface);color:var(--text-primary);box-sizing:border-box">
-              </div>
+              ${PUEDE_EDITAR() ? `
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <div style="position:relative;width:40px;height:22px">
+                    <input type="checkbox" id="pd-granel-toggle" ${granel?"checked":""}
+                      style="opacity:0;position:absolute;inset:0;cursor:pointer;z-index:1"
+                      onchange="ProdCtrlUI.toggleGranel('${esc(docId)}', this.checked)">
+                    <div id="pd-granel-track" style="position:absolute;inset:0;border-radius:11px;
+                      background:${granel?"#4ADE80":"#374151"};transition:background .2s"></div>
+                    <div id="pd-granel-thumb" style="position:absolute;top:3px;left:${granel?"21px":"3px"};
+                      width:16px;height:16px;border-radius:50%;background:var(--surface);transition:left .2s"></div>
+                  </div>
+                  <span style="font-size:12px;font-weight:600;color:${granel?"#4ADE80":"#9CA3AF"}">
+                    ${granel?"Habilitado":"Deshabilitado"}
+                  </span>
+                </label>` : `<span style="font-size:12px;font-weight:700;color:${granel?"#4ADE80":"#9CA3AF"}">${granel?"Habilitado":"Deshabilitado"}</span>`}
             </div>
-            ${PUEDE_EDITAR() ? `
-              <div style="margin-top:12px;text-align:right">
-                <button onclick="ProdCtrlUI.guardarGranel('${esc(docId)}')"
-                  style="padding:7px 18px;border:none;border-radius:6px;
-                    background:#1B5E20;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
-                  Guardar configuración granel
-                </button>
-              </div>` : ""}
-          ` : `
-            <div style="text-align:center;padding:24px 0;color:#9CA3AF;font-size:12px">
-              Activa la venta a granel para configurar precio y unidad mínima.
-            </div>
-          `}
-        </div>
+
+            ${granel ? `
+              <div style="border-top:1px solid var(--border);padding-top:16px">
+
+                <!-- Envase detectado -->
+                <div style="margin-bottom:14px;padding:10px 14px;background:var(--surface);
+                  border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;gap:10px">
+                  <div style="flex:1">
+                    <div style="font-size:10px;color:#9CA3AF;margin-bottom:3px">CONTENIDO TOTAL DEL ENVASE</div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <input type="number" id="pd-granel-total" value="${granelTotalDeriv || ""}" min="0.001" step="any"
+                        ${!PUEDE_EDITAR()?"disabled":""}
+                        oninput="ProdCtrlUI.recalcPartes()"
+                        style="width:110px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;
+                          font-size:13px;font-weight:700;background:var(--surface-2));color:var(--text-primary);box-sizing:border-box">
+                      <select id="pd-granel-unidad" ${!PUEDE_EDITAR()?"disabled":""}
+                        onchange="ProdCtrlUI.recalcPartes()"
+                        style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;
+                          font-size:13px;background:var(--surface-2));color:var(--text-primary)">
+                        <option value="g"  ${unidadLabel==="g" ?"selected":""}>g</option>
+                        <option value="ml" ${unidadLabel==="ml"?"selected":""}>ml</option>
+                        <option value="kg" ${unidadLabel==="kg"?"selected":""}>kg</option>
+                        <option value="L"  ${unidadLabel==="L" ?"selected":""}>L</option>
+                      </select>
+                    </div>
+                    ${derivMsg}
+                  </div>
+                </div>
+
+                <!-- 2 campos principales -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+                  <!-- Dosis -->
+                  <div style="padding:14px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
+                    <label style="font-size:10px;color:#9CA3AF;display:block;margin-bottom:6px;letter-spacing:.06em">
+                      PESO / VOLUMEN DE LA DOSIS
+                    </label>
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <input type="number" id="pd-granel-dosis" value="${dosisVal}" min="0.001" step="any"
+                        ${!PUEDE_EDITAR()?"disabled":""}
+                        oninput="ProdCtrlUI.recalcPartes()"
+                        style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+                          font-size:15px;font-weight:700;background:var(--surface-2));color:var(--text-primary);box-sizing:border-box">
+                      <span id="pd-granel-unidad-label"
+                        style="font-size:12px;color:#9CA3AF;font-weight:600;min-width:20px">${unidadLabel}</span>
+                    </div>
+                    <div style="font-size:10px;color:#9CA3AF;margin-top:6px">
+                      Ej: 100 g por aplicación
+                    </div>
+                  </div>
+
+                  <!-- Precio por dosis -->
+                  <div style="padding:14px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">
+                    <label style="font-size:10px;color:#9CA3AF;display:block;margin-bottom:6px;letter-spacing:.06em">
+                      PRECIO POR DOSIS ($)
+                    </label>
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="font-size:13px;color:#9CA3AF;font-weight:600">$</span>
+                      <input type="number" id="pd-granel-precio" value="${precioVal}" min="0" step="0.01"
+                        ${!PUEDE_EDITAR()?"disabled":""}
+                        style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+                          font-size:15px;font-weight:700;background:var(--surface-2));color:var(--text-primary);box-sizing:border-box">
+                    </div>
+                    <div style="font-size:10px;color:#9CA3AF;margin-top:6px">
+                      Precio al menudeo — mayor al proporcional
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Partes calculadas -->
+                <div id="pd-granel-partes-box" style="padding:12px 16px;border-radius:8px;
+                  background:${partes?"#052e16":"var(--surface)"};border:1px solid ${partes?"#166534":"var(--border)"};
+                  display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                  <div style="font-size:20px">📦</div>
+                  <div>
+                    <span id="pd-granel-partes-num"
+                      style="font-size:18px;font-weight:800;color:${partes?"#4ADE80":"#9CA3AF"}">
+                      ${partes ?? "–"}
+                    </span>
+                    <span id="pd-granel-partes-label"
+                      style="font-size:12px;color:${partes?"#86EFAC":"#9CA3AF"};margin-left:6px">
+                      ${partes ? `dosis por pieza (${granelTotalDeriv}${unidadLabel} ÷ ${dosisVal}${unidadLabel})` : "Captura dosis para calcular las partes"}
+                    </span>
+                  </div>
+                </div>
+
+                ${PUEDE_EDITAR() ? `
+                  <div style="text-align:right">
+                    <button onclick="ProdCtrlUI.guardarGranel('${esc(docId)}')"
+                      style="padding:8px 20px;border:none;border-radius:8px;
+                        background:#16a34a;color:#fff;font-size:13px;font-weight:700;cursor:pointer">
+                      Guardar configuración granel
+                    </button>
+                  </div>` : ""}
+              </div>
+            ` : `
+              <div style="text-align:center;padding:32px 0;color:#9CA3AF;font-size:12px">
+                Activa el toggle para configurar precio y dosis de venta al menudeo.
+              </div>
+            `}
+          </div>`;
+        })()}
       </div>
     </div>`;
 }
@@ -996,6 +1088,30 @@ function _bindUI() {
       });
     },
 
+    recalcPartes() {
+      const total  = parseFloat(document.getElementById("pd-granel-total")?.value)  || 0;
+      const dosis  = parseFloat(document.getElementById("pd-granel-dosis")?.value)  || 0;
+      const unidad = document.getElementById("pd-granel-unidad")?.value || "g";
+      // Sincronizar etiqueta de unidad junto al campo dosis
+      const lbl = document.getElementById("pd-granel-unidad-label");
+      if (lbl) lbl.textContent = unidad;
+      const box = document.getElementById("pd-granel-partes-box");
+      const num = document.getElementById("pd-granel-partes-num");
+      const lab = document.getElementById("pd-granel-partes-label");
+      if (!num) return;
+      if (total > 0 && dosis > 0) {
+        const partes = Math.floor(total / dosis);
+        num.textContent = partes;
+        num.style.color = "#4ADE80";
+        if (lab) { lab.textContent = `dosis por pieza (${total}${unidad} ÷ ${dosis}${unidad})`; lab.style.color = "#86EFAC"; }
+        if (box) { box.style.background = "#052e16"; box.style.borderColor = "#166534"; }
+      } else {
+        num.textContent = "–"; num.style.color = "#9CA3AF";
+        if (lab) { lab.textContent = "Captura dosis para calcular las partes"; lab.style.color = "#9CA3AF"; }
+        if (box) { box.style.background = "var(--surface)"; box.style.borderColor = "var(--border)"; }
+      }
+    },
+
     async toggleGranel(docId, enabled) {
       const track = document.getElementById("pd-granel-track");
       const thumb = document.getElementById("pd-granel-thumb");
@@ -1013,15 +1129,27 @@ function _bindUI() {
     },
 
     async guardarGranel(docId) {
-      const precio  = parseFloat(document.getElementById("pd-precio-granel")?.value) || 0;
-      const minimo  = parseFloat(document.getElementById("pd-min-granel")?.value) || 0;
-      const unidad  = document.getElementById("pd-unidad-granel")?.value.trim() || "kg";
+      const total  = parseFloat(document.getElementById("pd-granel-total")?.value)  || 0;
+      const dosis  = parseFloat(document.getElementById("pd-granel-dosis")?.value)  || 0;
+      const precio = parseFloat(document.getElementById("pd-granel-precio")?.value) || 0;
+      const unidad = document.getElementById("pd-granel-unidad")?.value || "g";
+      if (!total || !dosis || !precio) {
+        window.toast?.("Completa contenido total, dosis y precio por dosis.", "error"); return;
+      }
+      if (dosis >= total) {
+        window.toast?.("La dosis no puede ser mayor o igual al contenido total del envase.", "error"); return;
+      }
+      const partes = Math.floor(total / dosis);
       try {
         await updateDoc(doc(db, "productos", docId), {
-          precio_granel: precio, minimo_granel: minimo, unidad_granel: unidad,
+          granel_total:       total,
+          granel_dosis:       dosis,
+          granel_unidad:      unidad,
+          granel_precio_dosis: precio,
+          granel_partes:      partes,
           modificadoPor: Sesion.alias, modificadoEn: serverTimestamp()
         });
-        window.toast?.("Configuración granel guardada.", "success");
+        window.toast?.(`Configuración granel guardada — ${partes} dosis de ${dosis}${unidad} por pieza.`, "success");
       } catch(e) {
         window.toast?.("Error: " + e.message, "error");
       }
