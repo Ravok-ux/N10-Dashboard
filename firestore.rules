@@ -96,8 +96,13 @@ service cloud.firestore {
       // Lectura: todo rol conocido y activo
       allow read: if cuentaActiva() && esRolConocido();
 
-      // Escritura: SUPER_ADMIN, GERENTE, GERENTE_ZONA, ADMINISTRADOR o quien tenga flag
-      allow write: if cuentaActiva() && (esAdminOSuperior() || tieneFlag('PUEDE_CREAR_PEDIDOS'));
+      // Escritura: INGENIERO y RECUPERADOR pueden crear pedidos (su función principal).
+      // Admins pueden escribir siempre. El flag permite otorgarlo a otros roles.
+      allow write: if cuentaActiva() && (
+        esAdminOSuperior() ||
+        miRol() in ['INGENIERO', 'RECUPERADOR'] ||
+        tieneFlag('PUEDE_CREAR_PEDIDOS')
+      );
     }
 
     // ── /remisiones_credito ───────────────────────────────────────────────────
@@ -203,6 +208,11 @@ service cloud.firestore {
                          // Precio/costo: requiere flag
                          tieneFlag('PUEDE_EDITAR_PRECIO')
                        )
+                     ) ||
+                     // ALMACENISTA puede actualizar stock (ajustes de inventario)
+                     (miRol() == 'ALMACENISTA'
+                       && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['stock','stockActual','_ts'])
                      ) ||
                      // APK seed: solo merge de campos de catálogo (no precio ni costo)
                      tieneFlag('PUEDE_CREAR_PEDIDOS') // proxy para APK autenticado
@@ -395,7 +405,11 @@ service cloud.firestore {
     // ── /pedido_items ─────────────────────────────────────────────────────────
     match /pedido_items/{itemId} {
       allow read: if cuentaActiva() && esRolConocido();
-      allow write: if cuentaActiva() && (esAdminOSuperior() || tieneFlag('PUEDE_CREAR_PEDIDOS'));
+      allow write: if cuentaActiva() && (
+        esAdminOSuperior() ||
+        miRol() in ['INGENIERO', 'RECUPERADOR'] ||
+        tieneFlag('PUEDE_CREAR_PEDIDOS')
+      );
     }
 
     // ── /clientes ─────────────────────────────────────────────────────────────
@@ -518,6 +532,18 @@ service cloud.firestore {
       // Escritura: admins y almacenistas (actualizan al surtir); Cloud Functions actualiza vía Admin SDK
       allow write: if cuentaActiva()
                    && (esAdminOSuperior() || miRol() == 'ALMACENISTA');
+    }
+
+    // ── /conteos_fisicos ──────────────────────────────────────────────────────
+    // Conteos físicos cíclicos del inventario del panel web
+    match /conteos_fisicos/{conteoId} {
+      allow read: if cuentaActiva()
+                  && (esAdminOSuperior() || miRol() == 'ALMACENISTA');
+      allow create: if cuentaActiva()
+                    && (esAdminOSuperior() || miRol() == 'ALMACENISTA');
+      allow update: if cuentaActiva()
+                    && (esAdminOSuperior() || miRol() == 'ALMACENISTA');
+      allow delete: if cuentaActiva() && esAdminOSuperior();
     }
 
     // ── /solicitudes_reabasto ─────────────────────────────────────────────────

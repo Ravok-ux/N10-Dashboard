@@ -8,7 +8,7 @@ import { Sesion } from "./auth.js";
 import { esc, logAudit, norm } from "./app.js";
 import {
   collection, doc, query, where, orderBy, limit,
-  onSnapshot, addDoc, updateDoc, setDoc, getDoc, serverTimestamp
+  onSnapshot, addDoc, updateDoc, setDoc, getDoc, getDocs, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const fmtMXN   = v => Number(v || 0).toLocaleString("es-MX", { style:"currency", currency:"MXN" });
@@ -25,9 +25,10 @@ const TABS = [
   { id:"mermas",      label:"🗑️ Mermas"           },
 ];
 
-let _tab    = "stock";
-let _unsubs = [];
-let _allRows = [];
+let _tab       = "stock";
+let _unsubs    = [];   // listeners permanentes (stock, alertas)
+let _unsubsMov = [];   // listeners de movimientos (re-creados al filtrar)
+let _allRows   = [];
 
 export const InventarioModule = {
   mount(container) {
@@ -56,7 +57,11 @@ export const InventarioModule = {
     _activarTab("stock");
     return () => this.destroy();
   },
-  destroy() { _unsubs.forEach(u => u?.()); _unsubs = []; _allRows = []; }
+  destroy() {
+    _unsubs.forEach(u => u?.()); _unsubs = [];
+    _unsubsMov.forEach(u => u?.()); _unsubsMov = [];
+    _allRows = [];
+  }
 };
 
 function _puedeVer()    { return Sesion.esSuperAdmin?.() || ["GERENTE","ADMINISTRADOR","MESA_CONTROL","GERENTE_ZONA","INGENIERO","VENDEDOR"].includes(Sesion.rol); }
@@ -75,7 +80,7 @@ function _activarTab(tab) {
 // ══════════════════════════════════════════════════════════════
 // STOCK ACTUAL
 // ══════════════════════════════════════════════════════════════
-function _montarStock() {
+async function _montarStock() {
   document.getElementById("inv-content").innerHTML = `
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
       <input type="text" class="sel-sm" id="inv-buscar" placeholder="Buscar producto o SKU…" style="width:220px">
@@ -231,6 +236,8 @@ function _montarStock() {
             <!-- Campos ocultos usados por _guardarAjuste -->
             <input type="hidden" id="inv-prod-id">
             <input type="hidden" id="inv-prod-nom">
+            <input type="hidden" id="inv-prod-docid">
+            <input type="hidden" id="inv-prod-unidad">
           </div>
 
           <!-- Cantidad + Motivo -->
@@ -368,8 +375,10 @@ function _montarStock() {
   }
 
   function _invSelProducto(prod) {
-    document.getElementById("inv-prod-id").value  = prod.codigoN10 || prod.codigo || prod.id;
-    document.getElementById("inv-prod-nom").value = prod.nombre;
+    document.getElementById("inv-prod-id").value      = prod.codigoN10 || prod.codigo || prod.id;
+    document.getElementById("inv-prod-docid").value   = prod.id;
+    document.getElementById("inv-prod-nom").value     = prod.nombre;
+    document.getElementById("inv-prod-unidad").value  = prod.unidad || "";
     document.getElementById("inv-chip-nombre").textContent = prod.nombre;
     document.getElementById("inv-chip-codigo").textContent = `Código: ${prod.codigoN10 || prod.codigo || prod.id}`;
     document.getElementById("inv-prod-chip").style.display   = "flex";
@@ -384,8 +393,10 @@ function _montarStock() {
   }
 
   window._invLimpiarProducto = () => {
-    document.getElementById("inv-prod-id").value  = "";
-    document.getElementById("inv-prod-nom").value = "";
+    document.getElementById("inv-prod-id").value      = "";
+    document.getElementById("inv-prod-docid").value   = "";
+    document.getElementById("inv-prod-nom").value     = "";
+    document.getElementById("inv-prod-unidad").value  = "";
     document.getElementById("inv-prod-chip").style.display   = "none";
     document.getElementById("inv-prod-search").style.display = "";
     document.getElementById("inv-prod-search").value = "";
@@ -501,9 +512,25 @@ function _montarStock() {
   document.getElementById("inv-filtro-estado")?.addEventListener("change", _filtrar);
   document.getElementById("inv-xlsx-btn")?.addEventListener("click", () => _exportXlsx(_allRows));
 
+  // Cargar catálogo de unidades ANTES del snapshot para que siempre esté disponible
+  // La unidad del catálogo `productos` siempre gana sobre lo que tenga el doc de inventario
+  const _prodUnidadMap = {}; // codigoN10 → unidad
+  try {
+    const prodSnap = await getDocs(collection(db, "productos"));
+    prodSnap.docs.forEach(d => {
+      const p = d.data();
+      if (p.codigoN10 && p.unidad) _prodUnidadMap[p.codigoN10] = p.unidad;
+    });
+  } catch (_) {}
+
   const q = query(collection(db, "inventario"), orderBy("nombre"), limit(500));
   _unsubs.push(onSnapshot(q, snap => {
-    _allRows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _allRows = snap.docs.map(d => {
+      const data = d.data();
+      // El catálogo siempre gana: si hay unidad en productos, úsala
+      data.unidad = _prodUnidadMap[d.id] || data.unidad || "";
+      return { id: d.id, ...data };
+    });
     _filtrar();
   }, err => console.error("[Inventario]", err)));
 }
@@ -546,7 +573,7 @@ function _renderStock(rows) {
       <td style="font-size:11px;color:var(--text-sec)">${esc(r.sku||"–")}</td>
       <td style="text-align:right;font-weight:800;font-size:15px;color:${color}">${stock}</td>
       <td style="text-align:right;color:var(--text-sec)">${min}</td>
-      <td style="font-size:12px">${esc(r.unidad||"pza")}</td>
+      <td style="font-size:12px">${esc(r.unidad||"–")}</td>
       <td style="text-align:right;font-size:12px">${fmtMXN(r.costo)}</td>
       <td>
         ${badge}
@@ -592,13 +619,15 @@ function _renderStock(rows) {
 }
 
 async function _guardarAjuste() {
-  const tipo      = document.getElementById("inv-tipo")?.value;
-  const prodId    = document.getElementById("inv-prod-id")?.value.trim();
-  const prodNom   = document.getElementById("inv-prod-nom")?.value.trim();
-  const cant      = parseFloat(document.getElementById("inv-cantidad")?.value || "0");
-  const motivo    = document.getElementById("inv-motivo")?.value.trim();
-  const familia   = document.getElementById("inv-familia")?.value || "";
-  const litrosU   = parseFloat(document.getElementById("inv-litros-u")?.value || "0");
+  const tipo       = document.getElementById("inv-tipo")?.value;
+  const prodId     = document.getElementById("inv-prod-id")?.value.trim();
+  const prodDocId  = document.getElementById("inv-prod-docid")?.value.trim();
+  const prodNom    = document.getElementById("inv-prod-nom")?.value.trim();
+  const prodUnidad = document.getElementById("inv-prod-unidad")?.value.trim() || "";
+  const cant       = parseFloat(document.getElementById("inv-cantidad")?.value || "0");
+  const motivo     = document.getElementById("inv-motivo")?.value.trim();
+  const familia    = document.getElementById("inv-familia")?.value || "";
+  const litrosU    = parseFloat(document.getElementById("inv-litros-u")?.value || "0");
 
   if (!prodId || !prodNom) { window.toast?.("Selecciona un producto del catálogo", "error"); return; }
   if (cant < 0) { window.toast?.("La cantidad no puede ser negativa", "error"); return; }
@@ -626,7 +655,21 @@ async function _guardarAjuste() {
         stockAntes, stockDespues, motivo,
         quienRegistro: Sesion.alias, _ts: Date.now()
       });
-      await setDoc(invRef, { nombre: prodNom, stockActual: stockDespues, ...n10Meta, _ts: Date.now() }, { merge: true });
+      const unidadData = prodUnidad ? { unidad: prodUnidad } : {};
+      await setDoc(invRef, { nombre: prodNom, stockActual: stockDespues, ...unidadData, ...n10Meta, _ts: Date.now() }, { merge: true });
+      // Sincronizar `productos`: stock (leído por productos-control) y stockActual (leído por el APK)
+      // prodDocId es el Firestore doc ID real; si no está (ajuste desde tabla), buscar por codigoN10
+      let docIdParaProductos = prodDocId;
+      if (!docIdParaProductos) {
+        const { getDocs, query: q2, collection: col2, where: w2 } =
+          await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        const snap2 = await getDocs(q2(col2(db, "productos"), w2("codigoN10", "==", prodId))).catch(() => null);
+        if (snap2 && !snap2.empty) docIdParaProductos = snap2.docs[0].id;
+      }
+      if (docIdParaProductos) {
+        await updateDoc(doc(db, "productos", docIdParaProductos), { stock: stockDespues, stockActual: stockDespues, _ts: Date.now() })
+          .catch(e => { console.error("[inv] Error al actualizar productos:", e.message); window.toast?.("Aviso: stock guardado en inventario pero no en catálogo: " + e.message, "warning"); });
+      }
       logAudit(tipo === "AJUSTE_ENTRADA" ? "STOCK_ENTRADA" : tipo === "AJUSTE_SALIDA" ? "STOCK_SALIDA" : "AJUSTE_INVENTARIO",
         { productoId: prodId, productoNombre: prodNom, cantidad: cant, stockAntes, stockDespues, motivo });
       window.toast?.("Ajuste guardado", "success");
@@ -685,7 +728,7 @@ function _montarMovimientos() {
 }
 
 function _escucharMovimientos() {
-  _unsubs.forEach(u => u?.()); _unsubs = [];
+  _unsubsMov.forEach(u => u?.()); _unsubsMov = [];
   const tipo  = document.getElementById("mov-tipo")?.value || "";
   const desde = document.getElementById("mov-desde")?.value;
   const hasta = document.getElementById("mov-hasta")?.value;
@@ -703,7 +746,7 @@ function _escucharMovimientos() {
   const ICON = { SALIDA:"🔴", ENTRADA:"🟢", DEVOLUCION:"🔵",
     AJUSTE_ENTRADA:"➕", AJUSTE_SALIDA:"➖", AJUSTE_INVENTARIO:"🔁" };
 
-  _unsubs.push(onSnapshot(q, snap => {
+  _unsubsMov.push(onSnapshot(q, snap => {
     if (!tbody) return;
     const rows = snap.docs.map(d => d.data());
     if (!rows.length) {
@@ -727,7 +770,7 @@ function _exportXlsx(rows) {
   if (!rows.length) { window.toast?.("Sin datos para exportar","warning"); return; }
   const h = ["Producto","SKU","Stock actual","Stock mínimo","Unidad","Costo unitario","Valor total","Actualizado"];
   const d = rows.map(r => [r.nombre||"",r.sku||"",r.stockActual??0,r.stockMinimo??0,
-    r.unidad||"pza",r.costo||0,(r.stockActual||0)*(r.costo||0),fmtFecha(r._ts)]);
+    r.unidad||"",r.costo||0,(r.stockActual||0)*(r.costo||0),fmtFecha(r._ts)]);
   const ws = XLSX.utils.aoa_to_sheet([h, ...d]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Inventario");

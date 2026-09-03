@@ -6,7 +6,7 @@ import { Sesion } from "./auth.js";
 import { esc, logAudit, norm } from "./app.js";
 import {
   collection, query, where, orderBy, onSnapshot,
-  doc, updateDoc, getDoc, getDocs, limit,
+  doc, updateDoc, getDoc, getDocs, setDoc, limit,
   serverTimestamp, writeBatch, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -471,14 +471,13 @@ function _renderStockIngenieros(el) {
     ? _stockIng.filter(ing => norm(ing.ingenieroAlias).includes(norm(_filtroStock)))
     : _stockIng;
 
-  if (!filtrados.length) {
-    el.innerHTML = `<div style="padding:40px;text-align:center;color:#9CA3AF;font-size:13px">
-      Sin datos de stock. Los ingenieros publican su inventario desde el APK.</div>`;
-    return;
-  }
+  const listaHtml = filtrados.length
+    ? filtrados.map(ing => _cardStockIngeniero(ing, ahora, DIAS_40)).join("")
+    : `<div style="padding:32px;text-align:center;color:#9CA3AF;font-size:13px">
+        Sin datos de stock publicados. Los ingenieros sincronizan su inventario desde el APK.</div>`;
 
   el.innerHTML = `
-    <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center">
+    <div style="margin-bottom:14px;display:flex;gap:8px;align-items:center">
       <div style="position:relative;flex:1">
         <input id="reb-stock-buscar" type="text" placeholder="Filtrar por ingeniero…"
           value="${esc(_filtroStock)}"
@@ -488,9 +487,14 @@ function _renderStockIngenieros(el) {
           background:var(--surface);border:1px solid var(--border);border-radius:8px;
           max-height:200px;overflow-y:auto;z-index:200;box-shadow:0 4px 16px #0002;margin-top:2px"></div>
       </div>
-      <span style="font-size:11px;color:#9CA3AF">${filtrados.length} ingeniero${filtrados.length!==1?"s":""}</span>
+      ${filtrados.length ? `<span style="font-size:11px;color:#9CA3AF">${filtrados.length} ingeniero${filtrados.length!==1?"s":""}</span>` : ""}
+      <button id="reb-nueva-asignacion"
+        style="padding:7px 14px;font-size:12px;font-weight:700;border:none;border-radius:8px;
+          background:#7C3AED;color:#fff;cursor:pointer;flex-shrink:0;white-space:nowrap">
+        + Asignar stock
+      </button>
     </div>
-    ${filtrados.map(ing => _cardStockIngeniero(ing, ahora, DIAS_40)).join("")}
+    ${listaHtml}
   `;
 
   const rebBuscar = document.getElementById("reb-stock-buscar");
@@ -520,6 +524,20 @@ function _renderStockIngenieros(el) {
   });
   rebBuscar?.addEventListener("blur",   () => setTimeout(() => { if (rebDd) rebDd.style.display = "none"; }, 150));
   rebBuscar?.addEventListener("keydown", e => { if (e.key === "Escape" && rebDd) rebDd.style.display = "none"; });
+
+  document.getElementById("reb-nueva-asignacion")?.addEventListener("click", () => {
+    _abrirAsignarConSelector();
+  });
+
+  el.querySelectorAll(".reb-asignar-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const uid   = btn.dataset.uid;
+      const alias = btn.dataset.alias;
+      const ing   = _stockIng.find(i => i.id === uid);
+      _abrirAsignar(uid, alias, ing?.items || []);
+    });
+  });
 
   el.querySelectorAll(".reb-stock-card").forEach(card => {
     card.addEventListener("click", () => {
@@ -571,6 +589,13 @@ function _cardStockIngeniero(ing, ahora, DIAS_40) {
           · Sync: ${tsSync}
         </div>
       </div>
+      <button class="reb-asignar-btn"
+        data-uid="${esc(ing.id)}"
+        data-alias="${esc(ing.ingenieroAlias||'')}"
+        style="padding:5px 10px;font-size:11px;font-weight:600;border:1px solid #7C3AED;
+          border-radius:6px;background:#EDE9FE;color:#7C3AED;cursor:pointer;flex-shrink:0">
+        + Asignar
+      </button>
       <span style="font-size:18px;color:#9CA3AF">›</span>
     </div>
   </div>
@@ -588,5 +613,282 @@ function _cardStockIngeniero(ing, ahora, DIAS_40) {
       <tbody>${filasItems}</tbody>
     </table>
   </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Asignación directa de stock a ingeniero
+// ══════════════════════════════════════════════════════════════
+
+let _asignarProductos = [];    // caché de productos para búsqueda
+let _asignarSelProd   = null;  // producto seleccionado en modal
+
+function _inyectarModalAsignar() {
+  if (document.getElementById("reb-asignar-modal")) return;
+  const m = document.createElement("div");
+  m.id = "reb-asignar-modal";
+  m.style.cssText = `display:none;position:fixed;inset:0;z-index:9000;
+    background:#0007;align-items:center;justify-content:center`;
+  m.innerHTML = `
+    <div style="background:var(--surface);border-radius:14px;padding:24px;width:min(440px,94vw);
+      box-shadow:0 8px 40px #0005;position:relative">
+      <button id="reb-asignar-cerrar" style="position:absolute;top:12px;right:14px;
+        background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-secondary)">✕</button>
+      <div style="font-weight:700;font-size:15px;color:var(--text-primary);margin-bottom:4px">
+        Asignar stock directo</div>
+      <div id="reb-asignar-ing-nombre"
+        style="font-size:12px;color:#7C3AED;margin-bottom:16px"></div>
+
+      <label style="font-size:11px;font-weight:600;color:#9CA3AF;display:block;margin-bottom:4px">PRODUCTO</label>
+      <div style="position:relative;margin-bottom:14px">
+        <input id="reb-asignar-buscar" type="text" autocomplete="off"
+          placeholder="Buscar por nombre o código N10…"
+          style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;
+            padding:9px 12px;font-size:13px;background:var(--surface);color:var(--text-primary)">
+        <div id="reb-asignar-dd" style="display:none;position:absolute;top:100%;left:0;right:0;
+          background:var(--surface);border:1px solid var(--border);border-radius:8px;
+          max-height:200px;overflow-y:auto;z-index:200;box-shadow:0 4px 16px #0003;margin-top:2px"></div>
+      </div>
+      <div id="reb-asignar-prod-info" style="display:none;margin-bottom:14px;padding:8px 12px;
+        background:var(--surface-2);border-radius:8px;font-size:12px;color:var(--text-primary)"></div>
+
+      <label style="font-size:11px;font-weight:600;color:#9CA3AF;display:block;margin-bottom:4px">CANTIDAD</label>
+      <input id="reb-asignar-cantidad" type="number" min="0" step="1" value=""
+        style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;
+          padding:9px 12px;font-size:15px;font-weight:700;background:var(--surface);
+          color:var(--text-primary);margin-bottom:18px">
+
+      <div id="reb-asignar-error" style="display:none;color:#DC2626;font-size:12px;margin-bottom:10px"></div>
+
+      <button id="reb-asignar-guardar" style="width:100%;padding:11px;border:none;border-radius:8px;
+        background:#7C3AED;color:#fff;font-size:14px;font-weight:700;cursor:pointer">
+        Guardar asignación
+      </button>
+    </div>`;
+  document.body.appendChild(m);
+
+  document.getElementById("reb-asignar-cerrar").addEventListener("click", _cerrarAsignar);
+  m.addEventListener("click", e => { if (e.target === m) _cerrarAsignar(); });
+
+  const buscar = document.getElementById("reb-asignar-buscar");
+  const dd     = document.getElementById("reb-asignar-dd");
+
+  buscar.addEventListener("input", () => {
+    _asignarSelProd = null;
+    document.getElementById("reb-asignar-prod-info").style.display = "none";
+    const q = norm(buscar.value);
+    if (q.length < 2) { dd.style.display = "none"; return; }
+    const matches = _asignarProductos
+      .filter(p => norm(p.nombre||"").includes(q) || norm(p.codigoN10||"").includes(q))
+      .slice(0, 12);
+    if (!matches.length) { dd.style.display = "none"; return; }
+    dd.innerHTML = matches.map(p =>
+      `<div class="reb-ad-item" data-id="${p.id}"
+        style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);color:var(--text-primary)">
+        <span style="font-weight:600">${esc(p.nombre||"")}</span>
+        <span style="color:#9CA3AF;font-size:11px;margin-left:6px">${esc(p.codigoN10||"")}</span>
+      </div>`).join("");
+    dd.style.display = "block";
+    dd.querySelectorAll(".reb-ad-item").forEach(el2 =>
+      el2.addEventListener("mousedown", ev => {
+        ev.preventDefault();
+        const prod = _asignarProductos.find(p => p.id === el2.dataset.id);
+        if (!prod) return;
+        _asignarSelProd = prod;
+        buscar.value = prod.nombre;
+        dd.style.display = "none";
+        const info = document.getElementById("reb-asignar-prod-info");
+        info.textContent = `${prod.codigoN10 || "–"}  ·  ${prod.unidad || "–"}`;
+        info.style.display = "block";
+      }));
+  });
+  buscar.addEventListener("blur", () => setTimeout(() => { dd.style.display = "none"; }, 150));
+
+  document.getElementById("reb-asignar-guardar").addEventListener("click", _guardarAsignacion);
+}
+
+async function _abrirAsignarConSelector() {
+  _inyectarModalAsignar();
+
+  // Mostrar campo de selección de ingeniero
+  let ingRow = document.getElementById("reb-asignar-ing-row");
+  if (!ingRow) {
+    const modal = document.getElementById("reb-asignar-modal");
+    const inner = modal?.querySelector("div");
+    if (!inner) return;
+    ingRow = document.createElement("div");
+    ingRow.id = "reb-asignar-ing-row";
+    ingRow.style.cssText = "margin-bottom:14px";
+    ingRow.innerHTML = `
+      <label style="font-size:11px;font-weight:600;color:#9CA3AF;display:block;margin-bottom:4px">INGENIERO</label>
+      <div style="position:relative">
+        <input id="reb-asignar-ing-buscar" type="text" autocomplete="off"
+          placeholder="Buscar ingeniero…"
+          style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;
+            padding:9px 12px;font-size:13px;background:var(--surface);color:var(--text-primary)">
+        <div id="reb-asignar-ing-dd" style="display:none;position:absolute;top:100%;left:0;right:0;
+          background:var(--surface);border:1px solid var(--border);border-radius:8px;
+          max-height:180px;overflow-y:auto;z-index:210;box-shadow:0 4px 16px #0003;margin-top:2px"></div>
+      </div>`;
+    const ingNomEl = document.getElementById("reb-asignar-ing-nombre");
+    inner.insertBefore(ingRow, ingNomEl);
+
+    // Cargar ingenieros desde Firestore
+    let _ingenieros = [];
+    try {
+      const snap = await getDocs(collection(db, "usuarios"));
+      _ingenieros = snap.docs
+        .map(d => ({ uid: d.id, ...d.data() }))
+        .filter(u => ["INGENIERO","RECUPERADOR","ALMACENISTA"].includes(u.rol) && u.activo !== false)
+        .sort((a, b) => (a.alias||"").localeCompare(b.alias||"", "es"));
+    } catch (_) {}
+
+    const ingBuscar = document.getElementById("reb-asignar-ing-buscar");
+    const ingDd     = document.getElementById("reb-asignar-ing-dd");
+    ingBuscar.addEventListener("input", () => {
+      const q = norm(ingBuscar.value);
+      const matches = q.length < 1 ? _ingenieros : _ingenieros.filter(i => norm(i.alias||"").includes(q));
+      if (!matches.length) { ingDd.style.display = "none"; return; }
+      ingDd.innerHTML = matches.slice(0,12).map(i =>
+        `<div class="reb-ing-item" data-uid="${esc(i.uid)}" data-alias="${esc(i.alias||"")}"
+          style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);color:var(--text-primary)">
+          ${esc(i.alias||"")} <span style="font-size:10px;color:#9CA3AF">${esc(i.rol||"")}</span>
+        </div>`).join("");
+      ingDd.style.display = "block";
+      ingDd.querySelectorAll(".reb-ing-item").forEach(el2 =>
+        el2.addEventListener("mousedown", ev => {
+          ev.preventDefault();
+          ingBuscar.value = el2.dataset.alias;
+          ingDd.style.display = "none";
+          const modal = document.getElementById("reb-asignar-modal");
+          modal.dataset.uid   = el2.dataset.uid;
+          modal.dataset.alias = el2.dataset.alias;
+          document.getElementById("reb-asignar-ing-nombre").textContent = el2.dataset.alias;
+        }));
+    });
+    ingBuscar.addEventListener("focus", () => ingBuscar.dispatchEvent(new Event("input")));
+    ingBuscar.addEventListener("blur",  () => setTimeout(() => { ingDd.style.display = "none"; }, 150));
+  }
+
+  // Resetear estado
+  document.getElementById("reb-asignar-ing-row").style.display = "block";
+  const ingBuscar = document.getElementById("reb-asignar-ing-buscar");
+  if (ingBuscar) { ingBuscar.value = ""; }
+  document.getElementById("reb-asignar-ing-nombre").textContent = "";
+  _asignarSelProd = null;
+  document.getElementById("reb-asignar-buscar").value = "";
+  document.getElementById("reb-asignar-dd").style.display = "none";
+  document.getElementById("reb-asignar-prod-info").style.display = "none";
+  document.getElementById("reb-asignar-cantidad").value = "";
+  document.getElementById("reb-asignar-error").style.display = "none";
+
+  const modal = document.getElementById("reb-asignar-modal");
+  modal.dataset.uid   = "";
+  modal.dataset.alias = "";
+  modal.style.display = "flex";
+  _regEsc(_cerrarAsignar);
+
+  if (!_asignarProductos.length) {
+    getDocs(collection(db, "productos")).then(snap => {
+      _asignarProductos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(p => p.activo !== false)
+        .sort((a, b) => (a.nombre||"").localeCompare(b.nombre||"", "es"));
+    }).catch(() => {});
+  }
+}
+
+function _abrirAsignar(uid, alias, currentItems) {
+  _inyectarModalAsignar();
+  _asignarSelProd = null;
+  document.getElementById("reb-asignar-buscar").value = "";
+  document.getElementById("reb-asignar-dd").style.display = "none";
+  document.getElementById("reb-asignar-prod-info").style.display = "none";
+  document.getElementById("reb-asignar-cantidad").value = "";
+  document.getElementById("reb-asignar-error").style.display = "none";
+  document.getElementById("reb-asignar-ing-nombre").textContent = alias;
+  // Ocultar selector de ingeniero (ya está definido por la card)
+  const ingRow = document.getElementById("reb-asignar-ing-row");
+  if (ingRow) ingRow.style.display = "none";
+
+  const modal = document.getElementById("reb-asignar-modal");
+  modal.dataset.uid   = uid;
+  modal.dataset.alias = alias;
+  modal.style.display = "flex";
+  _regEsc(_cerrarAsignar);
+
+  if (!_asignarProductos.length) {
+    getDocs(collection(db, "productos")).then(snap => {
+      _asignarProductos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(p => p.activo !== false)
+        .sort((a, b) => (a.nombre||"").localeCompare(b.nombre||"", "es"));
+    }).catch(() => {});
+  }
+}
+
+function _cerrarAsignar() {
+  const modal = document.getElementById("reb-asignar-modal");
+  if (modal) modal.style.display = "none";
+  _unregEsc();
+}
+
+async function _guardarAsignacion() {
+  const modal    = document.getElementById("reb-asignar-modal");
+  const uid      = modal?.dataset.uid;
+  const alias    = modal?.dataset.alias;
+  const errEl    = document.getElementById("reb-asignar-error");
+  const btn      = document.getElementById("reb-asignar-guardar");
+  const cantStr  = document.getElementById("reb-asignar-cantidad").value.trim();
+
+  errEl.style.display = "none";
+  if (!uid)             { errEl.textContent = "Error: sin ingeniero."; errEl.style.display = "block"; return; }
+  if (!_asignarSelProd) { errEl.textContent = "Selecciona un producto."; errEl.style.display = "block"; return; }
+  const cantidad = parseFloat(cantStr);
+  if (isNaN(cantidad) || cantidad < 0) { errEl.textContent = "Cantidad inválida."; errEl.style.display = "block"; return; }
+
+  btn.disabled = true;
+  btn.textContent = "Guardando…";
+
+  try {
+    const docRef  = doc(db, "stock_ingenieros", uid);
+    const snap    = await getDoc(docRef);
+    const actual  = snap.exists() ? (snap.data().items || []) : [];
+    const prod    = _asignarSelProd;
+    const ahora   = Date.now();
+
+    const idx = actual.findIndex(i => i.productoId === prod.id || i.codigoN10 === prod.codigoN10);
+    if (idx >= 0) {
+      actual[idx] = { ...actual[idx], cantidad, ultimoMovimiento: ahora };
+    } else {
+      actual.push({
+        productoId:       prod.id,
+        nombre:           prod.nombre || "",
+        codigoN10:        prod.codigoN10 || "",
+        unidad:           prod.unidad || "",
+        cantidad,
+        ultimoMovimiento: ahora
+      });
+    }
+
+    const baseData = snap.exists() ? {} : {
+      ingenieroUid:   uid,
+      ingenieroAlias: alias,
+      almacenId:      0
+    };
+
+    await setDoc(docRef, { ...baseData, items: actual, _ts: ahora }, { merge: true });
+
+    await logAudit("asignar_stock_ingeniero", {
+      uid, alias,
+      producto: prod.nombre, codigoN10: prod.codigoN10, cantidad
+    });
+
+    window.toast?.(`Stock asignado: ${prod.nombre} × ${cantidad}`, "success");
+    _cerrarAsignar();
+  } catch (e) {
+    errEl.textContent = "Error: " + e.message;
+    errEl.style.display = "block";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Guardar asignación";
+  }
 }
 

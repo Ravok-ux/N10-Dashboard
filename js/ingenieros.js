@@ -405,7 +405,7 @@ function _render() {
   const ahora = Date.now();
   let lista = _usuarios.map(u => {
     const ub   = _ubicaciones[u.id] || _ubicaciones[u.alias] || null;
-    const ts   = ub?.timestamp?.toDate?.()?.getTime() ?? 0;
+    const ts   = typeof ub?.timestamp === 'number' ? ub.timestamp : (ub?.timestamp?.toDate?.()?.getTime() ?? 0);
     const mins = ts ? Math.floor((ahora - ts) / 60000) : null;
     const enJornada = ub?.enJornada === true;
     return { ...u, ub, ts, mins, enJornada };
@@ -460,8 +460,8 @@ function _render() {
         <span style="font-size:11px;color:var(--text-sec)">${senalTxt}</span>
         ${u.ts ? `<span style="font-size:11px;color:var(--text-muted);margin-left:auto">${fmtHora(new Date(u.ts))}</span>` : ""}
       </div>
-      ${u.ub?.lat && u.ub?.lon
-        ? `<a href="https://www.google.com/maps?q=${u.ub.lat},${u.ub.lon}" target="_blank"
+      ${u.ub?.lat && u.ub?.lng
+        ? `<a href="https://www.google.com/maps?q=${u.ub.lat},${u.ub.lng}" target="_blank"
             style="display:block;font-size:11px;color:#1565C0;text-decoration:none;font-weight:600">
             📍 Ver en Google Maps</a>`
         : `<span style="font-size:11px;color:var(--text-muted)">Sin ubicación registrada</span>`}

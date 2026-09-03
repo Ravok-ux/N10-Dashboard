@@ -285,6 +285,23 @@ function _html() {
           ${_field("pc-e-costo",       "Costo ($)",        "number", "0.00")}
           ${_field("pc-e-peso",        "Peso",             "number", "0.0")}
           <div>
+            <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Embalaje / Unidad</label>
+            <select id="pc-e-unidad"
+              style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+                font-size:12px;background:var(--surface);color:var(--text-primary);box-sizing:border-box;appearance:auto"
+              onchange="ProdCtrlUI.onUnidadChange(this)">
+              <option value="">— Sin especificar —</option>
+              <option value="Bulto">Bulto</option>
+              <option value="Caja">Caja</option>
+              <option value="Garrafa">Garrafa</option>
+              <option value="Paquete">Paquete</option>
+              <option value="Pieza">Pieza</option>
+              <option value="Pieza granel">Pieza granel</option>
+              <option value="Porrón">Porrón</option>
+              <option value="__nueva__">+ Agregar nueva…</option>
+            </select>
+          </div>
+          <div>
             <label style="font-size:11px;font-weight:600;color:#6B7280;display:block;margin-bottom:4px">Familia / tipo</label>
             <select id="pc-e-familia"
               onchange="document.getElementById('pc-e-litros-wrap').style.display=this.value==='N10'?'':'none'"
@@ -744,6 +761,7 @@ function _renderDetalle(docId) {
           ${_dfield("Marca",              esc(p.marca || "–"))}
           ${_dfield("Categoría",          esc(p.categoria || "–"))}
           ${_dfield("Subcategoría",       esc(p.subcategoria || "–"))}
+          ${_dfield("Embalaje / Unidad",   esc(p.unidad || "–"))}
           ${_dfield("Peso",               p.peso > 0 ? p.peso + " kg" : "–")}
           ${_dfield("Familia",            p.familia === "N10" ? "💧 N10 — Litros" : "Estándar")}
           ${p.familia === "N10" ? _dfield("Litros por unidad", p.litros_por_unidad > 0 ? p.litros_por_unidad + " L" : "–") : ""}
@@ -930,6 +948,17 @@ function _bindUI() {
 
   window.ProdCtrlUI = {
 
+    onUnidadChange(sel) {
+      if (sel.value !== "__nueva__") return;
+      const nueva = prompt("Nombre del nuevo embalaje/unidad:");
+      if (!nueva || !nueva.trim()) { sel.value = ""; return; }
+      const val = nueva.trim();
+      const opt = document.createElement("option");
+      opt.value = val; opt.textContent = val;
+      sel.insertBefore(opt, sel.querySelector("[value='__nueva__']"));
+      sel.value = val;
+    },
+
     setFiltro(f) {
       _filtroActivo = f;
       document.querySelectorAll("[data-filtro]").forEach(b =>
@@ -1107,6 +1136,19 @@ function _bindUI() {
       _val("pc-e-peso",         p.peso        ?? "");
       _val("pc-e-descripcion",  p.descripcion ?? "");
 
+      // Embalaje / Unidad
+      const selUnidad = document.getElementById("pc-e-unidad");
+      if (selUnidad) {
+        const unidadVal = p.unidad ?? "";
+        const existe = [...selUnidad.options].some(o => o.value === unidadVal);
+        if (unidadVal && !existe) {
+          const opt = document.createElement("option");
+          opt.value = unidadVal; opt.textContent = unidadVal;
+          selUnidad.insertBefore(opt, selUnidad.querySelector("[value='__nueva__']"));
+        }
+        selUnidad.value = unidadVal;
+      }
+
       const selImp = document.getElementById("pc-e-impuesto");
       if (selImp) selImp.value = p.impuesto ?? "Exento";
 
@@ -1203,6 +1245,7 @@ function _bindUI() {
           activo:          document.getElementById("pc-e-activo")?.checked !== false,
           familia:         document.getElementById("pc-e-familia")?.value || "",
           litros_por_unidad: parseFloat(document.getElementById("pc-e-litros_pu")?.value) || 0,
+          unidad:          (() => { const v = document.getElementById("pc-e-unidad")?.value || ""; return v === "__nueva__" ? "" : v; })(),
         };
 
         // Agregar valores nuevos al catálogo local (en memoria)
