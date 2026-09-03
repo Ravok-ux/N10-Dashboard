@@ -217,6 +217,28 @@ function _html() {
           </div>`).join("")}
       </div>
 
+      <!-- Barra de acciones masivas (oculta hasta seleccionar) -->
+      <div id="pc-bulk-bar" style="display:none;align-items:center;gap:10px;
+        padding:10px 20px;background:#1e3a5f;border-bottom:1px solid #2563EB;flex-shrink:0">
+        <span style="font-size:13px;font-weight:700;color:#93C5FD" id="pc-bulk-count">0 seleccionados</span>
+        <div style="flex:1"></div>
+        <button onclick="ProdCtrlUI.bulkExportar()"
+          style="padding:6px 14px;border-radius:6px;border:1px solid #3B82F6;
+            background:transparent;color:#93C5FD;font-size:12px;font-weight:700;cursor:pointer">
+          ↓ Exportar Excel
+        </button>
+        <button onclick="ProdCtrlUI.bulkDesactivar()"
+          style="padding:6px 14px;border-radius:6px;border:none;
+            background:#DC2626;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+          Desactivar seleccionados
+        </button>
+        <button onclick="ProdCtrlUI.toggleTodos(false)"
+          style="padding:6px 10px;border-radius:6px;border:1px solid #374151;
+            background:transparent;color:#9CA3AF;font-size:12px;cursor:pointer">
+          ✕ Cancelar
+        </button>
+      </div>
+
       <!-- Filtros + toolbar -->
       <div style="display:flex;align-items:center;gap:8px;padding:10px 20px;
         border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap">
@@ -534,8 +556,33 @@ function _renderizarHeader() {
     if (!meta) return "";
     if (key === "acciones" && !puedeEditar) return "";
     const wide = ["nombre","descripcion"].includes(key);
+    if (key === "check") {
+      return `<th style="${_th("width:36px;")}">
+        <input type="checkbox" id="pc-chk-all" title="Seleccionar todos"
+          style="cursor:pointer" onchange="ProdCtrlUI.toggleTodos(this.checked)">
+      </th>`;
+    }
     return `<th style="${_th(wide ? "min-width:180px;" : "")}">${meta.label}</th>`;
   }).join("");
+}
+
+function _bulkBarActualizar() {
+  const checks = [...document.querySelectorAll(".pc-chk-row:checked")];
+  const bar = document.getElementById("pc-bulk-bar");
+  const lbl = document.getElementById("pc-bulk-count");
+  if (!bar) return;
+  if (checks.length > 0) {
+    bar.style.display = "flex";
+    if (lbl) lbl.textContent = `${checks.length} seleccionado${checks.length > 1 ? "s" : ""}`;
+  } else {
+    bar.style.display = "none";
+  }
+  // Sincronizar check-all
+  const all = document.querySelectorAll(".pc-chk-row");
+  const chkAll = document.getElementById("pc-chk-all");
+  if (chkAll) chkAll.indeterminate = checks.length > 0 && checks.length < all.length;
+  if (chkAll && checks.length === all.length && all.length > 0) chkAll.checked = true;
+  if (chkAll && checks.length === 0) chkAll.checked = false;
 }
 
 function _renderizar() {
@@ -578,7 +625,8 @@ function _renderizar() {
       if (key === "acciones" && !puedeEditar) return "";
       switch(key) {
         case "check":
-          return `<td style="${COL_TD}"><input type="checkbox" class="pc-chk-row" data-id="${esc(p._docId)}" style="cursor:pointer"></td>`;
+          return `<td style="${COL_TD}"><input type="checkbox" class="pc-chk-row" data-id="${esc(p._docId)}"
+            style="cursor:pointer" onchange="_bulkBarActualizar()"></td>`;
         case "foto":
           return p.fotoUrl
             ? `<td style="${COL_TD}text-align:center"><img src="${esc(p.fotoUrl)}" alt="foto"
@@ -1061,6 +1109,50 @@ function _bindUI() {
 
     toggleTodos(checked) {
       document.querySelectorAll(".pc-chk-row").forEach(c => { c.checked = checked; });
+      _bulkBarActualizar();
+    },
+
+    _getCheckedIds() {
+      return [...document.querySelectorAll(".pc-chk-row:checked")].map(c => c.dataset.id);
+    },
+
+    async bulkDesactivar() {
+      const ids = this._getCheckedIds();
+      if (!ids.length) return;
+      if (!confirm(`¿Desactivar ${ids.length} producto${ids.length > 1 ? "s" : ""}? Esta acción se puede revertir.`)) return;
+      try {
+        const batch = writeBatch(db);
+        ids.forEach(id => batch.update(doc(db, "productos", id), {
+          activo: false, modificadoPor: Sesion.alias, modificadoEn: serverTimestamp()
+        }));
+        await batch.commit();
+        window.toast?.(`${ids.length} producto${ids.length > 1 ? "s" : ""} desactivado${ids.length > 1 ? "s" : ""}.`, "success");
+        document.getElementById("pc-bulk-bar").style.display = "none";
+      } catch(e) { window.toast?.("Error al desactivar: " + e.message, "error"); }
+    },
+
+    bulkExportar() {
+      const ids = new Set(this._getCheckedIds());
+      const seleccionados = _todos.filter(p => ids.has(p._docId));
+      if (!seleccionados.length) return;
+      const filas = seleccionados.map(p => ({
+        "Código N10":  p.codigo || "",
+        "ID":          p.numero || "",
+        "Nombre":      p.nombre || "",
+        "Precio":      p.precio_base || 0,
+        "Costo":       p.costo_base  || 0,
+        "Marca":       p.marca || "",
+        "Categoría":   p.categoria || "",
+        "Unidad":      p.unidad || "",
+        "Peso (kg)":   p.peso || "",
+        "Stock":       p.stock || 0,
+        "Activo":      p.activo !== false ? "Sí" : "No",
+        "Granel":      p.granel ? "Sí" : "No",
+        "Dosis":       p.granel_dosis ? `${p.granel_dosis}${p.granel_unidad}` : "",
+        "Precio dosis":p.granel_precio_dosis || "",
+      }));
+      exportarExcelProductos?.(filas, `productos_seleccionados_${ids.size}`);
+      window.toast?.(`Excel con ${ids.size} productos generado.`, "success");
     },
 
     // ── Vista de detalle ──────────────────────────────────────
