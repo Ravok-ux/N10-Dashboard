@@ -45,6 +45,7 @@ const TIPOS = {
   VENCIMIENTO_INTERESES:  { icon: "📈", color: "#C0504D", label: "Interés vencido"           },
   // Blacklist
   BLACKLIST_REHAB_SOLICITUD: { icon: "🚫", color: "#DC2626", label: "Solicitud rehabilitación blacklist" },
+  ADEUDO_INVENTARIO:         { icon: "⚠️", color: "#DC2626", label: "Adeudo por faltante de inventario" },
   // RH
   NOMINA_PAGADA:          { icon: "💼", color: "#16A34A", label: "Pago de nómina"           },
   VACACION_APROBADA:      { icon: "🏖️",  color: "#16A34A", label: "Vacaciones aprobadas"    },

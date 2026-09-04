@@ -899,9 +899,16 @@ function _montarConteoFisico() {
         const almLabel = !c.almacen || c.almacen === "CENTRAL" ? "🏭 Central"
           : c.almacen.startsWith("ING_") ? `👷 ${c.almacenNombre || c.almacen.replace("ING_","")}`
           : c.almacen;
+        const adeudoBadge = c.adeudoId
+          ? `<span title="Generó nota de adeudo en Mi RH"
+               style="display:inline-flex;align-items:center;gap:3px;font-size:10px;
+                 background:#FEE2E2;color:#991B1B;border-radius:4px;padding:2px 6px;margin-left:6px;font-weight:700">
+               ⚠️ ADEUDO
+             </span>`
+          : "";
         return `<tr>
           <td style="font-size:11px;white-space:nowrap">${fmtFecha(c._ts)}</td>
-          <td style="font-size:11px">${almLabel}</td>
+          <td style="font-size:11px">${almLabel}${adeudoBadge}</td>
           <td>${estado}</td>
           <td style="text-align:right;font-variant-numeric:tabular-nums">${prods}</td>
           <td style="text-align:right;font-weight:700;color:${difs>0?"#D97706":"#16A34A"}">${difs}</td>
@@ -1152,6 +1159,19 @@ function _montarConteoFisico() {
         });
         adeudoRef = adeudoDoc.id;
         logAudit("ADEUDO_INVENTARIO_CREADO", { adeudoId: adeudoDoc.id, ingUid, monto: montoTotal });
+
+        // Notificar al ingeniero afectado
+        try {
+          await ad(colRef(db, "notificaciones_web"), {
+            tipo:          "ADEUDO_INVENTARIO",
+            titulo:        "Adeudo de inventario registrado",
+            mensaje:       `Se registró un adeudo de ${new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(montoTotal)} por ${faltantes.length} producto(s) faltante(s) en el conteo del ${fmtConteo}. Consulta Mi RH → Anticipos.`,
+            destinatarios: [ingUid],
+            leida:         false,
+            timestamp:     Date.now(),
+            datos:         { adeudoId: adeudoDoc.id, conteoId: _conteoActivo.id, monto: montoTotal },
+          });
+        } catch(_) {}
       }
 
       await upd(dc(db, "conteos_fisicos", _conteoActivo.id), {

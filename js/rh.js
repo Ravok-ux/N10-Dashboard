@@ -888,6 +888,7 @@ function _montarNomina() {
           <th style="text-align:right">AUSENCIAS</th>
           <th style="text-align:right">DESC. AUSENCIAS</th>
           <th style="text-align:right">DESC. ANTICIPOS</th>
+          <th style="text-align:right">ADEUDOS INV.</th>
           <th style="text-align:right">NETO A PAGAR</th>
           <th>ACCIÓN</th>
         </tr></thead>
@@ -957,7 +958,7 @@ async function _calcularNomina() {
   const diasPeriodo = Math.round((hastaTs - desdeTs) / 86400000) + 1;
 
   const tbody = document.getElementById("nom-body");
-  if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="padding:24px;text-align:center">Calculando…</td></tr>`;
+  if (tbody) tbody.innerHTML = `<tr><td colspan="9" style="padding:24px;text-align:center">Calculando…</td></tr>`;
 
   try {
     // 1. Asistencia del período
@@ -968,14 +969,14 @@ async function _calcularNomina() {
     ));
     const asiRows = asiSnap.docs.map(d => d.data());
 
-    // 2. Anticipos APROBADOS/DESCONTADOS del período
+    // 2. Anticipos APROBADOS/DESCONTADOS + adeudos de inventario del período
     const antSnap = await getDocs(query(
       collection(db,"rh_anticipos"),
       where("_ts",">=",desdeTs), where("_ts","<=",hastaTs),
-      where("status","in",["APROBADO","DESCONTADO"]),
+      where("status","in",["APROBADO","DESCONTADO","ADEUDO"]),
       orderBy("_ts","asc"), limit(500)
     ));
-    const antRows = antSnap.docs.map(d => d.data());
+    const antRows = antSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
     // Agrupar por usuario
     const porUid = {};
@@ -983,21 +984,26 @@ async function _calcularNomina() {
       porUid[u.uid] = {
         uid: u.uid, alias: u.alias || u.uid,
         salarioSemanal: u.salarioSemanal || 0,
-        asistencias: [], anticipos: []
+        asistencias: [], anticipos: [], adeudos: []
       };
     }
     asiRows.forEach(r => { if (porUid[r.uid]) porUid[r.uid].asistencias.push(r); });
-    antRows.forEach(r => { if (porUid[r.uid]) porUid[r.uid].anticipos.push(r); });
+    antRows.forEach(r => {
+      if (!porUid[r.uid]) return;
+      if (r.tipo === "ADEUDO_INVENTARIO") porUid[r.uid].adeudos.push(r);
+      else porUid[r.uid].anticipos.push(r);
+    });
 
     _nominaData = Object.values(porUid).map(u => {
-      const presentes = u.asistencias.filter(a => ["PRESENTE","TARDANZA"].includes(a.status)).length;
-      const ausencias = u.asistencias.filter(a => a.status === "AUSENTE").length;
-      const salario   = u.salarioSemanal;
-      const valorDia  = diasPeriodo > 0 ? salario / diasPeriodo : 0;
-      const descAus   = ausencias * valorDia;
-      const descAnt   = u.anticipos.reduce((s,a) => s + (a.monto||0), 0);
-      const neto      = Math.max(0, salario - descAus - descAnt);
-      return { ...u, presentes, ausencias, salario, valorDia, descAus, descAnt, neto };
+      const presentes  = u.asistencias.filter(a => ["PRESENTE","TARDANZA"].includes(a.status)).length;
+      const ausencias  = u.asistencias.filter(a => a.status === "AUSENTE").length;
+      const salario    = u.salarioSemanal;
+      const valorDia   = diasPeriodo > 0 ? salario / diasPeriodo : 0;
+      const descAus    = ausencias * valorDia;
+      const descAnt    = u.anticipos.reduce((s,a) => s + (a.monto||0), 0);
+      const descAdeudo = u.adeudos.filter(a => a.status === "ADEUDO").reduce((s,a) => s + (a.monto||0), 0);
+      const neto       = Math.max(0, salario - descAus - descAnt - descAdeudo);
+      return { ...u, presentes, ausencias, salario, valorDia, descAus, descAnt, descAdeudo, neto };
     });
 
     _renderNomina(_nominaData);
@@ -1011,11 +1017,15 @@ function _renderNomina(rows) {
   const tbody = document.getElementById("nom-body");
   if (!tbody) return;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text-sec)">Sin empleados</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="padding:32px;text-align:center;color:var(--text-sec)">Sin empleados</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(r => {
     const sinSalario = r.salario <= 0;
+    const adeudoCell = r.descAdeudo > 0
+      ? `<span style="color:#DC2626;font-weight:700">${fmtMXN(r.descAdeudo)}</span>
+         <span style="font-size:9px;background:#FEE2E2;color:#991B1B;border-radius:4px;padding:1px 4px;margin-left:4px">⚠️ ${r.adeudos.filter(a=>a.status==="ADEUDO").length}</span>`
+      : `<span style="color:var(--text-sec)">—</span>`;
     return `<tr style="${sinSalario ? "opacity:.55" : ""}">
       <td style="font-weight:700">${esc(r.alias)}</td>
       <td style="text-align:right">
@@ -1028,6 +1038,7 @@ function _renderNomina(rows) {
       <td style="text-align:right;color:${r.ausencias>0?"#DC2626":"inherit"}">${r.ausencias}</td>
       <td style="text-align:right;color:#DC2626">${fmtMXN(r.descAus)}</td>
       <td style="text-align:right;color:#D97706">${fmtMXN(r.descAnt)}</td>
+      <td style="text-align:right">${adeudoCell}</td>
       <td style="text-align:right;font-weight:800;font-size:15px;color:${r.neto>0?"var(--primary)":"#DC2626"}">${fmtMXN(r.neto)}</td>
       <td>
         ${r.neto > 0 ? `<button class="btn-sm btn-green" data-uid="${r.uid}" data-act="pagar">✓ Registrar pago</button>` : "–"}
@@ -1075,6 +1086,7 @@ function _renderNomina(rows) {
           ausencias:          row.ausencias,
           deducciones:        row.descAus,
           descuentoAnticipos: row.descAnt,
+          descuentoAdeudos:   row.descAdeudo || 0,
           netoPagado:         row.neto,
           status:             "PAGADO",
           pagadoPor:          Sesion.alias,
@@ -1084,8 +1096,15 @@ function _renderNomina(rows) {
 
         // Marcar anticipos del período como DESCONTADO
         for (const ant of row.anticipos.filter(a => a.status === "APROBADO")) {
-          await updateDoc(doc(db,"rh_anticipos",ant.id || ant._id || ""), {
+          await updateDoc(doc(db,"rh_anticipos",ant.id || ""), {
             status:"DESCONTADO", descontadoPor: Sesion.alias
+          }).catch(() => {});
+        }
+        // Marcar adeudos de inventario del período como PAGADO (descontados vía nómina)
+        for (const ade of row.adeudos.filter(a => a.status === "ADEUDO")) {
+          await updateDoc(doc(db,"rh_anticipos",ade.id || ""), {
+            status:"PAGADO", pagadoPor: Sesion.alias, pagadoEn: Date.now(),
+            nota: `Descontado vía nómina ${periodo}`
           }).catch(() => {});
         }
         window.toast?.(`Pago registrado para ${row.alias}`,"success");
