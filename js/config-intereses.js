@@ -545,6 +545,16 @@ function _html() {
   </div>`;
 }
 
+// ── ESC handler para cerrar modales ──────────────────────────
+function _ciEscHandler(e) {
+  if (e.key !== "Escape") return;
+  if (!document.getElementById("ci-modal-global")?.classList.contains("hidden")) {
+    window.ConfigInteresesUI?.cerrarGlobal();
+  } else if (!document.getElementById("ci-modal-nota")?.classList.contains("hidden")) {
+    window.ConfigInteresesUI?.cerrarNota();
+  }
+}
+
 // ── Bind UI ───────────────────────────────────────────────────
 function _bindUI() {
   window.ConfigInteresesUI = {
@@ -682,6 +692,9 @@ function _bindUI() {
       }));
     },
   };
+
+  document.removeEventListener("keydown", _ciEscHandler);
+  document.addEventListener("keydown", _ciEscHandler);
 }
 
 // ── Cargar config global ──────────────────────────────────────

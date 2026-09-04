@@ -836,7 +836,9 @@ function _initSearchClearButtons() {
     btn.textContent = "✕";
     input.parentElement.appendChild(btn);
 
-    const toggle = () => { btn.style.display = input.value ? "block" : "none"; };
+    const toggle = () => {
+      btn.style.display = (input.value && input.value !== input.placeholder) ? "block" : "none";
+    };
     input.addEventListener("input",  toggle);
     input.addEventListener("change", toggle);
     toggle();
