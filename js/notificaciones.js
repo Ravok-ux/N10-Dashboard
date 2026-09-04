@@ -43,6 +43,8 @@ const TIPOS = {
   SEMAFORO_CRITICO:       { icon: "🔴", color: "#C0504D", label: "Semáforo crítico"          },
   SEMAFORO_GRAVE:         { icon: "🟠", color: "#F79646", label: "Semáforo grave"            },
   VENCIMIENTO_INTERESES:  { icon: "📈", color: "#C0504D", label: "Interés vencido"           },
+  // Blacklist
+  BLACKLIST_REHAB_SOLICITUD: { icon: "🚫", color: "#DC2626", label: "Solicitud rehabilitación blacklist" },
   // RH
   NOMINA_PAGADA:          { icon: "💼", color: "#16A34A", label: "Pago de nómina"           },
   VACACION_APROBADA:      { icon: "🏖️",  color: "#16A34A", label: "Vacaciones aprobadas"    },

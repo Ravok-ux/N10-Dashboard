@@ -56,6 +56,7 @@ import { mount as rcMount, destroy as rcDestroy } from "./reportes-custom.js";
 import { mount as cajaMount, destroy as cajaDestroy } from "./caja.js";
 import { mount as gastosMount, destroy as gastosDestroy } from "./gastos.js";
 import { mount as reabastoMount, destroy as reabastoDestroy } from "./reabasto.js";
+import { BlacklistModule } from "./blacklist.js";
 import { iniciarNotificaciones, detenerNotificaciones } from "./notificaciones.js";
 import { iniciarFCM } from "./fcm.js";
 import { db } from "./firebase-config.js";
@@ -241,6 +242,7 @@ const MODULES = {
   caja:             { mount: cajaMount, destroy: cajaDestroy },
   gastos:           { mount: gastosMount, destroy: gastosDestroy },
   reabasto:         { mount: reabastoMount, destroy: reabastoDestroy },
+  blacklist:        BlacklistModule,
 };
 
 let vistaActual = null;
@@ -489,7 +491,8 @@ function _navigate(viewId) {
     historial_ventas:"Historial de Ventas",
     asistencia:"Control de Asistencia",
     sms:"SMS Masivo",
-    bi_analytics:"BI & Analytics" };
+    bi_analytics:"BI & Analytics",
+    blacklist:"Blacklist" };
   const subs = { dashboard:"Resumen del día", mapa:"Ingenieros en campo", mapa_clientes:"Localización total de clientes georeferenciados",
     feed:"Actividades globales", usuarios:"Gestión de privilegios",
     reportes:"Generación de reportes", comisiones:"Nómina e incentivos por ingeniero",
@@ -520,7 +523,8 @@ function _navigate(viewId) {
     reportes_custom:"Reportes con campos configurables por fuente de datos",
     reabasto:"Solicitudes de reabasto por ingeniero",
     caja:"Cortes y arqueos de caja por turno",
-    gastos:"Solicitudes de gastos y reembolsos" };
+    gastos:"Solicitudes de gastos y reembolsos",
+    blacklist:"Clientes morosos, fraudulentos y de alto riesgo" };
   document.getElementById("tb-bc").innerHTML =
     `${bc[viewId] ?? viewId} <span>/ ${subs[viewId] ?? ""}</span>`;
   document.getElementById("subhdr-title").textContent = bc[viewId] ?? viewId;
@@ -988,6 +992,7 @@ function _aplicarVisibilidadSidebar() {
     gastos:           pv("GERENTE","ADMINISTRADOR","MESA_CONTROL"),
     historial_ventas: pv("GERENTE","ADMINISTRADOR","MESA_CONTROL"),
     bi_analytics:     pv("GERENTE","ADMINISTRADOR","MESA_CONTROL"),
+    blacklist:        pv("GERENTE","ADMINISTRADOR","MESA_CONTROL","INGENIERO","RECUPERADOR","JURIDICO","VENDEDOR"),
   };
 
   // Aplicar visibilidad a cada sb-item
@@ -1002,7 +1007,7 @@ function _aplicarVisibilidadSidebar() {
   const anyVis = views => views.some(v => vis[v] !== false);
 
   const grupos = [
-    { grp: "sb-grupo-campo",         sbi: "sbi-campo",        views: ["ingenieros","clientes","mapa_clientes","asignaciones","pedidos","remisiones","visitas","manuales","agroquimico","logistica","geocercas"] },
+    { grp: "sb-grupo-campo",         sbi: "sbi-campo",        views: ["ingenieros","clientes","mapa_clientes","asignaciones","pedidos","remisiones","visitas","manuales","agroquimico","logistica","geocercas","blacklist"] },
     { grp: "sb-grupo-ventas",        sbi: "sbi-ventas",       views: ["crm","cotizaciones","metas","formularios","promociones","sms","historial_ventas"] },
     { grp: "sb-grupo-juridico-sec",  sbi: "sbi-juridico-sec", views: ["juridico"] },
     { grp: "sb-grupo-catalogo",      sbi: "sbi-catalogo",     views: ["productos","precios","precios_segmento"] },

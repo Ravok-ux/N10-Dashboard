@@ -108,6 +108,19 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
+    // ── blacklist/{docId}/adjuntos/{archivo} ─────────────────────────────────
+    // Adjuntos del expediente: contratos, pagarés, evidencias fotográficas
+    match /blacklist/{docId}/adjuntos/{archivo} {
+      // Lectura: cualquier rol autenticado activo
+      allow read: if cuentaActiva() && esRolConocido();
+      // Escritura: solo admins, máx 20 MB, tipos permitidos
+      allow write: if cuentaActiva() && esAdminOSuperior()
+                   && request.resource.size <= 20 * 1024 * 1024
+                   && request.resource.contentType.matches(
+                        'image/(jpeg|png|webp)|application/pdf|application/vnd.openxmlformats-officedocument.(wordprocessingml.document|spreadsheetml.sheet)');
+      allow delete: if cuentaActiva() && esAdminOSuperior();
+    }
+
     // Bloqueo por defecto — cualquier ruta no listada queda denegada
     match /{allPaths=**} {
       allow read, write: if false;

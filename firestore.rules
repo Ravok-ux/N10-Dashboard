@@ -1074,6 +1074,20 @@ service cloud.firestore {
       allow delete:         if cuentaActiva() && esAdminOSuperior();
     }
 
+    // ── /blacklist ────────────────────────────────────────────────────────────
+    // Lectura: cualquier rol autenticado
+    // Escritura (crear/editar): GERENTE, ADMINISTRADOR, SUPER_ADMIN
+    // Actualización parcial (solicitar rehab): cualquier rol autenticado
+    match /blacklist/{docId} {
+      allow read: if esRolConocido();
+      allow create: if esAdminOSuperior();
+      allow update: if esAdminOSuperior()
+        || (esRolConocido()
+            && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['rehabSolicitud','historial']));
+      allow delete: if esSuperAdmin();
+    }
+
     // ── Bloqueo por defecto ───────────────────────────────────────────────────
     // Cualquier colección no listada queda denegada
     match /{document=**} {
