@@ -46,6 +46,7 @@ const ALL_COLS = [
   { key: "categoria",      label: "CATEGORÍA"                     },
   { key: "peso",           label: "PESO"                          },
   { key: "stock",          label: "STOCK"                         },
+  { key: "granel",         label: "GRANEL"                        },
   { key: "descripcion",    label: "DESCRIPCIÓN"                   },
   { key: "impuesto",       label: "CON O SIN IMPUESTO"            },
   { key: "materia_prima",  label: "MAT. PRIMA"                    },
@@ -58,7 +59,11 @@ const LS_KEY = "n10_prod_cols";
 function _loadCols() {
   try {
     const saved = JSON.parse(localStorage.getItem(LS_KEY) || "null");
-    if (Array.isArray(saved) && saved.length > 0) return saved;
+    if (Array.isArray(saved) && saved.length > 0) {
+      // Agregar columnas nuevas que no estén en el set guardado (excepto acciones que ya va al final)
+      const missing = DEFAULT_COLS.filter(k => !saved.includes(k) && k !== "acciones");
+      return missing.length ? [...saved.slice(0, -1), ...missing, "acciones"] : saved;
+    }
   } catch {}
   return [...DEFAULT_COLS];
 }
@@ -566,24 +571,6 @@ function _renderizarHeader() {
   }).join("");
 }
 
-function _bulkBarActualizar() {
-  const checks = [...document.querySelectorAll(".pc-chk-row:checked")];
-  const bar = document.getElementById("pc-bulk-bar");
-  const lbl = document.getElementById("pc-bulk-count");
-  if (!bar) return;
-  if (checks.length > 0) {
-    bar.style.display = "flex";
-    if (lbl) lbl.textContent = `${checks.length} seleccionado${checks.length > 1 ? "s" : ""}`;
-  } else {
-    bar.style.display = "none";
-  }
-  // Sincronizar check-all
-  const all = document.querySelectorAll(".pc-chk-row");
-  const chkAll = document.getElementById("pc-chk-all");
-  if (chkAll) chkAll.indeterminate = checks.length > 0 && checks.length < all.length;
-  if (chkAll && checks.length === all.length && all.length > 0) chkAll.checked = true;
-  if (chkAll && checks.length === 0) chkAll.checked = false;
-}
 
 function _renderizar() {
   const tbody = document.getElementById("pc-tbody");
@@ -626,7 +613,7 @@ function _renderizar() {
       switch(key) {
         case "check":
           return `<td style="${COL_TD}"><input type="checkbox" class="pc-chk-row" data-id="${esc(p._docId)}"
-            style="cursor:pointer" onchange="_bulkBarActualizar()"></td>`;
+            style="cursor:pointer" onchange="ProdCtrlUI.bulkBarActualizar()"></td>`;
         case "foto":
           return p.fotoUrl
             ? `<td style="${COL_TD}text-align:center"><img src="${esc(p.fotoUrl)}" alt="foto"
@@ -659,6 +646,16 @@ function _renderizar() {
           return `<td style="${COL_TD}color:#6B7280;text-align:right">${p.peso > 0 ? p.peso : "–"}</td>`;
         case "stock":
           return `<td style="${COL_TD}color:#6B7280;text-align:right;font-variant-numeric:tabular-nums">${p.stock ?? "–"}</td>`;
+        case "granel":
+          return p.granel
+            ? `<td style="${COL_TD}text-align:center">
+                <span title="${p.granel_dosis||""}${p.granel_unidad||""}/dosis · $${p.granel_precio_dosis||0} · ${p.granel_partes||"?"}pzs"
+                  style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;
+                    background:#052e16;color:#4ADE80;font-size:10px;font-weight:700;border:1px solid #166534">
+                  ✓ Granel
+                </span>
+              </td>`
+            : `<td style="${COL_TD}text-align:center;color:#374151">–</td>`;
         case "descripcion":
           return `<td style="${COL_TD}max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
             color:#9CA3AF" title="${esc(p.descripcion)}">${esc(p.descripcion || "–")}</td>`;
@@ -1107,9 +1104,27 @@ function _bindUI() {
       _syncTopScrollWidth();
     },
 
+    bulkBarActualizar() {
+      const checks = [...document.querySelectorAll(".pc-chk-row:checked")];
+      const bar = document.getElementById("pc-bulk-bar");
+      const lbl = document.getElementById("pc-bulk-count");
+      if (!bar) return;
+      if (checks.length > 0) {
+        bar.style.display = "flex";
+        if (lbl) lbl.textContent = `${checks.length} seleccionado${checks.length > 1 ? "s" : ""}`;
+      } else {
+        bar.style.display = "none";
+      }
+      const all = document.querySelectorAll(".pc-chk-row");
+      const chkAll = document.getElementById("pc-chk-all");
+      if (chkAll) chkAll.indeterminate = checks.length > 0 && checks.length < all.length;
+      if (chkAll && checks.length === all.length && all.length > 0) chkAll.checked = true;
+      if (chkAll && checks.length === 0) chkAll.checked = false;
+    },
+
     toggleTodos(checked) {
       document.querySelectorAll(".pc-chk-row").forEach(c => { c.checked = checked; });
-      _bulkBarActualizar();
+      this.bulkBarActualizar();
     },
 
     _getCheckedIds() {
@@ -1147,9 +1162,10 @@ function _bindUI() {
         "Peso (kg)":   p.peso || "",
         "Stock":       p.stock || 0,
         "Activo":      p.activo !== false ? "Sí" : "No",
-        "Granel":      p.granel ? "Sí" : "No",
-        "Dosis":       p.granel_dosis ? `${p.granel_dosis}${p.granel_unidad}` : "",
-        "Precio dosis":p.granel_precio_dosis || "",
+        "Granel":        p.granel ? "Sí" : "No",
+        "Dosis":         p.granel_dosis ? `${p.granel_dosis}${p.granel_unidad}` : "",
+        "Partes/pieza":  p.granel_partes || "",
+        "Precio dosis":  p.granel_precio_dosis || "",
       }));
       exportarExcelProductos?.(filas, `productos_seleccionados_${ids.size}`);
       window.toast?.(`Excel con ${ids.size} productos generado.`, "success");
