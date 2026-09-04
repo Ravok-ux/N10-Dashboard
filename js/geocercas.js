@@ -154,7 +154,7 @@ export const GeocercasModule = {
 // ── Mapa ───────────────────────────────────────────────────────────────────────
 function _initMap(canvas) {
   _map = new google.maps.Map(canvas, {
-    center: { lat: 24.8, lng: -107.4 },
+    center: { lat: 18.68, lng: -99.10 },
     zoom: 10,
     mapTypeId: "roadmap"
   });
