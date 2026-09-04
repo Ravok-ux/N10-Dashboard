@@ -89,19 +89,25 @@ export const BlacklistModule = {
     </div>
 
     <!-- Modal agregar / editar -->
-    <div id="bl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;overflow-y:auto">
-      <div style="background:var(--card-bg);border-radius:12px;max-width:680px;margin:40px auto;padding:32px;position:relative">
-        <button onclick="window._blCerrarModal()" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-sec)">✕</button>
-        <h3 id="bl-modal-titulo" style="margin-bottom:20px;font-size:18px;font-weight:700">Agregar a Blacklist</h3>
-        <div id="bl-modal-body"></div>
+    <div id="bl-modal" class="modal-overlay" style="display:none;z-index:9000">
+      <div class="modal-box" style="width:660px">
+        <div class="modal-hdr">
+          <span class="modal-title" id="bl-modal-titulo">Agregar a Blacklist</span>
+          <button class="modal-close" onclick="window._blCerrarModal()">✕</button>
+        </div>
+        <div class="modal-body" id="bl-modal-body"></div>
+        <div class="modal-footer" id="bl-modal-footer"></div>
       </div>
     </div>
 
     <!-- Panel detalle -->
-    <div id="bl-panel" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;overflow-y:auto">
-      <div style="background:var(--card-bg);border-radius:12px;max-width:760px;margin:40px auto;padding:32px;position:relative">
-        <button onclick="window._blCerrarPanel()" style="position:absolute;top:16px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-sec)">✕</button>
-        <div id="bl-panel-body"></div>
+    <div id="bl-panel" class="modal-overlay" style="display:none;z-index:9000">
+      <div class="modal-box" style="width:720px">
+        <div class="modal-hdr">
+          <span class="modal-title">Expediente</span>
+          <button class="modal-close" onclick="window._blCerrarPanel()">✕</button>
+        </div>
+        <div class="modal-body" id="bl-panel-body"></div>
       </div>
     </div>`;
 
@@ -309,24 +315,16 @@ async function _abrirDetalle(id) {
     </div>
 
     <!-- Acciones -->
-    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;border-top:1px solid var(--border);padding-top:16px">
+    ${(!esRehab && puedeGestionar) || (!esRehab && !puedeGestionar) ? `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;padding-top:8px">
       ${!esRehab && puedeGestionar ? `
-        <button onclick="_blEditar('${id}')"
-          style="padding:8px 18px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;font-size:13px">
-          ✏️ Editar expediente
-        </button>
-        <button onclick="_blAprobarRehab('${id}')"
-          style="padding:8px 18px;border:none;border-radius:8px;background:#16A34A;color:#fff;cursor:pointer;font-size:13px;font-weight:600">
-          ✓ Rehabilitar cliente
-        </button>` : ""}
+        <button class="btn-outline" onclick="_blEditar('${id}')">✏️ Editar expediente</button>
+        <button class="btn-primary" style="background:#16A34A" onclick="_blAprobarRehab('${id}')">✓ Rehabilitar cliente</button>` : ""}
       ${!esRehab && !puedeGestionar ? `
         ${rehabPendiente
-          ? `<span style="color:#D97706;font-size:13px;padding:8px">⏳ Solicitud de rehabilitación pendiente</span>`
-          : `<button onclick="_blSolicitarRehab('${id}')"
-              style="padding:8px 18px;border:1px solid #D97706;border-radius:8px;background:none;cursor:pointer;font-size:13px;color:#D97706;font-weight:600">
-              Solicitar rehabilitación
-            </button>`}` : ""}
-    </div>`;
+          ? `<span style="color:#D97706;font-size:13px;padding:8px">⏳ Solicitud pendiente de aprobación</span>`
+          : `<button class="btn-outline" style="border-color:#D97706;color:#D97706" onclick="_blSolicitarRehab('${id}')">Solicitar rehabilitación</button>`}` : ""}
+    </div>` : ""}`;
 
   window._blSubirAdjunto = (docId, input) => _subirAdjuntos(docId, input.files);
 
@@ -360,77 +358,69 @@ async function _abrirModal(registro) {
   } catch(_) {}
 
   document.getElementById("bl-modal-body").innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:16px">
-      <div>
-        <label style="font-size:12px;font-weight:700;color:var(--text-sec);display:block;margin-bottom:6px">CLIENTE *</label>
-        <select class="sel-sm" id="bl-f-cliente" style="width:100%" onchange="window._blClienteChange()">
-          <option value="">— Selecciona un cliente —</option>
-          ${opcionesClientes}
+    <div class="form-group">
+      <label class="form-label">CLIENTE</label>
+      <select class="form-input" id="bl-f-cliente" onchange="window._blClienteChange()">
+        <option value="">— Selecciona un cliente del sistema —</option>
+        ${opcionesClientes}
+      </select>
+      <div style="margin-top:8px;font-size:11px;color:var(--text-sec)">O escribe el nombre si no está en el sistema:</div>
+      <input type="text" class="form-input" id="bl-f-nombre" placeholder="Nombre del cliente"
+        style="margin-top:6px" value="${esc(registro?.clienteNombre||"")}">
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="form-group">
+        <label class="form-label">NIVEL DE RIESGO *</label>
+        <select class="form-input" id="bl-f-riesgo">
+          ${Object.keys(NIVELES).map(k=>
+            `<option value="${k}" ${registro?.nivelRiesgo===k?"selected":""}>${k}</option>`
+          ).join("")}
         </select>
-        <div style="margin-top:8px;font-size:11px;color:var(--text-sec)">
-          O escribe el nombre manualmente si no está en el sistema:
-        </div>
-        <input type="text" class="sel-sm" id="bl-f-nombre" placeholder="Nombre del cliente"
-          style="width:100%;margin-top:6px" value="${esc(registro?.clienteNombre||"")}">
       </div>
+      <div class="form-group">
+        <label class="form-label">CATEGORÍA *</label>
+        <select class="form-input" id="bl-f-categoria">
+          ${CATEGORIAS.map(c=>
+            `<option value="${c}" ${registro?.categoria===c?"selected":""}>${c}</option>`
+          ).join("")}
+        </select>
+      </div>
+    </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div>
-          <label style="font-size:12px;font-weight:700;color:var(--text-sec);display:block;margin-bottom:6px">NIVEL DE RIESGO *</label>
-          <select class="sel-sm" id="bl-f-riesgo" style="width:100%">
-            ${Object.keys(NIVELES).map(k=>
-              `<option value="${k}" ${registro?.nivelRiesgo===k?"selected":""}>${k}</option>`
-            ).join("")}
-          </select>
-        </div>
-        <div>
-          <label style="font-size:12px;font-weight:700;color:var(--text-sec);display:block;margin-bottom:6px">CATEGORÍA *</label>
-          <select class="sel-sm" id="bl-f-categoria" style="width:100%">
-            ${CATEGORIAS.map(c=>
-              `<option value="${c}" ${registro?.categoria===c?"selected":""}>${c}</option>`
-            ).join("")}
-          </select>
-        </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="form-group">
+        <label class="form-label">ZONA</label>
+        <input type="text" class="form-input" id="bl-f-zona"
+          placeholder="Zona del cliente" value="${esc(registro?.zona||"")}">
       </div>
+      <div class="form-group">
+        <label class="form-label">MONTO ADEUDO (MXN)</label>
+        <input type="number" class="form-input" id="bl-f-monto"
+          placeholder="0.00" min="0" value="${registro?.montoAdeudo||""}">
+      </div>
+    </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div>
-          <label style="font-size:12px;font-weight:700;color:var(--text-sec);display:block;margin-bottom:6px">ZONA</label>
-          <input type="text" class="sel-sm" id="bl-f-zona" style="width:100%"
-            placeholder="Zona del cliente" value="${esc(registro?.zona||"")}">
-        </div>
-        <div>
-          <label style="font-size:12px;font-weight:700;color:var(--text-sec);display:block;margin-bottom:6px">MONTO ADEUDO (MXN)</label>
-          <input type="number" class="sel-sm" id="bl-f-monto" style="width:100%"
-            placeholder="0.00" min="0" value="${registro?.montoAdeudo||""}">
-        </div>
-      </div>
+    <div class="form-group">
+      <label class="form-label">INGENIERO PREVIO</label>
+      <input type="text" class="form-input" id="bl-f-ingprev"
+        placeholder="Nombre del ingeniero que lo atendía"
+        value="${esc(registro?.ingenieroPrevio||"")}">
+    </div>
 
-      <div>
-        <label style="font-size:12px;font-weight:700;color:var(--text-sec);display:block;margin-bottom:6px">INGENIERO PREVIO</label>
-        <input type="text" class="sel-sm" id="bl-f-ingprev" style="width:100%"
-          placeholder="Nombre del ingeniero que lo atendía"
-          value="${esc(registro?.ingenieroPrevio||"")}">
-      </div>
-
-      <div>
-        <label style="font-size:12px;font-weight:700;color:var(--text-sec);display:block;margin-bottom:6px">DESCRIPCIÓN DEL CASO *</label>
-        <textarea id="bl-f-desc" rows="5"
-          style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--card-bg);color:var(--text-pri);font-size:13px;font-family:inherit;resize:vertical"
-          placeholder="Describe el historial del cliente: motivos, incidentes, fechas relevantes, deuda pendiente, acuerdos rotos…">${esc(registro?.descripcion||"")}</textarea>
-      </div>
-
-      <div style="display:flex;justify-content:flex-end;gap:10px;border-top:1px solid var(--border);padding-top:16px">
-        <button onclick="window._blCerrarModal()"
-          style="padding:10px 20px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer">
-          Cancelar
-        </button>
-        <button onclick="window._blGuardar(${editar ? `'${registro.id}'` : "null"})"
-          style="padding:10px 20px;border:none;border-radius:8px;background:#DC2626;color:#fff;cursor:pointer;font-weight:700">
-          ${editar ? "Guardar cambios" : "Agregar a lista negra"}
-        </button>
-      </div>
+    <div class="form-group">
+      <label class="form-label">DESCRIPCIÓN DEL CASO *</label>
+      <textarea id="bl-f-desc" rows="5" class="form-input"
+        style="resize:vertical;font-family:inherit"
+        placeholder="Describe el historial: motivos, incidentes, fechas, deuda pendiente, acuerdos rotos…">${esc(registro?.descripcion||"")}</textarea>
     </div>`;
+
+  document.getElementById("bl-modal-footer").innerHTML = `
+    <button class="btn-outline" onclick="window._blCerrarModal()">Cancelar</button>
+    <button id="bl-guardar-btn" class="btn-primary" style="background:#DC2626"
+      onclick="window._blGuardar(${editar ? `'${registro.id}'` : "null"})">
+      ${editar ? "Guardar cambios" : "Agregar a lista negra"}
+    </button>`;
 
   window._blClienteChange = () => {
     const sel = document.getElementById("bl-f-cliente");
@@ -463,7 +453,7 @@ async function _guardar(registroId) {
   if (!nombre) { alert("El nombre del cliente es obligatorio."); return; }
   if (!desc)   { alert("La descripción del caso es obligatoria."); return; }
 
-  const btn = document.querySelector(`button[onclick*="_blGuardar"]`);
+  const btn = document.getElementById("bl-guardar-btn");
   if (btn) { btn.disabled = true; btn.textContent = "Guardando…"; }
 
   const ahora = new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric"});
