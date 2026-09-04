@@ -11,6 +11,7 @@ import {
   getDocs, where, limit
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { exportarExcel } from "./excel-utils.js";
+import { cargarCacheBlacklist, clienteEnBlacklist } from "./blacklist.js";
 
 // ── Focus trap utility ────────────────────────────────────────
 // Atrapa el foco dentro de `el` y cierra con Escape via `closeFn`.
@@ -662,6 +663,8 @@ function _bindUI() {
 
 // ── Firestore listener ────────────────────────────────────────
 function _escuchar() {
+  // Cargar cache blacklist primero; cuando termine re-renderiza si ya hay datos
+  cargarCacheBlacklist().then(() => { if (_clientes.length) _applyFilters(); });
   _unsub = onSnapshot(
     query(collection(db, "clientes"), orderBy("nombre")),
     snap => {
@@ -795,7 +798,10 @@ function _renderTabla() {
         ${esc(c.clienteId || "—")}
       </td>
       <td style="padding:10px 14px">
-        <div style="font-weight:700;font-size:12px;color:var(--text-primary)">${esc(c.nombre || "—")}${abcBadge}</div>
+        <div style="font-weight:700;font-size:12px;color:var(--text-primary)">
+          ${esc(c.nombre || "—")}${abcBadge}
+          ${clienteEnBlacklist(c.id, c.nombre) ? `<span title="Cliente en lista negra" style="margin-left:4px;background:#FEE2E2;color:#DC2626;font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;border:1px solid #FECACA;vertical-align:middle">🚫 BLACKLIST</span>` : ""}
+        </div>
         ${c.telefono ? `<div style="font-size:11px;color:#6B7280">${esc(c.telefono)}</div>` : ""}
         ${c.ciudad || c.colonia ? `<div style="font-size:10px;color:#9CA3AF">${esc([c.colonia,c.ciudad].filter(Boolean).join(", "))}</div>` : ""}
       </td>
@@ -869,7 +875,31 @@ async function _abrirDetalle(id) {
   const activo = c.activo !== false;
   const segCol = _segColor(c.segmento);
 
+  const _blEntry = clienteEnBlacklist(c.id, c.nombre);
+  const _blNiveles = { ALTO:"#DC2626", MEDIO:"#D97706", BAJO:"#16A34A" };
+  const _blColor = _blEntry ? (_blNiveles[_blEntry.nivelRiesgo] || "#DC2626") : null;
+
   body.innerHTML = `
+    ${_blEntry ? `
+    <div style="background:${_blColor}10;border:2px solid ${_blColor};border-radius:10px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:flex-start;gap:12px">
+      <span style="font-size:22px;flex-shrink:0">🚫</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:800;color:${_blColor};margin-bottom:3px">
+          CLIENTE EN LISTA NEGRA — RIESGO ${esc(_blEntry.nivelRiesgo||"ALTO")} · ${esc(_blEntry.categoria||"")}
+        </div>
+        <div style="font-size:12px;color:var(--text-pri);line-height:1.5">
+          ${esc((_blEntry.descripcion||"").slice(0, 200))}${(_blEntry.descripcion||"").length > 200 ? "…" : ""}
+        </div>
+        ${_blEntry.montoAdeudo > 0 ? `<div style="margin-top:4px;font-size:12px;font-weight:700;color:${_blColor}">
+          Adeudo: ${Number(_blEntry.montoAdeudo).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}
+        </div>` : ""}
+        <div style="margin-top:6px">
+          <a onclick="navigate('blacklist')" href="#" style="font-size:11px;color:${_blColor};font-weight:700;text-decoration:underline">
+            Ver expediente completo →
+          </a>
+        </div>
+      </div>
+    </div>` : ""}
     <!-- Header -->
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
       <div style="display:flex;align-items:center;gap:14px">
