@@ -893,9 +893,9 @@ function _montarConteoFisico() {
           : `<span class="badge badge-amber">ABIERTO</span>`;
         const accion  = c.estado === "ABIERTO"
           ? `<button class="btn-sm btn-outline cnt-open-btn" data-id="${esc(c.id)}">Continuar ▶</button>`
-          : `<button class="btn-sm" style="padding:4px 8px;font-size:10px;background:var(--surface-2);
+          : `<button class="btn-sm cnt-ver-btn" style="padding:4px 8px;font-size:10px;background:var(--surface-2);
               border:1px solid var(--border);border-radius:5px;cursor:pointer"
-              data-id="${esc(c.id)}" class="cnt-ver-btn">Ver detalle</button>`;
+              data-id="${esc(c.id)}">Ver detalle</button>`;
         const almLabel = !c.almacen || c.almacen === "CENTRAL" ? "🏭 Central"
           : c.almacen.startsWith("ING_") ? `👷 ${c.almacenNombre || c.almacen.replace("ING_","")}`
           : c.almacen;
