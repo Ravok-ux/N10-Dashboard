@@ -115,7 +115,15 @@ export const BlacklistModule = {
 
     window._blFiltrar    = _filtrar;
     window._blCerrarModal = _cerrarModal;
-    window._blCerrarPanel = () => { document.getElementById("bl-panel").style.display = "none"; };
+    window._blCerrarPanel = _cerrarPanel;
+
+    // ESC cierra el modal o panel activo
+    window._blEscHandler = e => {
+      if (e.key !== "Escape") return;
+      if (document.getElementById("bl-modal")?.style.display !== "none") { _cerrarModal(); return; }
+      if (document.getElementById("bl-panel")?.style.display  !== "none") { _cerrarPanel(); }
+    };
+    document.addEventListener("keydown", window._blEscHandler);
     window._blAbrirDetalle = _abrirDetalle;
     window._blEditar     = id => { const r = _allRows.find(r=>r.id===id); if(r) _abrirModal(r); };
     window._blSolicitarRehab = _solicitarRehab;
@@ -128,6 +136,10 @@ export const BlacklistModule = {
   },
   destroy() {
     _unsub?.(); _unsub = null;
+    if (window._blEscHandler) {
+      document.removeEventListener("keydown", window._blEscHandler);
+      delete window._blEscHandler;
+    }
     delete window._blFiltrar;
     delete window._blCerrarModal;
     delete window._blCerrarPanel;
@@ -328,7 +340,7 @@ async function _abrirDetalle(id) {
 
   window._blSubirAdjunto = (docId, input) => _subirAdjuntos(docId, input.files);
 
-  document.getElementById("bl-panel").style.display = "block";
+  document.getElementById("bl-panel").style.display = "flex";
 }
 
 function _dfield(label, valor) {
@@ -432,11 +444,14 @@ async function _abrirModal(registro) {
   };
 
   window._blGuardar = id => _guardar(id);
-  document.getElementById("bl-modal").style.display = "block";
+  document.getElementById("bl-modal").style.display = "flex";
 }
 
 function _cerrarModal() {
   document.getElementById("bl-modal").style.display = "none";
+}
+function _cerrarPanel() {
+  document.getElementById("bl-panel").style.display = "none";
 }
 
 // ── Guardar ────────────────────────────────────────────────────
@@ -618,6 +633,6 @@ async function _aprobarRehab(id) {
   }
 
   logAudit?.("blacklist_rehabilitado", { id, nombre: r.clienteNombre });
-  document.getElementById("bl-panel").style.display = "none";
+  _cerrarPanel();
   alert(`"${r.clienteNombre}" ha sido rehabilitado. El historial queda registrado.`);
 }
