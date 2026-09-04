@@ -513,13 +513,16 @@ async function _montarStock() {
   document.getElementById("inv-xlsx-btn")?.addEventListener("click", () => _exportXlsx(_allRows));
 
   // Cargar catálogo de unidades ANTES del snapshot para que siempre esté disponible
-  // La unidad del catálogo `productos` siempre gana sobre lo que tenga el doc de inventario
-  const _prodUnidadMap = {}; // codigoN10 → unidad
+  const _prodUnidadMap   = {}; // codigoN10 → unidad
+  const _prodUnidadByNom = {}; // norm(nombre) → unidad  (fallback cuando falta codigoN10)
   try {
     const prodSnap = await getDocs(collection(db, "productos"));
     prodSnap.docs.forEach(d => {
       const p = d.data();
-      if (p.codigoN10 && p.unidad) _prodUnidadMap[p.codigoN10] = p.unidad;
+      if (p.unidad) {
+        if (p.codigoN10) _prodUnidadMap[p.codigoN10] = p.unidad;
+        if (p.nombre)    _prodUnidadByNom[norm(p.nombre)] = p.unidad;
+      }
     });
   } catch (_) {}
 
@@ -527,8 +530,10 @@ async function _montarStock() {
   _unsubs.push(onSnapshot(q, snap => {
     _allRows = snap.docs.map(d => {
       const data = d.data();
-      // El catálogo siempre gana: buscar por doc.id (=codigoN10) y también por data.codigoN10
-      data.unidad = _prodUnidadMap[d.id] || _prodUnidadMap[data.codigoN10] || data.unidad || "";
+      data.unidad = _prodUnidadMap[d.id]
+        || _prodUnidadMap[data.codigoN10]
+        || _prodUnidadByNom[norm(data.nombre || "")]
+        || data.unidad || "";
       return { id: d.id, ...data };
     });
     _filtrar();
