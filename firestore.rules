@@ -460,6 +460,15 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ── /clientes/{clienteId}/visitas_log ────────────────────────────────────
+    match /clientes/{clienteId}/visitas_log/{logId} {
+      allow read: if cuentaActiva() && esRolConocido();
+      allow create: if cuentaActiva()
+                   && (esAdminOSuperior()
+                       || miRol() in ['INGENIERO', 'RECUPERADOR', 'MESA_CONTROL', 'VENDEDOR']);
+      allow update, delete: if false;
+    }
+
     // ── /solicitudes_visita ───────────────────────────────────────────────────
     match /solicitudes_visita/{solId} {
       // Lectura: admins, gerentes y mesa de control
