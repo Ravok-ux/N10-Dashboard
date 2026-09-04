@@ -751,7 +751,7 @@ function _escucharAnticipos() {
 
 function _renderAnticipos(rows) {
   const puedeApr = _puedeAprobar();
-  const ST = { PENDIENTE:"badge-yellow", APROBADO:"badge-green", RECHAZADO:"badge-red", DESCONTADO:"badge-purple" };
+  const ST = { PENDIENTE:"badge-yellow", APROBADO:"badge-green", RECHAZADO:"badge-red", DESCONTADO:"badge-purple", ADEUDO:"badge-red", PAGADO:"badge-green" };
   const pending = rows.filter(r => r.status === "PENDIENTE").length;
   const montoAprobado = rows.filter(r => r.status === "APROBADO").reduce((s,r) => s + (r.monto||0), 0);
   const el = id => document.getElementById(id);
@@ -770,7 +770,9 @@ function _renderAnticipos(rows) {
          <button class="btn-sm btn-red"   data-id="${r.id}" data-act="rec" style="margin-left:4px">✗ Rechazar</button>`
       : puedeApr && r.status === "APROBADO"
       ? `<button class="btn-sm btn-outline" data-id="${r.id}" data-act="desc">✓ Descontar de nómina</button>`
-      : `<span style="font-size:11px;color:var(--text-sec)">${r.aprobadoPor || r.rechazadoPor || "—"}</span>`;
+      : puedeApr && r.status === "ADEUDO"
+      ? `<button class="btn-sm btn-green" data-id="${r.id}" data-act="pagar">💰 Marcar pagado</button>`
+      : `<span style="font-size:11px;color:var(--text-sec)">${r.aprobadoPor || r.rechazadoPor || r.pagadoPor || "—"}</span>`;
     return `<tr>
       <td><b>${esc(r.alias || "–")}</b></td>
       <td style="font-weight:700">${fmtMXN(r.monto)}</td>
@@ -788,6 +790,7 @@ function _renderAnticipos(rows) {
         if (act === "apr")  _aprobarAnticipo(id);
         else if (act === "rec")  _rechazarAnticipo(id);
         else if (act === "desc") _descontarAnticipo(id);
+        else if (act === "pagar") _pagarAdeudo(id);
       });
     });
   }
@@ -834,6 +837,14 @@ async function _descontarAnticipo(id) {
     status: "DESCONTADO", descontadoPor: Sesion.alias, descontadoEn: serverTimestamp()
   }).catch(e => window.toast?.("Error: " + e.message, "error"));
   window.toast?.("Marcado como descontado", "success");
+}
+
+async function _pagarAdeudo(id) {
+  if (!await window.modal({ title: "Marcar como pagado", message: "¿Confirmar que el ingeniero liquidó este adeudo de inventario?", confirmLabel: "Sí, pagado" })) return;
+  await updateDoc(doc(db, "rh_anticipos", id), {
+    status: "PAGADO", pagadoPor: Sesion.alias, pagadoEn: serverTimestamp()
+  }).catch(e => window.toast?.("Error: " + e.message, "error"));
+  window.toast?.("Adeudo marcado como pagado", "success");
 }
 
 // ══════════════════════════════════════════════════════════════

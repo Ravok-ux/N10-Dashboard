@@ -745,12 +745,18 @@ service cloud.firestore {
                       (esRolConocido() && resource.data.uid == request.auth.uid)
                     );
       // El empleado puede solicitar un anticipo propio; monto mínimo 100
-      allow create: if cuentaActiva() && esRolConocido()
-                    && request.resource.data.uid == request.auth.uid
-                    && request.resource.data.monto is number
-                    && request.resource.data.monto >= 100
-                    && strValido(request.resource.data.motivo, 500)
-                    && request.resource.data.status == 'PENDIENTE';
+      // Los admins pueden crear adeudos de inventario (tipo ADEUDO_INVENTARIO)
+      allow create: if cuentaActiva() && (
+        (esRolConocido()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.monto is number
+          && request.resource.data.monto >= 100
+          && strValido(request.resource.data.motivo, 500)
+          && request.resource.data.status == 'PENDIENTE')
+        || (esAdminOSuperior()
+          && request.resource.data.tipo == 'ADEUDO_INVENTARIO'
+          && request.resource.data.status == 'ADEUDO')
+      );
       allow update: if cuentaActiva() && esAdminOSuperior();
       allow delete: if esSuperAdmin();
     }

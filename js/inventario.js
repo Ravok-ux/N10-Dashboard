@@ -918,23 +918,42 @@ function _montarConteoFisico() {
 
   // ── Nuevo conteo ───────────────────────────────────────────
   document.getElementById("cnt-nuevo-btn")?.addEventListener("click", async () => {
-    if (!_allRows.length) { window.toast?.("Carga el tab Stock primero","warning"); return; }
-    const { addDoc: ad, collection: colRef, doc: dc, serverTimestamp: st } =
+    const { addDoc: ad, collection: colRef, doc: dc, getDoc: gdc } =
       await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-    const productos = _allRows.map(r => ({
-      productoId: r.id, nombre: r.nombre||"",
-      stockSistema: r.stockActual ?? 0, stockConteo: null, diferencia: 0
-    }));
+
+    const selEl = document.getElementById("cnt-almacen");
+    const almacen = selEl?.value || "CENTRAL";
+    const almacenNombre = selEl?.options[selEl.selectedIndex]?.text?.replace(/^[🏭👷]\s*/u,"") || "Central";
+    const ingUid = almacen.startsWith("ING_") ? almacen.replace("ING_","") : null;
+
+    let productos;
+    if (ingUid) {
+      // Leer stock personal del ingeniero
+      try {
+        const ingDoc = await gdc(dc(db, "stock_ingenieros", ingUid));
+        const items = ingDoc.exists() ? (ingDoc.data().items || {}) : {};
+        productos = Object.entries(items).map(([productoId, d]) => ({
+          productoId, nombre: d.nombre || productoId,
+          stockSistema: d.cantidad ?? 0, stockConteo: null, diferencia: 0
+        }));
+        if (!productos.length) { window.toast?.("Este ingeniero no tiene stock registrado","warning"); return; }
+      } catch(e) { window.toast?.("Error leyendo stock del ingeniero: " + e.message,"error"); return; }
+    } else {
+      if (!_allRows.length) { window.toast?.("Carga el tab Stock primero","warning"); return; }
+      productos = _allRows.map(r => ({
+        productoId: r.id, nombre: r.nombre||"",
+        stockSistema: r.stockActual ?? 0, stockConteo: null, diferencia: 0
+      }));
+    }
+
     try {
-      const selEl = document.getElementById("cnt-almacen");
-      const almacen = selEl?.value || "CENTRAL";
-      const almacenNombre = selEl?.options[selEl.selectedIndex]?.text?.replace(/^👷\s*/,"") || "Central";
       const ref = await ad(colRef(db, "conteos_fisicos"), {
         estado: "ABIERTO", productos, almacen, almacenNombre,
+        ingUid: ingUid || null,
         quienCreo: Sesion.alias, _ts: Date.now()
       });
-      logAudit("CONTEO_CREADO", { conteoId: ref.id, productos: productos.length });
-      _conteoActivo = { id: ref.id, estado:"ABIERTO", productos, quienCreo: Sesion.alias, _ts: Date.now() };
+      logAudit("CONTEO_CREADO", { conteoId: ref.id, productos: productos.length, almacen });
+      _conteoActivo = { id: ref.id, estado:"ABIERTO", productos, almacen, almacenNombre, ingUid: ingUid||null, quienCreo: Sesion.alias, _ts: Date.now() };
       _conteoItems  = productos.map(p => ({ ...p }));
       _renderFormConteo(false);
     } catch(e) { window.toast?.("Error: " + e.message,"error"); }
@@ -1058,25 +1077,42 @@ function _montarConteoFisico() {
 
   document.getElementById("cnt-aplicar-btn")?.addEventListener("click", async () => {
     const conDif = _conteoItems.filter(p => p.stockConteo !== null && p.diferencia !== 0);
+    const ingUid = _conteoActivo.ingUid || null;
+    const etiqueta = ingUid ? "stock del ingeniero" : "inventario";
     if (!conDif.length) { window.toast?.("Sin diferencias para ajustar","info"); return; }
-    if (!confirm(`¿Aplicar ${conDif.length} ajuste(s) al inventario y cerrar el conteo?`)) return;
+    if (!confirm(`¿Aplicar ${conDif.length} ajuste(s) al ${etiqueta} y cerrar el conteo?`)) return;
 
     const btn = document.getElementById("cnt-aplicar-btn");
     btn.disabled = true; btn.textContent = "Aplicando…";
     try {
-      const { addDoc: ad, collection: colRef, doc: dc, updateDoc: upd, setDoc: sd } =
+      const { addDoc: ad, collection: colRef, doc: dc, updateDoc: upd, setDoc: sd, getDoc: gdc } =
         await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+
+      const fmtConteo = fmtFecha(_conteoActivo._ts);
+      const faltantes = conDif.filter(p => p.diferencia < 0);
+      const sobrantes = conDif.filter(p => p.diferencia > 0);
 
       for (const p of conDif) {
         const nuevo = (p.stockConteo ?? p.stockSistema);
+        const tipoMov = ingUid ? "AJUSTE_INGENIERO" : "AJUSTE_INVENTARIO";
+
         await ad(colRef(db, "movimientos_stock"), {
           productoId: p.productoId, nombreProducto: p.nombre,
-          tipo: "AJUSTE_INVENTARIO", cantidad: Math.abs(p.diferencia),
+          tipo: tipoMov, cantidad: Math.abs(p.diferencia),
           stockAntes: p.stockSistema, stockDespues: nuevo,
-          motivo: `Conteo físico ${fmtFecha(_conteoActivo._ts)}`,
-          quienRegistro: Sesion.alias, _ts: Date.now()
+          motivo: `Conteo físico ${fmtConteo}${ingUid ? ` — ${_conteoActivo.almacenNombre}` : ""}`,
+          quienRegistro: Sesion.alias, ingUid: ingUid || null, _ts: Date.now()
         });
-        await sd(dc(db, "inventario", p.productoId), { stockActual: nuevo, _ts: Date.now() }, { merge: true });
+
+        if (ingUid) {
+          // Actualizar stock personal del ingeniero
+          await upd(dc(db, "stock_ingenieros", ingUid), {
+            [`items.${p.productoId}.cantidad`]: nuevo,
+            [`items.${p.productoId}._tsConteo`]: Date.now()
+          });
+        } else {
+          await sd(dc(db, "inventario", p.productoId), { stockActual: nuevo, _ts: Date.now() }, { merge: true });
+        }
       }
 
       const productosActualizados = _conteoItems.map(p => ({
@@ -1084,18 +1120,154 @@ function _montarConteoFisico() {
         diferencia: (p.stockConteo ?? p.stockSistema) - p.stockSistema
       }));
       const almacenSel = document.getElementById("cnt-almacen")?.value || _conteoActivo.almacen || "CENTRAL";
+      const almNom = document.getElementById("cnt-almacen")?.options[document.getElementById("cnt-almacen").selectedIndex]?.text?.replace(/^[🏭👷]\s*/u,"") || _conteoActivo.almacenNombre || "Central";
+
+      // Generar nota de adeudo en RH si hay faltantes de ingeniero
+      let adeudoRef = null;
+      if (ingUid && faltantes.length) {
+        // Buscar costo unitario para calcular monto
+        const lineas = await Promise.all(faltantes.map(async p => {
+          let costo = 0;
+          try {
+            const invDoc = await gdc(dc(db, "inventario", p.productoId));
+            costo = invDoc.data()?.costoUnitario || invDoc.data()?.costo || 0;
+          } catch(_) {}
+          return { nombre: p.nombre, faltante: Math.abs(p.diferencia), costo, subtotal: Math.abs(p.diferencia) * costo };
+        }));
+        const montoTotal = lineas.reduce((s,l) => s + l.subtotal, 0);
+        const conceptoLineas = lineas.map(l =>
+          `${l.nombre}: ${l.faltante} uds${l.costo ? ` × $${l.costo.toFixed(2)} = $${l.subtotal.toFixed(2)}` : ""}`
+        ).join("\n");
+
+        const adeudoDoc = await ad(colRef(db, "rh_anticipos"), {
+          uid: ingUid,
+          alias: _conteoActivo.almacenNombre,
+          tipo: "ADEUDO_INVENTARIO",
+          monto: montoTotal,
+          motivo: `Adeudo por conteo físico ${fmtConteo} — ${faltantes.length} producto(s) faltante(s):\n${conceptoLineas}`,
+          conteoId: _conteoActivo.id,
+          status: "ADEUDO",
+          creadoPor: Sesion.alias,
+          timestamp: Date.now(), _ts: Date.now()
+        });
+        adeudoRef = adeudoDoc.id;
+        logAudit("ADEUDO_INVENTARIO_CREADO", { adeudoId: adeudoDoc.id, ingUid, monto: montoTotal });
+      }
+
       await upd(dc(db, "conteos_fisicos", _conteoActivo.id), {
-        estado: "CERRADO", productos: productosActualizados, almacen: almacenSel,
+        estado: "CERRADO", productos: productosActualizados,
+        almacen: almacenSel, almacenNombre: almNom,
+        adeudoId: adeudoRef || null,
         quienCerro: Sesion.alias, fechaCierre: Date.now()
       });
-      logAudit("CONTEO_CERRADO", { conteoId: _conteoActivo.id, ajustes: conDif.length });
+
+      logAudit("CONTEO_CERRADO", { conteoId: _conteoActivo.id, ajustes: conDif.length, ingUid });
       window.toast?.(`Conteo cerrado. ${conDif.length} ajuste(s) aplicado(s)`, "success");
-      document.getElementById("cnt-vista-lista").style.display = "";
-      document.getElementById("cnt-vista-form").style.display  = "none";
-      _cargarHistorial();
+
+      // ── Mostrar reporte de hallazgos ─────────────────────────
+      _mostrarReporteConteo({
+        almacenNombre: almNom,
+        ingUid,
+        fmtConteo,
+        faltantes: conDif.filter(p => p.diferencia < 0),
+        sobrantes: conDif.filter(p => p.diferencia > 0),
+        adeudoId: adeudoRef
+      });
+
     } catch(e) { window.toast?.("Error: " + e.message, "error"); }
     finally { btn.disabled = false; btn.textContent = "✔ Cerrar y aplicar ajustes"; }
   });
+
+  function _mostrarReporteConteo({ almacenNombre, ingUid, fmtConteo, faltantes, sobrantes, adeudoId }) {
+    const fmtMXN = v => Number(v||0).toLocaleString("es-MX",{style:"currency",currency:"MXN"});
+    const filasF = faltantes.map(p => `<tr>
+      <td style="padding:6px 10px;font-weight:600">${esc(p.nombre)}</td>
+      <td style="padding:6px 10px;text-align:right">${p.stockSistema}</td>
+      <td style="padding:6px 10px;text-align:right">${p.stockConteo ?? "–"}</td>
+      <td style="padding:6px 10px;text-align:right;font-weight:800;color:#DC2626">${p.diferencia}</td>
+    </tr>`).join("");
+    const filasS = sobrantes.map(p => `<tr>
+      <td style="padding:6px 10px;font-weight:600">${esc(p.nombre)}</td>
+      <td style="padding:6px 10px;text-align:right">${p.stockSistema}</td>
+      <td style="padding:6px 10px;text-align:right">${p.stockConteo ?? "–"}</td>
+      <td style="padding:6px 10px;text-align:right;font-weight:800;color:#16A34A">+${p.diferencia}</td>
+    </tr>`).join("");
+
+    const adeudoBanner = adeudoId
+      ? `<div style="margin-top:16px;padding:12px 16px;background:#FEF2F2;border:1px solid #FECACA;
+            border-radius:10px;display:flex;gap:10px;align-items:center">
+           <span style="font-size:22px">⚠️</span>
+           <div>
+             <div style="font-weight:800;color:#DC2626;font-size:13px">Nota de adeudo generada</div>
+             <div style="font-size:11px;color:#7F1D1D;margin-top:2px">
+               Registrada en Mi RH → Anticipos con concepto <strong>ADEUDO</strong>.
+               Cambia a <strong>PAGADO</strong> cuando el ingeniero liquide.
+             </div>
+           </div>
+         </div>`
+      : "";
+
+    const html = `<div class="modal-overlay" id="cnt-reporte-overlay" style="display:flex;z-index:9999">
+      <div class="modal-box" style="max-width:600px;width:100%">
+        <div class="modal-hdr">
+          <span>📋 Reporte de hallazgos — ${esc(almacenNombre)} · ${fmtConteo}</span>
+          <button class="modal-close" id="cnt-rep-close">✕</button>
+        </div>
+        <div class="modal-body" style="max-height:70vh;overflow-y:auto">
+          ${faltantes.length ? `
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;font-weight:800;color:#DC2626;margin-bottom:6px;letter-spacing:.05em">
+              🔴 FALTANTES (${faltantes.length})
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead><tr style="background:var(--surface-2)">
+                <th style="padding:6px 10px;text-align:left;font-size:10px;letter-spacing:.05em">PRODUCTO</th>
+                <th style="padding:6px 10px;text-align:right;font-size:10px">SISTEMA</th>
+                <th style="padding:6px 10px;text-align:right;font-size:10px">CONTEO</th>
+                <th style="padding:6px 10px;text-align:right;font-size:10px">DIFERENCIA</th>
+              </tr></thead>
+              <tbody>${filasF}</tbody>
+            </table>
+          </div>` : ""}
+          ${sobrantes.length ? `
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;font-weight:800;color:#16A34A;margin-bottom:6px;letter-spacing:.05em">
+              🟢 SOBRANTES (${sobrantes.length})
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead><tr style="background:var(--surface-2)">
+                <th style="padding:6px 10px;text-align:left;font-size:10px;letter-spacing:.05em">PRODUCTO</th>
+                <th style="padding:6px 10px;text-align:right;font-size:10px">SISTEMA</th>
+                <th style="padding:6px 10px;text-align:right;font-size:10px">CONTEO</th>
+                <th style="padding:6px 10px;text-align:right;font-size:10px">DIFERENCIA</th>
+              </tr></thead>
+              <tbody>${filasS}</tbody>
+            </table>
+          </div>` : ""}
+          ${!faltantes.length && !sobrantes.length
+            ? `<div style="padding:24px;text-align:center;color:var(--text-sec)">Sin diferencias encontradas.</div>`
+            : ""}
+          ${adeudoBanner}
+        </div>
+        <div class="modal-footer" style="justify-content:flex-end">
+          <button class="btn-primary" id="cnt-rep-close2">Cerrar reporte</button>
+        </div>
+      </div>
+    </div>`;
+
+    document.body.insertAdjacentHTML("beforeend", html);
+    const cerrarRep = () => document.getElementById("cnt-reporte-overlay")?.remove();
+    document.getElementById("cnt-rep-close")?.addEventListener("click", cerrarRep);
+    document.getElementById("cnt-rep-close2")?.addEventListener("click", () => {
+      cerrarRep();
+      document.getElementById("cnt-vista-lista").style.display = "";
+      document.getElementById("cnt-vista-form").style.display  = "none";
+      _cargarHistorial();
+    });
+    document.getElementById("cnt-reporte-overlay")?.addEventListener("click", e => {
+      if (e.target.id === "cnt-reporte-overlay") { cerrarRep(); _cargarHistorial(); }
+    });
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
