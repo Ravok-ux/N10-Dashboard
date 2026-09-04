@@ -112,11 +112,11 @@ async function _montarStock() {
     <div style="overflow-x:auto">
       <table class="data-table">
         <thead><tr>
-          <th>PRODUCTO</th><th>SKU</th>
+          <th>PRODUCTO</th><th>CÓDIGO N10</th>
           <th style="text-align:right">STOCK</th>
           <th style="text-align:right">MÍNIMO</th>
           <th>UNIDAD</th><th style="text-align:right">COSTO</th>
-          <th>NIVEL</th><th>ÚLT. MOV.</th>
+          <th>ESTADO</th><th>ÚLT. MOV.</th>
           ${_puedeEditar() ? "<th></th>" : ""}
         </tr></thead>
         <tbody id="inv-body">
@@ -527,8 +527,8 @@ async function _montarStock() {
   _unsubs.push(onSnapshot(q, snap => {
     _allRows = snap.docs.map(d => {
       const data = d.data();
-      // El catálogo siempre gana: si hay unidad en productos, úsala
-      data.unidad = _prodUnidadMap[d.id] || data.unidad || "";
+      // El catálogo siempre gana: buscar por doc.id (=codigoN10) y también por data.codigoN10
+      data.unidad = _prodUnidadMap[d.id] || _prodUnidadMap[data.codigoN10] || data.unidad || "";
       return { id: d.id, ...data };
     });
     _filtrar();
@@ -570,7 +570,7 @@ function _renderStock(rows) {
       : "";
     return `<tr style="${rowBg}">
       <td style="font-weight:700">${esc(r.nombre||"–")}</td>
-      <td style="font-size:11px;color:var(--text-sec)">${esc(r.sku||"–")}</td>
+      <td style="font-size:11px;color:var(--text-sec);font-family:monospace">${esc(r.codigoN10||r.id||"–")}</td>
       <td style="text-align:right;font-weight:800;font-size:15px;color:${color}">${stock}</td>
       <td style="text-align:right;color:var(--text-sec)">${min}</td>
       <td style="font-size:12px">${esc(r.unidad||"–")}</td>
