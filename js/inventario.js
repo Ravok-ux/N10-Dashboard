@@ -812,7 +812,7 @@ function _montarConteoFisico() {
       <div style="overflow-x:auto">
         <table class="data-table">
           <thead><tr>
-            <th>FECHA</th><th>ESTADO</th><th>PRODUCTOS</th>
+            <th>FECHA</th><th>ALMACÉN</th><th>ESTADO</th><th>PRODUCTOS</th>
             <th>DIFERENCIAS</th><th>REGISTRÓ</th><th></th>
           </tr></thead>
           <tbody id="cnt-lista-body">
@@ -824,23 +824,33 @@ function _montarConteoFisico() {
 
     <!-- Form conteo activo (oculto al inicio) -->
     <div id="cnt-vista-form" style="display:none">
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
         <button id="cnt-back-btn" style="padding:6px 12px;border:1px solid var(--border);
           background:transparent;border-radius:7px;cursor:pointer;font-size:12px;color:var(--text-sec)">
           ← Volver
         </button>
-        <div style="flex:1">
+        <div style="flex:1;min-width:160px">
           <div style="font-size:13px;font-weight:800" id="cnt-form-titulo">Conteo — </div>
           <div style="font-size:11px;color:var(--text-sec)">Ingresa el conteo real de cada producto y aplica los ajustes</div>
         </div>
+        <select id="cnt-almacen" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;
+          background:var(--surface);color:var(--text-primary);font-size:12px;font-weight:600;min-width:180px">
+          <option value="CENTRAL">🏭 Almacén central</option>
+        </select>
         <button id="cnt-aplicar-btn" style="padding:8px 18px;border-radius:8px;border:none;
           background:#16A34A;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
           ✔ Cerrar y aplicar ajustes
         </button>
       </div>
 
-      <div style="margin-bottom:10px;font-size:12px;color:var(--text-sec)">
-        <strong style="color:var(--text-primary)" id="cnt-resumen-difs">—</strong> productos con diferencia
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+        <input id="cnt-buscar" type="text" placeholder="🔍 Buscar producto…"
+          style="flex:1;min-width:200px;padding:7px 12px;border:1px solid var(--border);
+            border-radius:8px;background:var(--surface);color:var(--text-primary);font-size:13px">
+        <div style="font-size:12px;color:var(--text-sec);white-space:nowrap">
+          <strong style="color:var(--text-primary)" id="cnt-resumen-difs">—</strong> con diferencia ·
+          <strong style="color:var(--text-primary)" id="cnt-resumen-vis">—</strong> visibles
+        </div>
       </div>
 
       <div style="overflow-x:auto">
@@ -871,7 +881,7 @@ function _montarConteoFisico() {
       const snap = await getDocs(qry(colRef(db, "conteos_fisicos"), oby("_ts","desc"), lmt(30)));
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       if (!docs.length) {
-        tbody.innerHTML = `<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--text-sec)">
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--text-sec)">
           Sin conteos registrados. Crea el primero con <strong>+ Nuevo conteo</strong>.</td></tr>`;
         return;
       }
@@ -886,8 +896,12 @@ function _montarConteoFisico() {
           : `<button class="btn-sm" style="padding:4px 8px;font-size:10px;background:var(--surface-2);
               border:1px solid var(--border);border-radius:5px;cursor:pointer"
               data-id="${esc(c.id)}" class="cnt-ver-btn">Ver detalle</button>`;
+        const almLabel = !c.almacen || c.almacen === "CENTRAL" ? "🏭 Central"
+          : c.almacen.startsWith("ING_") ? `👷 ${c.almacenNombre || c.almacen.replace("ING_","")}`
+          : c.almacen;
         return `<tr>
           <td style="font-size:11px;white-space:nowrap">${fmtFecha(c._ts)}</td>
+          <td style="font-size:11px">${almLabel}</td>
           <td>${estado}</td>
           <td style="text-align:right;font-variant-numeric:tabular-nums">${prods}</td>
           <td style="text-align:right;font-weight:700;color:${difs>0?"#D97706":"#16A34A"}">${difs}</td>
@@ -912,8 +926,11 @@ function _montarConteoFisico() {
       stockSistema: r.stockActual ?? 0, stockConteo: null, diferencia: 0
     }));
     try {
+      const selEl = document.getElementById("cnt-almacen");
+      const almacen = selEl?.value || "CENTRAL";
+      const almacenNombre = selEl?.options[selEl.selectedIndex]?.text?.replace(/^👷\s*/,"") || "Central";
       const ref = await ad(colRef(db, "conteos_fisicos"), {
-        estado: "ABIERTO", productos,
+        estado: "ABIERTO", productos, almacen, almacenNombre,
         quienCreo: Sesion.alias, _ts: Date.now()
       });
       logAudit("CONTEO_CREADO", { conteoId: ref.id, productos: productos.length });
@@ -936,6 +953,22 @@ function _montarConteoFisico() {
       `Conteo — ${fmtFecha(_conteoActivo._ts)} ${soloLectura?"(cerrado)":""}`;
     document.getElementById("cnt-aplicar-btn").style.display = soloLectura ? "none" : "";
 
+    // Buscador: filtrar filas en tiempo real
+    const buscarEl = document.getElementById("cnt-buscar");
+    if (buscarEl) {
+      buscarEl.value = "";
+      buscarEl.oninput = () => {
+        const q = norm(buscarEl.value);
+        document.querySelectorAll("#cnt-form-body tr").forEach(tr => {
+          tr.hidden = q ? !norm(tr.dataset.nombre || "").includes(q) : false;
+        });
+        _actualizarResumen();
+      };
+    }
+
+    // Cargar ingenieros en el dropdown de almacén
+    _cargarIngenierosDrop();
+
     const tbody = document.getElementById("cnt-form-body");
     if (!tbody) return;
     _actualizarResumen();
@@ -948,7 +981,7 @@ function _montarConteoFisico() {
         : dif > 0
         ? `<span class="badge" style="background:#DCFCE7;color:#15803D">Sobrante ▲</span>`
         : `<span class="badge badge-red">Faltante ▼</span>`;
-      return `<tr>
+      return `<tr data-nombre="${esc(p.nombre)}">
         <td style="font-weight:600">${esc(p.nombre)}</td>
         <td style="text-align:right;font-variant-numeric:tabular-nums">${p.stockSistema}</td>
         <td style="text-align:right">
@@ -992,6 +1025,29 @@ function _montarConteoFisico() {
     const difs = _conteoItems.filter(p => p.diferencia !== 0).length;
     const el = document.getElementById("cnt-resumen-difs");
     if (el) el.textContent = difs;
+    const visibles = document.querySelectorAll("#cnt-form-body tr:not([hidden])").length;
+    const elVis = document.getElementById("cnt-resumen-vis");
+    if (elVis) elVis.textContent = visibles || _conteoItems.length;
+  }
+
+  async function _cargarIngenierosDrop() {
+    const sel = document.getElementById("cnt-almacen");
+    if (!sel) return;
+    // Limpiar opciones previas excepto la central
+    [...sel.options].forEach(o => { if (o.value !== "CENTRAL") o.remove(); });
+    try {
+      const { getDocs: gd, collection: colRef, query: qry, where: wh } =
+        await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      const snap = await gd(qry(colRef(db, "usuarios"), wh("rol", "==", "INGENIERO"), wh("activo","==",true)));
+      snap.forEach(d => {
+        const u = d.data();
+        const opt = document.createElement("option");
+        opt.value = "ING_" + d.id;
+        opt.textContent = `👷 ${u.nombre || u.alias || d.id}`;
+        opt.dataset.uid = d.id;
+        sel.appendChild(opt);
+      });
+    } catch(_) {}
   }
 
   document.getElementById("cnt-back-btn")?.addEventListener("click", () => {
@@ -1027,8 +1083,9 @@ function _montarConteoFisico() {
         ...p, stockConteo: p.stockConteo ?? p.stockSistema,
         diferencia: (p.stockConteo ?? p.stockSistema) - p.stockSistema
       }));
+      const almacenSel = document.getElementById("cnt-almacen")?.value || _conteoActivo.almacen || "CENTRAL";
       await upd(dc(db, "conteos_fisicos", _conteoActivo.id), {
-        estado: "CERRADO", productos: productosActualizados,
+        estado: "CERRADO", productos: productosActualizados, almacen: almacenSel,
         quienCerro: Sesion.alias, fechaCierre: Date.now()
       });
       logAudit("CONTEO_CERRADO", { conteoId: _conteoActivo.id, ajustes: conDif.length });
