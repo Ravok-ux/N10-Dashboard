@@ -61,6 +61,10 @@ export const InventarioModule = {
     _unsubs.forEach(u => u?.()); _unsubs = [];
     _unsubsMov.forEach(u => u?.()); _unsubsMov = [];
     _allRows = [];
+    if (window._invEscHandler) {
+      document.removeEventListener("keydown", window._invEscHandler);
+      delete window._invEscHandler;
+    }
   }
 };
 
@@ -494,6 +498,10 @@ async function _montarStock() {
   document.getElementById("inv-modal")?.addEventListener("click", e => {
     if (e.target === document.getElementById("inv-modal")) cerrarModal();
   });
+  window._invEscHandler = e => {
+    if (e.key === "Escape" && !document.getElementById("inv-modal")?.classList.contains("hidden")) cerrarModal();
+  };
+  document.addEventListener("keydown", window._invEscHandler);
 
   const _filtrar = () => {
     const buscar = norm(document.getElementById("inv-buscar")?.value || "");
