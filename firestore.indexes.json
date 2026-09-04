@@ -36,6 +36,14 @@
       "collectionGroup": "pedidos",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "estado", "order": "ASCENDING" },
+        { "fieldPath": "_ts",    "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pedidos",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "status",      "order": "ASCENDING" },
         { "fieldPath": "fechaPedido", "order": "DESCENDING" }
       ]
